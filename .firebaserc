@@ -1,5 +1,5 @@
 {
-  "projects": {
-    "default": "my-play-db"
-  }
+    "projects": {
+        "default": "my-play-db"
+    }
 }
