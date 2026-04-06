@@ -1,3 +1,6 @@
+// Test endpoint — replace with real feature endpoints (e.g. api/psn/trophies.js).
+// Each file in api/ becomes a serverless function at /api/<filename>.
+// Copy the CORS block into every new endpoint.
 const ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://my-play-db.web.app"
