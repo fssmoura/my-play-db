@@ -6,3 +6,5 @@ ui-debug.log*
 
 # Environment
 .env
+.vercel
+.env*.local
