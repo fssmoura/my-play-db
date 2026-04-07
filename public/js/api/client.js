@@ -4,8 +4,21 @@ const API_BASE = window.location.hostname === "localhost"
 
 async function apiGet(path) {
     const res = await fetch(`${API_BASE}${path}`);
-    if (!res.ok) throw new Error(`API error: ${res.status}`);
-    return res.json();
+    const data = await res.json();
+    if (!res.ok) throw Object.assign(new Error(data.error ?? `API error ${res.status}`), { status: res.status });
+    return data;
 }
 
-export { apiGet };
+async function apiPost(path, body) {
+    const res = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw Object.assign(new Error(data.error ?? `API error ${res.status}`), { status: res.status });
+    return data;
+}
+
+export { apiGet, apiPost };
+

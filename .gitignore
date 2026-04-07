@@ -4,6 +4,9 @@ firebase-debug.log*
 firestore-debug.log*
 ui-debug.log*
 
+# Dependencies
+node_modules/
+
 # Environment
 .env
 .vercel
