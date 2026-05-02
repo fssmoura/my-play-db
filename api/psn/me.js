@@ -2,7 +2,7 @@ const { exchangeNpssoForAccessCode, exchangeAccessCodeForAuthTokens, getUserTrop
 
 const ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https://my-play-db.web.app"
+    "https://my-play-db.vercel.app"
 ];
 
 module.exports = async function handler(req, res) {
