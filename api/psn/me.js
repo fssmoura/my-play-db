@@ -1,21 +1,9 @@
 const { exchangeNpssoForAccessCode, exchangeAccessCodeForAuthTokens, getUserTrophyProfileSummary } = require("psn-api");
-
-const ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "https://my-play-db.vercel.app"
-];
+const { setCorsHeaders, handlePreflight } = require("../_cors");
 
 module.exports = async function handler(req, res) {
-    const origin = req.headers.origin;
-    if (ALLOWED_ORIGINS.includes(origin)) {
-        res.setHeader("Access-Control-Allow-Origin", origin);
-    }
-
-    if (req.method === "OPTIONS") {
-        res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-        return res.status(204).end();
-    }
+    setCorsHeaders(req, res);
+    if (handlePreflight(req, res)) return;
 
     const npsso = req.body?.npsso;
     if (!npsso) {
