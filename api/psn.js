@@ -6,6 +6,8 @@
   getBasicPresence,
   getUserTrophyProfileSummary,
   getUserPlayedGames,
+  getRecentlyPlayedGames,
+  getUserTitles,
   getTitleTrophies,
   getUserTrophiesEarnedForTitle,
   getUserTrophiesForSpecificTitle,
@@ -59,6 +61,47 @@ const actions = {
       nextOffset = page.nextOffset;
     }
     return { titles, totalItemCount: first.totalItemCount };
+  },
+
+  async recent(authorization, options = {}) {
+    const { limit, categories } = options;
+    const opts = {};
+    if (limit != null) opts.limit = Number(limit);
+    if (categories != null) {
+      opts.categories = Array.isArray(categories) ? categories : [categories];
+    }
+    const response = await getRecentlyPlayedGames(authorization, opts);
+    return {
+      games: response.data?.gameLibraryTitlesRetrieve?.games ?? [],
+    };
+  },
+
+  async titles(authorization, options = {}) {
+    const { limit, offset } = options;
+    if (limit != null) {
+      return getUserTitles(authorization, "me", {
+        limit: Number(limit),
+        offset: Number(offset ?? 0),
+      });
+    }
+    const pageSize = 800;
+    const first = await getUserTitles(authorization, "me", {
+      limit: pageSize,
+      offset: 0,
+    });
+    const trophyTitles = [...(first.trophyTitles ?? [])];
+    let currentOffset = pageSize;
+    while (currentOffset < (first.totalItemCount ?? 0)) {
+      const page = await getUserTitles(authorization, "me", {
+        limit: pageSize,
+        offset: currentOffset,
+      });
+      const items = page.trophyTitles ?? [];
+      if (items.length === 0) break;
+      trophyTitles.push(...items);
+      currentOffset += pageSize;
+    }
+    return { trophyTitles, totalItemCount: first.totalItemCount };
   },
 
   async trophymap(authorization, options = {}) {
@@ -175,7 +218,15 @@ module.exports = async function handler(req, res) {
   setCorsHeaders(req, res);
   if (handlePreflight(req, res)) return;
 
-  const body = req.method === "GET" ? req.query : (req.body ?? {});
+  const raw = req.method === "GET" ? req.query : (req.body ?? {});
+  const body = {};
+  for (const key of Object.keys(raw)) {
+    try {
+      body[key] = JSON.parse(raw[key]);
+    } catch {
+      body[key] = raw[key];
+    }
+  }
   const { npsso, accessToken, refreshToken, action, options } = body;
 
   if (!action) return res.status(400).json({ error: "action is required" });

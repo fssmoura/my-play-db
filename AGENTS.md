@@ -50,10 +50,6 @@ GET query params are parsed with `JSON.parse` where possible — numbers, boolea
 
 Auth order: NPSSO → exchangeNpssoForAccessCode → exchangeAccessCodeForAuthTokens. The `auth` action is handled before the generic authorization path — do not change this order.
 
-### Verification
-
-Every action was tested live against the account **xoura7** (PS Plus, Level 280, Tier 3). Results confirmed 181 games total, 164 with trophy support, 17 without (demos, VR, F2P). Trophies for FC 26 returned 15 earned / 44 total — matches the PS App.
-
 ## Sync workflow
 
 The API is designed to support two patterns:
