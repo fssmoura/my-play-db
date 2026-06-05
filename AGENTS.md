@@ -46,9 +46,9 @@ Auth: NPSSO → exchangeNpssoForAccessCode → exchangeAccessCodeForAuthTokens. 
 
 The `trophies` action handles missing trophy sync gracefully — if the user has never synced a game, it returns trophy definitions with all `earned: false` rather than crashing.
 
-## Frontend gap
+## Frontend
 
-`public/js/main.js` + `public/js/api/client.js` + `public/js/api/psn/index.js` are referenced by index.html but **do not exist**. Frontend is non-functional.
+`public/index.html` shows a link to get NPSSO. No JavaScript frontend exists yet — the API is designed to be consumed by a sync script or a future UI.
 
 ## Git
 
