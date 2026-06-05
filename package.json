@@ -1,0 +1,8 @@
+{
+    "name": "my-play-db",
+    "version": "1.0.0",
+    "private": true,
+    "dependencies": {
+        "psn-api": "^2.14.0"
+    }
+}
