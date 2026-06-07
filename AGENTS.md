@@ -7,6 +7,7 @@ This is not a public service. It's a private data pipe. The API layer has zero b
 ## Dev
 
 - **`vercel dev`** — local server at localhost:3000 (only way to test API functions). Do NOT use VS Code Live Server.
+- **Testing**: User starts `vercel dev`, then I provide the URL for the user to open in browser to see the JSON response. I also call `curl.exe` in terminal to read the response myself and stay aware of the data. This is the standard way to test.
 - **`npx prettier --write <file>`** — formatting. No linter, no test framework, no build step configured.
 
 ## Stack
@@ -18,16 +19,19 @@ This is not a public service. It's a private data pipe. The API layer has zero b
 ## Architecture
 
 ```
-Browser (ES module) → POST /api/psn → Vercel serverless → psn-api → PlayStation Network
+Browser (ES module) → POST /api/psn   → Vercel serverless → psn-api → PlayStation Network
+                    → POST /api/steam → Vercel serverless → fetch   → Steam Web API
 ```
 
 ```
 my-play-db/
 ├── api/
 │   ├── _cors.js       # CORS utility
-│   └── psn.js         # PSN handler — 7 actions
+│   ├── psn.js         # PSN handler — 7 actions
+│   └── steam.js       # Steam handler — actions
 ├── public/
 │   ├── index.html     # NPSSO link
+├── .env.local          # STEAM_API_KEY (local dev)
 ├── package.json
 └── vercel.json
 ```
@@ -49,6 +53,21 @@ GET query params are parsed with `JSON.parse` where possible — numbers, boolea
 | `trophies`  | accessToken + npCommunicationId + npServiceName | full trophy details for one game. If the user hasn't synced the game, returns definitions with all `earned: false`.     |
 
 Auth order: NPSSO → exchangeNpssoForAccessCode → exchangeAccessCodeForAuthTokens. The `auth` action is handled before the generic authorization path — do not change this order.
+
+## API (api/steam.js)
+
+POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+
+| Action         | What it needs     | Returns                                             |
+| -------------- | ----------------- | --------------------------------------------------- |
+| `profile`      | steamId           | Steam player summary (persona, avatar, profile URL) |
+| `games`        | steamId           | Full library (appid, name, playtime, icon)          |
+| `recent`       | steamId [+ count] | Recently played in last 2 weeks                     |
+| `game`         | appids[]          | Store metadata (type, genres, dev, screenshots)     |
+| `schemas`      | appid             | Achievement definitions per game                    |
+| `achievements` | steamId + appid   | Earned achievements per game                        |
+
+Steam API key is in server-side env var (`STEAM_API_KEY`), never sent from client. `steamId` is passed as option (public info).
 
 ## Sync workflow
 
