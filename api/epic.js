@@ -116,6 +116,19 @@ async function resolveAccountId(options) {
     });
     return auth.account_id;
   }
+  if (options.accessToken) {
+    try {
+      const { data } = await httpsRequest(
+        `https://${AUTH_HOST}/account/api/oauth/verify`,
+        {
+          headers: { Authorization: `bearer ${options.accessToken}` },
+        },
+      );
+      return data.account_id || null;
+    } catch {
+      return null;
+    }
+  }
   return null;
 }
 

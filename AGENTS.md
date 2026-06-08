@@ -94,13 +94,13 @@ POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and m
 
 Uses Epic's undocumented internal REST APIs (same endpoints as Legendary/Playnite). Auth via OAuth authorization code flow with Epic's launcher client credentials embedded in the handler.
 
-| Action         | What it needs                                                               | Returns                                                                                                                                                            |
-| -------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `auth`         | authorizationCode or refreshToken                                           | accessToken + refreshToken + accountId + displayName + expiry                                                                                                      |
-| `library`      | accessToken [+ epicAccountId]                                               | Owned games (auto-paginates) with playtime merged. Each record: `namespace`, `catalogItemId`, `sandboxName`, `appName`, `productId`, `acquisitionDate`, `playtime` |
-| `catalog`      | accessToken + items[] ({ namespace, catalogItemId })                        | Store metadata per game (title, description, keyImages, developer, releaseInfo)                                                                                    |
-| `progress`     | accessToken [+ epicAccountId] [+ sandboxIds[]] [+ names{}]                  | Achievement progress per game: `sandboxId`, `sandboxName`, `catalogItemId`, total/unlocked/XPer game for every namespace with achievements                         |
-| `achievements` | accessToken + sandboxId [+ epicAccountId] [+ sandboxName] [+ catalogItemId] | Full achievement list: name, displayName, icon, XP, rarity, unlocked, unlockDate                                                                                   |
+| Action         | What it needs                                                               | Returns                                                                                                                                                                                                                                                                      |
+| -------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`         | authorizationCode or refreshToken                                           | accessToken + refreshToken + accountId + displayName + expiry                                                                                                                                                                                                                |
+| `library`      | accessToken [+ epicAccountId] [+ resolveNames]                              | Owned games (auto-paginates) with playtime merged. Each record: `namespace`, `catalogItemId`, `sandboxName`, `appName`, `productId`, `sandboxType`, `acquisitionDate`, `playtime`, `platforms`. `resolveNames: true` calls catalog to replace generic names with real titles |
+| `catalog`      | accessToken + items[] ({ namespace, catalogItemId })                        | Store metadata per game: `id`, `title`, `description`, `keyImages`, `developer`, `releaseInfo`, `categories`, `mainGameItem`                                                                                                                                                 |
+| `progress`     | accessToken [+ epicAccountId] [+ sandboxIds[]] [+ names{}] [+ resolveNames] | Achievement progress per game: `sandboxId`, `productId`, `sandboxName`, `catalogItemId`, `totalAchievements`, `totalXP`, `totalUnlocked`, `earnedXP`, `achievementSets[]`                                                                                                    |
+| `achievements` | accessToken + sandboxId [+ epicAccountId] [+ sandboxName] [+ catalogItemId] | Game header (same fields as progress) + `achievements[]` with `name`, `displayName`, `displayNameLocked`, `iconUnlocked`, `iconLocked`, `XP`, `rarity`, `unlocked`, `unlockDate`, `achievementSetId`, `isBase`                                                               |
 
 ### Field identity guide
 
@@ -163,12 +163,12 @@ auth (via refreshToken) → recent({ limit: 20 }) → compare lastPlayedDateTime
 **Epic sync** — library + achievements:
 
 ```
-auth (via refreshToken) → library → compare acquisitionDate
+auth (via refreshToken) → library({ resolveNames: true }) → compare acquisitionDate
                         → catalog only for new/changed items
-                        → progress → achievements only for games with new unlocks
+                        → progress({ resolveNames: true }) → achievements only for games with new unlocks
 ```
 
-`library` includes playtime (seconds) merged into each record. Incremental detection: compare `playtime` against previous run to detect recently-played games. No "last played" timestamp exists in Epic's API. `progress` checks all library namespaces for achievement schemas (public, no auth), then fetches player unlock data. Use `achievements` to get full details per game. `catalogItemId` + `namespace` from library records serve as the lookup keys for `catalog` queries — no guessing needed.
+`library` includes playtime (seconds) merged into each record. Incremental detection: compare `playtime` against previous run to detect recently-played games. No "last played" timestamp exists in Epic's API. `progress` checks all library namespaces for achievement schemas (public, no auth), then fetches player unlock data. Use `achievements` to get full details per game. `catalogItemId` + `namespace` from library records serve as the lookup keys for `catalog` queries — no guessing needed. Pass `resolveNames: true` on `library` and `progress` to resolve generic sandbox names ("Live", "shoal Production") into real titles via the catalog API.
 
 ## Frontend
 
