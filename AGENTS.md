@@ -7,20 +7,38 @@ This is not a public service. It's a private data pipe. The API layer has zero b
 ## Dev
 
 - **`vercel dev`** — local server at localhost:3000 (only way to test API functions). Do NOT use VS Code Live Server.
-- **Testing**: User starts `vercel dev`, then I provide the URL for the user to open in browser to see the JSON response. I also call `curl.exe` in terminal to read the response myself and stay aware of the data. This is the standard way to test.
 - **`npx prettier --write <file>`** — formatting. No linter, no test framework, no build step configured.
+
+### API testing protocol (MUST follow every time)
+
+1. User confirms `vercel dev` is running.
+2. Construct the GET URL(s) with query params, show them to the user, and tell them to open in browser to see the JSON response.
+3. Also call `curl.exe -s "<url>"` in this terminal to read the response myself.
+4. Only after BOTH the user confirms they saw the JSON AND I have curl output, declare the endpoint verified.
+
+Example flow:
+
+```
+# I tell the user:
+Open this in your browser: http://localhost:3000/api/epic?action=auth&options={"..."}
+(I also run curl myself behind the scenes)
+
+# Then after both confirm:
+auth ✅ — returns access_token, refresh_token, account_id
+```
 
 ## Stack
 
 - **CommonJS** everywhere (api/). `require()`, not `import`. package.json has no `"type": "module"` — psn-api is CJS.
 - **Vanilla JS frontend** (public/) — ES modules in browser, no bundler, no framework, no TypeScript.
-- Single dependency: `psn-api` ^2.14.0.
+- **Dependencies**: `psn-api` ^2.14.0. Steam and Epic handlers use raw `fetch`.
 
 ## Architecture
 
 ```
 Browser (ES module) → POST /api/psn   → Vercel serverless → psn-api → PlayStation Network
                     → POST /api/steam → Vercel serverless → fetch   → Steam Web API
+                    → POST /api/epic  → Vercel serverless → https   → Epic internal APIs
 ```
 
 ```
@@ -28,7 +46,8 @@ my-play-db/
 ├── api/
 │   ├── _cors.js       # CORS utility
 │   ├── psn.js         # PSN handler — 7 actions
-│   └── steam.js       # Steam handler — actions
+│   ├── steam.js       # Steam handler — 6 actions
+│   └── epic.js        # Epic handler — 5 actions
 ├── public/
 │   ├── index.html     # NPSSO link
 ├── .env.local          # STEAM_API_KEY (local dev)
@@ -69,6 +88,56 @@ POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and m
 
 Steam API key is in server-side env var (`STEAM_API_KEY`), never sent from client. `steamId` is passed as option (public info).
 
+## API (api/epic.js)
+
+POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+
+Uses Epic's undocumented internal REST APIs (same endpoints as Legendary/Playnite). Auth via OAuth authorization code flow with Epic's launcher client credentials embedded in the handler.
+
+| Action         | What it needs                                                               | Returns                                                                                                                                                            |
+| -------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `auth`         | authorizationCode or refreshToken                                           | accessToken + refreshToken + accountId + displayName + expiry                                                                                                      |
+| `library`      | accessToken [+ epicAccountId]                                               | Owned games (auto-paginates) with playtime merged. Each record: `namespace`, `catalogItemId`, `sandboxName`, `appName`, `productId`, `acquisitionDate`, `playtime` |
+| `catalog`      | accessToken + items[] ({ namespace, catalogItemId })                        | Store metadata per game (title, description, keyImages, developer, releaseInfo)                                                                                    |
+| `progress`     | accessToken [+ epicAccountId] [+ sandboxIds[]] [+ names{}]                  | Achievement progress per game: `sandboxId`, `sandboxName`, `catalogItemId`, total/unlocked/XPer game for every namespace with achievements                         |
+| `achievements` | accessToken + sandboxId [+ epicAccountId] [+ sandboxName] [+ catalogItemId] | Full achievement list: name, displayName, icon, XP, rarity, unlocked, unlockDate                                                                                   |
+
+### Field identity guide
+
+All Epic identifiers are returned by `library`. Use them as-is — no guessing needed:
+
+| Library field   | Maps to                                                   | Used for                      |
+| --------------- | --------------------------------------------------------- | ----------------------------- |
+| `namespace`     | `sandboxId` in progress/achievements                      | Achievement queries           |
+| `catalogItemId` | `id` in catalog API                                       | Store metadata queries        |
+| `sandboxName`   | Human-readable title (e.g. "Fall Guys", "Rocket League®") | Display in UI                 |
+| `appName`       | Internal codename (e.g. "Sugar", "Jackal")                | Matches playtime `artifactId` |
+| `productId`     | `productId` in achievement schema                         | Internal Epic reference       |
+
+**Example flow** — call once, use everywhere:
+
+```
+library → records[0].namespace = "jackal"     → progress sandboxId: "jackal"
+         records[0].catalogItemId = "..."      → catalog items: [{ namespace: "jackal", catalogItemId: "..." }]
+         records[0].sandboxName = "Dauntless"   → pass to progress/achievements via names{} or sandboxName param
+```
+
+### `progress` additional options
+
+- **`sandboxIds[]`**: Array of namespaces to check. If omitted, auto-scans the full library.
+- **`names{}`**: Optional name map to include game titles in the response. Pass as `{ [sandboxId]: "Game Name" }` or `{ [sandboxId]: { sandboxName, catalogItemId } }`. When auto-scanning, names are filled in automatically from library records.
+
+### `achievements` additional options
+
+- **`sandboxName`**: Optional game name to include in the response.
+- **`catalogItemId`**: Optional catalog item ID to include in the response.
+
+Achievement data via `launcher.store.epicgames.com/graphql` (POST only, requires `User-Agent: Mozilla/5.0 (...EpicGamesLauncher)` header). Schema queries are public; player unlock data requires an auth token. Games use Epic's internal codename as their sandboxId (e.g. `jackal` = Dauntless, `9773aa1aa54f4f7b80e44bef04986cea`/Sugar = Rocket League, `50118b7f954e450f8823df1614b24e80` = Fall Guys).
+
+**Auth flow**: User visits `https://www.epicgames.com/id/api/redirect?clientId=34a02cf8f4414e29b15921876da36f9a&responseType=code` while logged into Epic in their browser → gets a JSON response with an `authorizationCode` (short-lived). Pass that code to the `auth` action. The handler exchanges it for access+refresh tokens using Epic's OAuth endpoint.
+
+No env vars needed — the launcher client id/secret are public (same ones embedded in the Epic Games Launcher binary).
+
 ## Sync workflow
 
 The API is designed to support two patterns:
@@ -90,6 +159,16 @@ auth (via refreshToken) → recent({ limit: 20 }) → compare lastPlayedDateTime
 `games` with a `limit` provides playtime data (playDuration, playCount) for the N most recently played. `recent` is a lighter alternative (GraphQL endpoint, no pagination, no playtime) when you only need to detect "was this game played since last check?" without fetching the heavier `games` response.
 
 `titles` returns every trophy-enabled title ordered by most recent trophy activity. Each entry includes `npCommunicationId`, `progress`, `definedTrophies`, `earnedTrophies`, and `lastUpdatedDateTime` — enough to decide whether `trophies` needs to be called for that game.
+
+**Epic sync** — library + achievements:
+
+```
+auth (via refreshToken) → library → compare acquisitionDate
+                        → catalog only for new/changed items
+                        → progress → achievements only for games with new unlocks
+```
+
+`library` includes playtime (seconds) merged into each record. Incremental detection: compare `playtime` against previous run to detect recently-played games. No "last played" timestamp exists in Epic's API. `progress` checks all library namespaces for achievement schemas (public, no auth), then fetches player unlock data. Use `achievements` to get full details per game. `catalogItemId` + `namespace` from library records serve as the lookup keys for `catalog` queries — no guessing needed.
 
 ## Frontend
 
