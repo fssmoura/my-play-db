@@ -138,6 +138,29 @@ Achievement data via `launcher.store.epicgames.com/graphql` (POST only, requires
 
 No env vars needed — the launcher client id/secret are public (same ones embedded in the Epic Games Launcher binary).
 
+## API (api/xbox.js)
+
+POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+
+Uses Xbox Live REST APIs via OAuth 2.0 through Microsoft account authentication. Auth flow: user visits Microsoft OAuth URL → gets authorization code → handler exchanges for MSA token → Xbox User Token → XSTS token. The Xbox app's consumer client ID (`38cd2fa8-66fd-4760-afb2-405eb65d5b0c`) is hardcoded — no Azure app registration needed.
+
+**Auth URL** (user must visit while logged into their Microsoft account):
+```
+https://login.live.com/oauth20_authorize.srf?client_id=38cd2fa8-66fd-4760-afb2-405eb65d5b0c&response_type=code&approval_prompt=auto&scope=Xboxlive.signin%20Xboxlive.offline_access&redirect_uri=https://login.live.com/oauth20_desktop.srf
+```
+After authorizing, they're redirected to `oauth20_desktop.srf?code=...`. Pass the `code` param value to the `auth` action.
+
+| Action         | What it needs                                      | Returns                                                                                                                                                     |
+| -------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`         | authorizationCode or refreshToken                  | xuid + gamertag + userHash + xstsToken + accessToken + refreshToken + expiresIn                                                                             |
+| `profile`      | xuid + userHash + xstsToken                        | Xbox profile settings (gamertag, gamerscore, avatar)                                                                                                         |
+| `games`        | xuid + userHash + xstsToken                        | Title history — played games with name, titleId, devices, lastTimePlayed, developer, publisher. Playtime (minutesPlayed) merged from userstats.              |
+| `achievements` | xuid + userHash + xstsToken + titleId              | Full achievement list per titleId (name, description, gamerscore, icon, unlock status, timeUnlocked). `titleId` comes from the `games` response.            |
+
+**Limitation**: Xbox's REST API only returns titles that have been started at least once (no full purchase library like Steam). The `games` action mirrors what's available via `titlehub.xboxlive.com` — this is the same limitation Playnite's Xbox integration has.
+
+No env vars needed — the Microsoft OAuth client ID is the Xbox app's consumer ID (same one Playnite uses).
+
 ## Sync workflow
 
 The API is designed to support two patterns:
@@ -169,6 +192,17 @@ auth (via refreshToken) → library({ resolveNames: true }) → compare acquisit
 ```
 
 `library` includes playtime (seconds) merged into each record. Incremental detection: compare `playtime` against previous run to detect recently-played games. No "last played" timestamp exists in Epic's API. `progress` checks all library namespaces for achievement schemas (public, no auth), then fetches player unlock data. Use `achievements` to get full details per game. `catalogItemId` + `namespace` from library records serve as the lookup keys for `catalog` queries — no guessing needed. Pass `resolveNames: true` on `library` and `progress` to resolve generic sandbox names ("Live", "shoal Production") into real titles via the catalog API.
+
+**Xbox sync** — title history + achievements:
+
+```
+auth (via refreshToken) → profile → games → compare lastTimePlayed per title
+                                      → achievements only for titles where lastTimePlayed changed
+```
+
+`games` returns all played titles (auto-paginates), each with `titleHistory.lastTimePlayed` and minutes played where available. Metadata is included in the `detail` field per title: `developerName`, `publisherName`, `description`, `shortDescription`, `releaseDate`, `genres`, `displayImage`. No separate catalog endpoint needed. Games without `XblAchievements` in `detail.attributes` have no achievements to fetch. Playtime (`minutesPlayed`) is only available for Microsoft Store / Xbox-native titles (UWP, Game Pass) — non-MS games (Riot, Steam, standalone) that appear via Xbox app tracking on PC will show `minutesPlayed: null` or `0`.
+
+**Incremental detection**: Compare `lastTimePlayed` against stored timestamps. Titles where it's newer need re-import; titles with `null` or old timestamps can be skipped. Achievement data is per-game via `achievements` action.
 
 ## Frontend
 
