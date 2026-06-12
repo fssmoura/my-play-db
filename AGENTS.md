@@ -39,6 +39,7 @@ auth ✅ — returns access_token, refresh_token, account_id
 Browser (ES module) → POST /api/psn   → Vercel serverless → psn-api → PlayStation Network
                     → POST /api/steam → Vercel serverless → fetch   → Steam Web API
                     → POST /api/epic  → Vercel serverless → https   → Epic internal APIs
+                    → POST /api/ea    → Vercel serverless → https   → EA GraphQL + REST APIs
 ```
 
 ```
@@ -47,7 +48,9 @@ my-play-db/
 │   ├── _cors.js       # CORS utility
 │   ├── psn.js         # PSN handler — 7 actions
 │   ├── steam.js       # Steam handler — 6 actions
-│   └── epic.js        # Epic handler — 5 actions
+│   ├── epic.js        # Epic handler — 5 actions
+│   ├── xbox.js        # Xbox handler — 4 actions
+│   └── ea.js          # EA handler — 3 actions
 ├── public/
 │   ├── index.html     # NPSSO link
 ├── .env.local          # STEAM_API_KEY (local dev)
@@ -145,21 +148,65 @@ POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and m
 Uses Xbox Live REST APIs via OAuth 2.0 through Microsoft account authentication. Auth flow: user visits Microsoft OAuth URL → gets authorization code → handler exchanges for MSA token → Xbox User Token → XSTS token. The Xbox app's consumer client ID (`38cd2fa8-66fd-4760-afb2-405eb65d5b0c`) is hardcoded — no Azure app registration needed.
 
 **Auth URL** (user must visit while logged into their Microsoft account):
+
 ```
 https://login.live.com/oauth20_authorize.srf?client_id=38cd2fa8-66fd-4760-afb2-405eb65d5b0c&response_type=code&approval_prompt=auto&scope=Xboxlive.signin%20Xboxlive.offline_access&redirect_uri=https://login.live.com/oauth20_desktop.srf
 ```
+
 After authorizing, they're redirected to `oauth20_desktop.srf?code=...`. Pass the `code` param value to the `auth` action.
 
-| Action         | What it needs                                      | Returns                                                                                                                                                     |
-| -------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth`         | authorizationCode or refreshToken                  | xuid + gamertag + userHash + xstsToken + accessToken + refreshToken + expiresIn                                                                             |
-| `profile`      | xuid + userHash + xstsToken                        | Xbox profile settings (gamertag, gamerscore, avatar)                                                                                                         |
-| `games`        | xuid + userHash + xstsToken                        | Title history — played games with name, titleId, devices, lastTimePlayed, developer, publisher. Playtime (minutesPlayed) merged from userstats.              |
-| `achievements` | xuid + userHash + xstsToken + titleId              | Full achievement list per titleId (name, description, gamerscore, icon, unlock status, timeUnlocked). `titleId` comes from the `games` response.            |
+| Action         | What it needs                         | Returns                                                                                                                                          |
+| -------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `auth`         | authorizationCode or refreshToken     | xuid + gamertag + userHash + xstsToken + accessToken + refreshToken + expiresIn                                                                  |
+| `profile`      | xuid + userHash + xstsToken           | Xbox profile settings (gamertag, gamerscore, avatar)                                                                                             |
+| `games`        | xuid + userHash + xstsToken           | Title history — played games with name, titleId, devices, lastTimePlayed, developer, publisher. Playtime (minutesPlayed) merged from userstats.  |
+| `achievements` | xuid + userHash + xstsToken + titleId | Full achievement list per titleId (name, description, gamerscore, icon, unlock status, timeUnlocked). `titleId` comes from the `games` response. |
 
 **Limitation**: Xbox's REST API only returns titles that have been started at least once (no full purchase library like Steam). The `games` action mirrors what's available via `titlehub.xboxlive.com` — this is the same limitation Playnite's Xbox integration has.
 
 No env vars needed — the Microsoft OAuth client ID is the Xbox app's consumer ID (same one Playnite uses).
+
+## API (api/ea.js)
+
+POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+
+Uses EA's internal GraphQL API (`service-aggregation-layer.juno.ea.com`) plus the legacy achievements REST API (`achievements.gameservices.ea.com`). Auth via OAuth implicit token flow — user visits EA auth URL while logged into EA in their browser, gets a Bearer access token directly.
+
+**Auth URL** (user must visit while logged into their EA account):
+
+```
+https://accounts.ea.com/connect/auth?client_id=ORIGIN_JS_SDK&response_type=token&redirect_uri=nucleus:rest&prompt=none
+```
+
+Returns `{ access_token, token_type, expires_in }`. Pass the `access_token` value to all actions.
+
+| Action         | What it needs                                                    | Returns                                                                                                                                                                                                   |
+| -------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`         | accessToken                                                      | accessToken + pidId + personaId + displayName                                                                                                                                                             |
+| `library`      | accessToken                                                      | Owned games with metadata merged. Each record: `originOfferId`, `productId`, `name`, `gameSlug`, `contentId`, `displayType`, `achievementSetOverride`, `playtimeSeconds`, `lastPlayedDate`                |
+| `achievements` | accessToken + personaId + achievementSetOverride [+ sandboxName] | Full achievement list with `name`, `description`, `howTo`, `xp`, `hidden`, `rarity`, `iconUrl`, `unlocked`, `unlockDate`. Uses legacy REST API (icons+descriptions) when available, falls back to GraphQL |
+
+### Field identity guide
+
+| Library field            | Maps to            | Used for                                    |
+| ------------------------ | ------------------ | ------------------------------------------- |
+| `originOfferId`          | Offer lookup key   | Legacy offers & metadata                    |
+| `gameSlug`               | URL slug           | Playtime queries                            |
+| `achievementSetOverride` | Achievement set ID | Achievements query (null = no achievements) |
+| `contentId`              | Master title ID    | Internal EA reference                       |
+| `personaId`              | Player persona ID  | Achievements query (from auth)              |
+
+**Example flow**:
+
+```
+auth → { pidId, personaId, displayName }
+library → records[0].gameSlug = "fifa-20", achievementSetOverride = "50072_194927_50844"
+achievements({ personaId, achievementSetOverride: "50072_194927_50844" }) → full achievement list
+```
+
+### Auth note
+
+EA access tokens from `ORIGIN_JS_SDK` client ID expire after ~4 hours. There's no refresh flow for this client — user revisits the auth URL for a new token.
 
 ## Sync workflow
 
@@ -203,6 +250,15 @@ auth (via refreshToken) → profile → games → compare lastTimePlayed per tit
 `games` returns all played titles (auto-paginates), each with `titleHistory.lastTimePlayed` and minutes played where available. Metadata is included in the `detail` field per title: `developerName`, `publisherName`, `description`, `shortDescription`, `releaseDate`, `genres`, `displayImage`. No separate catalog endpoint needed. Games without `XblAchievements` in `detail.attributes` have no achievements to fetch. Playtime (`minutesPlayed`) is only available for Microsoft Store / Xbox-native titles (UWP, Game Pass) — non-MS games (Riot, Steam, standalone) that appear via Xbox app tracking on PC will show `minutesPlayed: null` or `0`.
 
 **Incremental detection**: Compare `lastTimePlayed` against stored timestamps. Titles where it's newer need re-import; titles with `null` or old timestamps can be skipped. Achievement data is per-game via `achievements` action.
+
+**EA sync** — library + achievements:
+
+```
+auth → library → compare playtime per game
+               → achievements only for games with changed playtime
+```
+
+`library` includes playtime (seconds) and `lastPlayedDate` merged into each record. Incremental detection: compare `playtimeSeconds` against previous run to find recently-played games. Each library record includes `achievementSetOverride` — games with `null` have no achievements. `gameSlug` from library is the key for playtime lookups; `achievementSetOverride` is the key for achievements. Older games (Origin era) return achievement icons, descriptions, and rarity via the legacy REST API; newer games fall back to GraphQL (name + status only).
 
 ## Frontend
 
