@@ -31,7 +31,7 @@ auth ✅ — returns access_token, refresh_token, account_id
 
 - **CommonJS** everywhere (api/). `require()`, not `import`. package.json has no `"type": "module"` — psn-api is CJS.
 - **Vanilla JS frontend** (public/) — ES modules in browser, no bundler, no framework, no TypeScript.
-- **Dependencies**: `psn-api` ^2.14.0. Steam and Epic handlers use raw `fetch`.
+- **Dependencies**: `psn-api` ^2.14.0. Steam, Epic, and IGDB handlers use raw `fetch`.
 
 ## Architecture
 
@@ -40,6 +40,7 @@ Browser (ES module) → POST /api/psn   → Vercel serverless → psn-api → Pl
                     → POST /api/steam → Vercel serverless → fetch   → Steam Web API
                     → POST /api/epic  → Vercel serverless → https   → Epic internal APIs
                     → POST /api/ea    → Vercel serverless → https   → EA GraphQL + REST APIs
+                    → POST /api/igdb  → Vercel serverless → https   → IGDB v4 (Twitch-backed)
 ```
 
 ```
@@ -50,7 +51,8 @@ my-play-db/
 │   ├── steam.js       # Steam handler — 6 actions
 │   ├── epic.js        # Epic handler — 5 actions
 │   ├── xbox.js        # Xbox handler — 4 actions
-│   └── ea.js          # EA handler — 3 actions
+│   ├── ea.js          # EA handler — 3 actions
+│   └── igdb.js        # IGDB handler — 4 actions
 ├── public/
 │   ├── index.html     # NPSSO link
 ├── .env.local          # STEAM_API_KEY (local dev)
@@ -207,6 +209,121 @@ achievements({ personaId, achievementSetOverride: "50072_194927_50844" }) → fu
 ### Auth note
 
 EA access tokens from `ORIGIN_JS_SDK` client ID expire after ~4 hours. There's no refresh flow for this client — user revisits the auth URL for a new token.
+
+## API (api/igdb.js)
+
+POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+
+Uses IGDB v4 (Twitch-backed game database) via OAuth client_credentials flow. No user auth needed — the Twitch Client ID + Client Secret are in server-side env vars (set via `vercel env add` — `.env.local` unreliable on this machine due to iCloud Drive file locking).
+
+| Action        | What it needs                     | Returns                                                                                                                                                                                                                                                                   |
+| ------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`        | nothing                           | `{ accessToken, expiresAt }` — Twitch OAuth token (auto-refreshed in-memory)                                                                                                                                                                                              |
+| `search`      | query [+ limit=10] [+ type]       | Array of games matching the search term. Fields: name, slug, summary, first_release_date, cover.url (t_1080p), genres.name, platforms.abbreviation, involved_companies, game_type. `type` filters by game_type enum                                                       |
+| `game`        | ids (single int or array of ints) | Array of full game records by IGDB id. See [game response fields](#game-response-fields) below.                                                                                                                                                                           |
+| `by_external` | source + uid                      | Single game record by external source ID (e.g. Steam appid → IGDB game). Returns `null` if not found. **LIMITATION**: numeric uids (Steam appids) fail — IGDB parsercalypse converts `"1817070"` to integer, causing `expected String but found Integer`. See workaround. |
+
+**Source map** for `by_external`:
+
+| Name  | Category |
+| ----- | -------- |
+| steam | 1        |
+| gog   | 5        |
+| xbox  | 31       |
+| psn   | 36       |
+| epic  | 26       |
+
+**Rate limit**: 4 requests/second to IGDB (handled by the API itself — no client-side throttle needed for single-user use).
+
+### Game response fields
+
+The `game` action returns games with images/videos URLs auto-constructed server-side:
+
+| Field                   | Type                                                           | Description                                        |
+| ----------------------- | -------------------------------------------------------------- | -------------------------------------------------- |
+| `id`                    | int                                                            | IGDB's canonical game ID                           |
+| `name`                  | string                                                         | Game title                                         |
+| `slug`                  | string                                                         | URL-friendly identifier                            |
+| `summary`               | string                                                         | Short description                                  |
+| `storyline`             | string                                                         | Full plot summary                                  |
+| `game_type`             | int                                                            | Game type enum (see table below)                   |
+| `version_title`         | string                                                         | Edition/subtitle (e.g. "Game of the Year Edition") |
+| `rating`                | float                                                          | IGDB community rating (0-100)                      |
+| `rating_count`          | int                                                            | Number of ratings                                  |
+| `updated_at`            | timestamp                                                      | Last update timestamp                              |
+| `cover`                 | object `{ url }`                                               | Cover image (t_1080p)                              |
+| `screenshots[]`         | array of `{ url }`                                             | Screenshots (t_1080p)                              |
+| `artworks[]`            | array of `{ url }`                                             | Artworks (t_1080p)                                 |
+| `videos[]`              | array of `{ name, url }`                                       | Video trailers (YouTube URLs)                      |
+| `genres[]`              | array of `{ id, name }`                                        | Genres                                             |
+| `platforms[]`           | array of `{ id, name, abbreviation }`                          | Platforms                                          |
+| `involved_companies[]`  | array of `{ id, company: { id, name }, developer, publisher }` | Dev/publisher                                      |
+| `release_dates[]`       | array of `{ id, date, platform, region, human }`               | Per-platform releases                              |
+| `websites[]`            | array of `{ id, url }`                                         | External links (category not returned by IGDB)     |
+| `collections[]`         | array of `{ id, name }`                                        | Collections (e.g. "Marvel's Spider-Man")           |
+| `franchise`             | object `{ id, name }`                                          | Franchise (e.g. "Spider-Man")                      |
+| `parent_game`           | object `{ id, name, slug, game_type }`                         | Parent game (for DLCs, remasters, etc)             |
+| `version_parent`        | object `{ id, name, slug, game_type }`                         | Parent version (for editions/bundles)              |
+| `bundles`               | int[]                                                          | IDs of bundles this game is included in            |
+| `dlcs`                  | int[]                                                          | IDs of DLC content for this game                   |
+| `expanded_games`        | int[]                                                          | IDs of expanded games                              |
+| `expansions`            | int[]                                                          | IDs of expansions                                  |
+| `forks`                 | int[]                                                          | IDs of forks                                       |
+| `ports`                 | int[]                                                          | IDs of ports                                       |
+| `remakes`               | int[]                                                          | IDs of remakes                                     |
+| `remasters`             | int[]                                                          | IDs of remasters                                   |
+| `standalone_expansions` | int[]                                                          | IDs of standalone expansions                       |
+| `similar_games`         | int[]                                                          | IDs of similar games (max 10-11)                   |
+
+Image URL construction pattern: `https://images.igdb.com/igdb/image/upload/t_1080p/{image_id}.jpg`
+
+Video URL pattern: `https://www.youtube.com/watch?v={video_id}`
+
+No `first_release_date` — use earliest from `release_dates[]` instead.
+
+### Relationship mapping
+
+Relationships are **directional** — child→parent has full names, parent→child is bare IDs:
+
+```
+Parent game (19565) → DLC IDs [109421, 109419, 109422]  (bare)
+DLC "Turf Wars" → parent_game { id: 19565, name: "Marvel's Spider-Man", ... }  (full)
+
+Parent game → bundle/edition IDs [122095]  (bare)
+GOTY Edition → version_parent { id: 19565, name: "Marvel's Spider-Man", ... }  (full)
+```
+
+**Editions and Updates are NOT returned by the parent game** — only discoverable via reverse queries:
+
+- Editions (games with `version_parent` pointing to parent): `where version_parent = {parent_id}`
+- Updates (games with `parent_game` + `game_type = 14`): `where parent_game = {parent_id} & game_type = 14`
+
+### Game type enum
+
+| Value | Name                 |
+| ----- | -------------------- |
+| 0     | main_game            |
+| 1     | dlc_addon            |
+| 2     | expansion            |
+| 3     | bundle               |
+| 4     | standalone_expansion |
+| 5     | mod                  |
+| 6     | episode              |
+| 7     | season               |
+| 8     | remake               |
+| 9     | remaster             |
+| 10    | expanded_game        |
+| 11    | port                 |
+| 12    | fork                 |
+| 13    | pack                 |
+| 14    | update               |
+
+The `search` action accepts an optional `type` parameter to filter results by game_type (e.g. `{"query":"Elden Ring","type":0}` returns only main games).
+
+### Known limitations
+
+- **`by_external` numeric uid**: IGDB APIcalypse parser converts all-digit quoted strings (like `"1817070"`) to integers. The `uid` field on `external_games` expects String — this causes a 400 error for Steam appids. Workaround: query `where version_parent = null & category = 0` then filter client-side, or use the `websites` endpoint with URL matching (also blocked by `://` in URLs). Non-numeric uids (Epic hex strings) work fine.
+- **`websites.category` not returned**: IGDB no longer returns the `category` field on website records. Identify site type by parsing URL domain.
 
 ## Sync workflow
 
