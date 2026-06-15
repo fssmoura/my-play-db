@@ -222,7 +222,7 @@ Uses IGDB v4 (Twitch-backed game database) via OAuth client_credentials flow. No
 | --------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `auth`          | nothing                           | `{ accessToken, expiresAt }` — Twitch OAuth token (auto-refreshed in-memory)                                                                                                                                                                                              |
 | `search`        | query [+ limit=10] [+ type]       | Array of games matching the search term. Fields: name, slug, summary, game_type, cover.url (t_1080p), platforms (name + abbreviation), release_dates (date, platform, region, human). `type` filters by game_type enum |
-| `game`          | ids (single int or array of ints) | Array of full game records by IGDB id. See [game response fields](#game-response-fields) below.                                                                                                                                                                           |
+| `game`          | ids (single int or array of ints) | Array of full game records by IGDB id. See [game response fields](api_reference.md#game) in api_reference.md.                                                                                                                                                                           |
 | `by_external`   | source + uid                      | Single game record by external source ID (e.g. Steam appid → IGDB game). Returns `null` if not found. Uses `external_game_source` (not the deprecated `category`). |
 | `external_ids`  | ids (single int or array of ints) | For a single IGDB game ID: `{ steam: { uid, url }, psn: { uid, url }, ... }`. For multiple IDs: `{ [igdbId]: { steam: { uid }, ... } }`. Queries IGDB's `external_games` table. Known sources (`steam`, `psn`, `xbox`, `epic`, `gog`) are named; unknown ones get `source_<N>`. |
 
@@ -236,100 +236,7 @@ Uses IGDB v4 (Twitch-backed game database) via OAuth client_credentials flow. No
 | psn   | 36 |
 | epic  | 26 |
 
-**ID mapping guide** — each platform uses different external IDs in IGDB. Verified via live API testing against actual game libraries:
-
-| Platform | Platform's own ID | IGDB uid format | Direct bridge? | How |
-|----------|-------------------|-----------------|:--------------:|-----|
-| **PSN**  | `concept.id` from `psn/games` (e.g. `10011898`) | Numeric string `"10011898"` | ✅ 1:1 | PSN `games` → `by_external(psn, conceptId)` |
-| **Steam** | `appid` from `steam/games` (e.g. `1245620`) | Numeric string `"1245620"` | ✅ 1:1 | Steam `games` → `by_external(steam, appid)` |
-| **Epic**  | `namespace` / `catalogItemId` from `epic/library` | Different hex UUID (Epic's product slug UUID, not namespace/catalogItemId) | ❌ | Store URL slug is different from both identifiers |
-| **Xbox**  | `titleId` from `xbox/games` (e.g. `1820250788`) | Xbox 360 UUID format `66acd000-...-d802{8hex}` | ❌ | IGDB only has Xbox 360 marketplace IDs; modern Xbox One/Series title IDs are absent |
-| **EA**    | `contentId` from `ea/library` | N/A — IGDB has no EA/Origin external source | ❌ | No EA category in IGDB's external_game_sources table |
-
 **Rate limit**: 4 requests/second to IGDB (handled by the API itself — no client-side throttle needed for single-user use).
-
-### Game response fields
-
-The `game` action returns games with images/videos URLs auto-constructed server-side:
-
-| Field                   | Type                                                           | Description                                        |
-| ----------------------- | -------------------------------------------------------------- | -------------------------------------------------- |
-| `id`                    | int                                                            | IGDB's canonical game ID                           |
-| `name`                  | string                                                         | Game title                                         |
-| `slug`                  | string                                                         | URL-friendly identifier                            |
-| `summary`               | string                                                         | Short description                                  |
-| `storyline`             | string                                                         | Full plot summary                                  |
-| `game_type`             | int                                                            | Game type enum (see table below)                   |
-| `version_title`         | string                                                         | Edition/subtitle (e.g. "Game of the Year Edition") |
-| `rating`                | float                                                          | IGDB community rating (0-100)                      |
-| `rating_count`          | int                                                            | Number of ratings                                  |
-| `updated_at`            | timestamp                                                      | Last update timestamp                              |
-| `cover`                 | object `{ url }`                                               | Cover image (t_1080p)                              |
-| `screenshots[]`         | array of `{ url }`                                             | Screenshots (t_1080p)                              |
-| `artworks[]`            | array of `{ url }`                                             | Artworks (t_1080p)                                 |
-| `videos[]`              | array of `{ name, url }`                                       | Video trailers (YouTube URLs)                      |
-| `genres[]`              | array of `{ id, name }`                                        | Genres                                             |
-| `platforms[]`           | array of `{ id, name, abbreviation }`                          | Platforms                                          |
-| `involved_companies[]`  | array of `{ id, company: { id, name }, developer, publisher }` | Dev/publisher                                      |
-| `release_dates[]`       | array of `{ id, date, platform, region, human }`               | Per-platform releases                              |
-| `websites[]`            | array of `{ url, type }`                                       | External links with type ID (1=Official, 3=Wikipedia, 9=YouTube, 13=Steam, 16=Epic, etc). See `website_types` endpoint for full map. |
-| `collections[]`         | array of `{ id, name }`                                        | Collections (e.g. "Marvel's Spider-Man")           |
-| `franchise`             | object `{ id, name }`                                          | Franchise (e.g. "Spider-Man")                      |
-| `parent_game`           | object `{ id, name, slug, game_type }`                         | Parent game (for DLCs, remasters, etc)             |
-| `version_parent`        | object `{ id, name, slug, game_type }`                         | Parent version (for editions/bundles)              |
-| `bundles`               | int[]                                                          | IDs of bundles this game is included in            |
-| `dlcs`                  | int[]                                                          | IDs of DLC content for this game                   |
-| `expanded_games`        | int[]                                                          | IDs of expanded games                              |
-| `expansions`            | int[]                                                          | IDs of expansions                                  |
-| `forks`                 | int[]                                                          | IDs of forks                                       |
-| `ports`                 | int[]                                                          | IDs of ports                                       |
-| `remakes`               | int[]                                                          | IDs of remakes                                     |
-| `remasters`             | int[]                                                          | IDs of remasters                                   |
-| `standalone_expansions` | int[]                                                          | IDs of standalone expansions                       |
-| `similar_games`         | int[]                                                          | IDs of similar games (max 10-11)                   |
-
-Image URL construction pattern: `https://images.igdb.com/igdb/image/upload/t_1080p/{image_id}.jpg`
-
-Video URL pattern: `https://www.youtube.com/watch?v={video_id}`
-
-No `first_release_date` — use earliest from `release_dates[]` instead.
-
-### Relationship mapping
-
-Relationships are **directional** — child→parent has full names, parent→child is bare IDs:
-
-```
-Parent game (19565) → DLC IDs [109421, 109419, 109422]  (bare)
-DLC "Turf Wars" → parent_game { id: 19565, name: "Marvel's Spider-Man", ... }  (full)
-
-Parent game → bundle/edition IDs [122095]  (bare)
-GOTY Edition → version_parent { id: 19565, name: "Marvel's Spider-Man", ... }  (full)
-```
-
-**Editions and Updates are NOT returned by the parent game** — only discoverable via reverse queries:
-
-- Editions (games with `version_parent` pointing to parent): `where version_parent = {parent_id}`
-- Updates (games with `parent_game` + `game_type = 14`): `where parent_game = {parent_id} & game_type = 14`
-
-### Game type enum
-
-| Value | Name                 |
-| ----- | -------------------- |
-| 0     | main_game            |
-| 1     | dlc_addon            |
-| 2     | expansion            |
-| 3     | bundle               |
-| 4     | standalone_expansion |
-| 5     | mod                  |
-| 6     | episode              |
-| 7     | season               |
-| 8     | remake               |
-| 9     | remaster             |
-| 10    | expanded_game        |
-| 11    | port                 |
-| 12    | fork                 |
-| 13    | pack                 |
-| 14    | update               |
 
 The `search` action accepts an optional `type` parameter to filter results by game_type (e.g. `{"query":"Elden Ring","type":0}` returns only main games).
 
@@ -351,73 +258,9 @@ Each action accepts either an SGDB `gameId` or a `{ platform, platformId }` pair
 | `heroes`    | sgdbId or { platform, platformId } [+filters]            | Same shape as grids                                                                      |
 | `logos`     | sgdbId or { platform, platformId } [+filters]            | Same shape as grids (logos have no `dimensions` filter)                                  |
 
-### Platform ID bridge
+For platforms without a direct SGDB bridge (PSN, Xbox, EA), use IGDB as intermediary: `external_ids(igdbId)` → Steam appid → SGDB steam bridge. Name search is final fallback.
 
-| Source   | Our ID             | SGDB Bridge | Strategy                                               |
-| -------- | ------------------ | :---------: | ------------------------------------------------------ |
-| Steam    | appid (int)        |  ✅ Direct  | `/games/steam/{appid}` → `/grids/steam/{appid}`        |
-| Epic     | namespace (string) |  ✅ Direct  | `/games/egs/{namespace}` → `/grids/egs/{namespace}`    |
-| PSN      | concept.id (int)   |     ❌      | Via IGDB `external_ids` → Steam appid → SGDB steam bridge |
-| Xbox     | titleId (int)      |     ❌      | Via IGDB `external_ids` → Steam appid → SGDB steam bridge |
-| EA       | contentId (string) |     ❌      | Name search fallback (Origin ID unknown)               |
-
-For platforms without a direct SGDB bridge, IGDB serves as the intermediary: query `external_ids(igdbId)` to get the Steam appid, then use SGDB's steam bridge. Name search is the final fallback for exclusives.
-
-**CORS**: SGDB does not set `access-control-allow-origin` — all requests must proxy through Vercel. API key is server-side only.
-
-**Caching**: Game lookups are stable (IDs don't change) — cache aggressively. Asset responses can be cached with reasonable TTL. No documented rate limit.
-
-## Sync workflow
-
-The API is designed to support two patterns:
-
-**Initial sync** — pull everything once:
-
-```
-auth → profile → games (no limit) → titles (no limit) → trophies per game
-```
-
-**Incremental update** — only fetch what changed:
-
-```
-auth (via refreshToken) → recent({ limit: 20 }) → compare lastPlayedDateTime
-                        → titles({ limit: 50 }) → compare lastUpdatedDateTime
-                        → trophies only for changed titles
-```
-
-`games` with a `limit` provides playtime data (playDuration, playCount) for the N most recently played. `recent` is a lighter alternative (GraphQL endpoint, no pagination, no playtime) when you only need to detect "was this game played since last check?" without fetching the heavier `games` response.
-
-`titles` returns every trophy-enabled title ordered by most recent trophy activity. Each entry includes `npCommunicationId`, `progress`, `definedTrophies`, `earnedTrophies`, and `lastUpdatedDateTime` — enough to decide whether `trophies` needs to be called for that game.
-
-**Epic sync** — library + achievements:
-
-```
-auth (via refreshToken) → library({ resolveNames: true }) → compare acquisitionDate
-                        → catalog only for new/changed items
-                        → progress({ resolveNames: true }) → achievements only for games with new unlocks
-```
-
-`library` includes playtime (seconds) merged into each record. Incremental detection: compare `playtime` against previous run to detect recently-played games. No "last played" timestamp exists in Epic's API. `progress` checks all library namespaces for achievement schemas (public, no auth), then fetches player unlock data. Use `achievements` to get full details per game. `catalogItemId` + `namespace` from library records serve as the lookup keys for `catalog` queries — no guessing needed. Pass `resolveNames: true` on `library` and `progress` to resolve generic sandbox names ("Live", "shoal Production") into real titles via the catalog API.
-
-**Xbox sync** — title history + achievements:
-
-```
-auth (via refreshToken) → profile → games → compare lastTimePlayed per title
-                                      → achievements only for titles where lastTimePlayed changed
-```
-
-`games` returns all played titles (auto-paginates), each with `titleHistory.lastTimePlayed` and minutes played where available. Metadata is included in the `detail` field per title: `developerName`, `publisherName`, `description`, `shortDescription`, `releaseDate`, `genres`, `displayImage`. No separate catalog endpoint needed. Games without `XblAchievements` in `detail.attributes` have no achievements to fetch. Playtime (`minutesPlayed`) is only available for Microsoft Store / Xbox-native titles (UWP, Game Pass) — non-MS games (Riot, Steam, standalone) that appear via Xbox app tracking on PC will show `minutesPlayed: null` or `0`.
-
-**Incremental detection**: Compare `lastTimePlayed` against stored timestamps. Titles where it's newer need re-import; titles with `null` or old timestamps can be skipped. Achievement data is per-game via `achievements` action.
-
-**EA sync** — library + achievements:
-
-```
-auth → library → compare playtime per game
-               → achievements only for games with changed playtime
-```
-
-`library` includes playtime (seconds) and `lastPlayedDate` merged into each record. Incremental detection: compare `playtimeSeconds` against previous run to find recently-played games. Each library record includes `achievementSetOverride` — games with `null` have no achievements. `gameSlug` from library is the key for playtime lookups; `achievementSetOverride` is the key for achievements. Older games (Origin era) return achievement icons, descriptions, and rarity via the legacy REST API; newer games fall back to GraphQL (name + status only).
+> Detailed API responses, field observations, data flows, and sync patterns for all handlers are in [`api_reference.md`](api_reference.md).
 
 ## Frontend
 
