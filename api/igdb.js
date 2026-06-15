@@ -12,6 +12,10 @@ const SOURCE_MAP = {
   epic: 26,
 };
 
+const SOURCE_NAMES = Object.fromEntries(
+  Object.entries(SOURCE_MAP).map(([k, v]) => [v, k]),
+);
+
 let tokenCache = { accessToken: null, expiresAt: 0 };
 
 async function getAccessToken() {
@@ -129,6 +133,25 @@ const actions = {
     );
     enrichImages(results);
     return results;
+  },
+
+  async external_ids(options = {}) {
+    const { ids } = options;
+    if (!ids) throw new Error("ids is required");
+    const idList = Array.isArray(ids) ? ids : [ids];
+    const results = await igdbFetch(
+      "external_games",
+      `where game = (${idList.join(",")}); fields game, uid, external_game_source, name, url;`,
+    );
+    if (!results || !results.length) return {};
+    const grouped = {};
+    for (const r of results) {
+      const gameId = typeof r.game === "object" ? r.game.id : r.game;
+      if (!grouped[gameId]) grouped[gameId] = {};
+      const platform = SOURCE_NAMES[r.external_game_source] ?? `source_${r.external_game_source}`;
+      grouped[gameId][platform] = { uid: r.uid, url: r.url };
+    }
+    return idList.length === 1 ? (grouped[idList[0]] ?? {}) : grouped;
   },
 
   async by_external(options = {}) {

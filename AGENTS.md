@@ -40,7 +40,8 @@ Browser (ES module) → POST /api/psn   → Vercel serverless → psn-api → Pl
                     → POST /api/steam → Vercel serverless → fetch   → Steam Web API
                     → POST /api/epic  → Vercel serverless → https   → Epic internal APIs
                     → POST /api/ea    → Vercel serverless → https   → EA GraphQL + REST APIs
-                    → POST /api/igdb  → Vercel serverless → https   → IGDB v4 (Twitch-backed)
+                     → POST /api/igdb  → Vercel serverless → https   → IGDB v4 (Twitch-backed)
+                     → POST /api/sgdb → Vercel serverless → https   → SteamGridDB v2 (community game art)
 ```
 
 ```
@@ -52,7 +53,8 @@ my-play-db/
 │   ├── epic.js        # Epic handler — 5 actions
 │   ├── xbox.js        # Xbox handler — 4 actions
 │   ├── ea.js          # EA handler — 3 actions
-│   └── igdb.js        # IGDB handler — 4 actions
+│   ├── igdb.js        # IGDB handler — 5 actions
+│   └── sgdb.js        # SteamGridDB handler — 5 actions
 ├── public/
 │   ├── index.html     # NPSSO link
 ├── .env.local          # STEAM_API_KEY (local dev)
@@ -216,12 +218,13 @@ POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and m
 
 Uses IGDB v4 (Twitch-backed game database) via OAuth client_credentials flow. No user auth needed — the Twitch Client ID + Client Secret are in server-side env vars (set via `vercel env add` — `.env.local` unreliable on this machine due to iCloud Drive file locking).
 
-| Action        | What it needs                     | Returns                                                                                                                                                                                                                                                                   |
-| ------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth`        | nothing                           | `{ accessToken, expiresAt }` — Twitch OAuth token (auto-refreshed in-memory)                                                                                                                                                                                              |
-| `search`      | query [+ limit=10] [+ type]       | Array of games matching the search term. Fields: name, slug, summary, game_type, cover.url (t_1080p), platforms (name + abbreviation), release_dates (date, platform, region, human). `type` filters by game_type enum |
-| `game`        | ids (single int or array of ints) | Array of full game records by IGDB id. See [game response fields](#game-response-fields) below.                                                                                                                                                                           |
-| `by_external` | source + uid                      | Single game record by external source ID (e.g. Steam appid → IGDB game). Returns `null` if not found. Uses `external_game_source` (not the deprecated `category`). |
+| Action          | What it needs                     | Returns                                                                                                                                                                                                                                                                   |
+| --------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`          | nothing                           | `{ accessToken, expiresAt }` — Twitch OAuth token (auto-refreshed in-memory)                                                                                                                                                                                              |
+| `search`        | query [+ limit=10] [+ type]       | Array of games matching the search term. Fields: name, slug, summary, game_type, cover.url (t_1080p), platforms (name + abbreviation), release_dates (date, platform, region, human). `type` filters by game_type enum |
+| `game`          | ids (single int or array of ints) | Array of full game records by IGDB id. See [game response fields](#game-response-fields) below.                                                                                                                                                                           |
+| `by_external`   | source + uid                      | Single game record by external source ID (e.g. Steam appid → IGDB game). Returns `null` if not found. Uses `external_game_source` (not the deprecated `category`). |
+| `external_ids`  | ids (single int or array of ints) | For a single IGDB game ID: `{ steam: { uid, url }, psn: { uid, url }, ... }`. For multiple IDs: `{ [igdbId]: { steam: { uid }, ... } }`. Queries IGDB's `external_games` table. Known sources (`steam`, `psn`, `xbox`, `epic`, `gog`) are named; unknown ones get `source_<N>`. |
 
 **Source map** for `by_external` — maps platform names to IGDB's `external_game_source` IDs:
 
@@ -329,6 +332,40 @@ GOTY Edition → version_parent { id: 19565, name: "Marvel's Spider-Man", ... } 
 | 14    | update               |
 
 The `search` action accepts an optional `type` parameter to filter results by game_type (e.g. `{"query":"Elden Ring","type":0}` returns only main games).
+
+## API (api/sgdb.js)
+
+POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+
+Uses SteamGridDB v2 API (community-driven game artwork: grids, heroes, logos). Auth via static API key (`STEAMGRIDDB_API_KEY` in Vercel env), sent as `Authorization: Bearer` header. No OAuth, no token refresh.
+
+Asset actions default to including everything (nsfw/humor/epilepsy/animated). Override via optional filters: `styles`, `dimensions`, `mimes`, `types` (static/animated), `nsfw` (yes/no/any), `humor` (yes/no/any), `epilepsy` (yes/no/any), `limit`, `page`. Styles/dimensions values differ per asset type (see SGDB docs for valid values).
+
+Each action accepts either an SGDB `gameId` or a `{ platform, platformId }` pair for direct platform ID lookups. Platform enum: `steam`, `origin`, `egs`, `bnet`, `uplay`, `flashpoint`, `eshop`.
+
+| Action      | Params                                                   | Returns                                                                                  |
+| ----------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `search`    | name                                                     | [{ id, name, release_date }]                                                             |
+| `game`      | sgdbId or { platform, platformId }                       | { id, name, release_date }                                                               |
+| `grids`     | sgdbId or { platform, platformId } [+filters]            | { page, total, limit, data: [{ id, width, height, nsfw, humor, mime, url, thumb }] }    |
+| `heroes`    | sgdbId or { platform, platformId } [+filters]            | Same shape as grids                                                                      |
+| `logos`     | sgdbId or { platform, platformId } [+filters]            | Same shape as grids (logos have no `dimensions` filter)                                  |
+
+### Platform ID bridge
+
+| Source   | Our ID             | SGDB Bridge | Strategy                                               |
+| -------- | ------------------ | :---------: | ------------------------------------------------------ |
+| Steam    | appid (int)        |  ✅ Direct  | `/games/steam/{appid}` → `/grids/steam/{appid}`        |
+| Epic     | namespace (string) |  ✅ Direct  | `/games/egs/{namespace}` → `/grids/egs/{namespace}`    |
+| PSN      | concept.id (int)   |     ❌      | Via IGDB `external_ids` → Steam appid → SGDB steam bridge |
+| Xbox     | titleId (int)      |     ❌      | Via IGDB `external_ids` → Steam appid → SGDB steam bridge |
+| EA       | contentId (string) |     ❌      | Name search fallback (Origin ID unknown)               |
+
+For platforms without a direct SGDB bridge, IGDB serves as the intermediary: query `external_ids(igdbId)` to get the Steam appid, then use SGDB's steam bridge. Name search is the final fallback for exclusives.
+
+**CORS**: SGDB does not set `access-control-allow-origin` — all requests must proxy through Vercel. API key is server-side only.
+
+**Caching**: Game lookups are stable (IDs don't change) — cache aggressively. Asset responses can be cached with reasonable TTL. No documented rate limit.
 
 ## Sync workflow
 
