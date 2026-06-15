@@ -1271,32 +1271,35 @@ No user-facing account — this is an app-level token for API access.
   "screenshots": [{ "url": "https://images.igdb.com/igdb/image/upload/t_1080p/sc52we.jpg" }],
   "artworks": [{ "url": "..." }],
   "videos": [{ "name": "Story Trailer", "url": "https://www.youtube.com/watch?v=K_03kFqW8I" }],
-  "genres": [{ "id": 12, "name": "Role-playing (RPG)" }, { "id": 31, "name": "Adventure" }],
-  "platforms": [{ "id": 6, "name": "PC (Microsoft Windows)", "abbreviation": "PC" }],
+  "genres": [{ "name": "Role-playing (RPG)" }, { "name": "Adventure" }],
+  "platforms": [{ "name": "PC (Microsoft Windows)", "abbreviation": "PC" }],
   "involved_companies": [
-    { "id": 1, "company": { "id": 100, "name": "FromSoftware" }, "developer": true, "publisher": false }
+    { "company": { "name": "FromSoftware" }, "developer": true, "publisher": false }
   ],
-  "release_dates": [{ "id": 1, "date": 1645660800, "platform": 6, "region": 8, "human": "Feb 24, 2022" }],
-  "websites": [{ "url": "https://www.eldenring.com", "type": 1 }],
-  "collections": [{ "id": 100, "name": "Souls series" }],
-  "franchise": { "id": 100, "name": "Dark Souls" },
+  "release_dates": [{ "date": 1645660800, "platform": 6, "region": 8, "human": "Feb 24, 2022" }],
+  "websites": [{ "url": "https://www.eldenring.com", "type": "official" }],
+  "collections": [{ "name": "Souls series" }],
+  "franchises": [{ "name": "Dark Souls" }],
   "parent_game": null,
   "version_parent": null,
   "bundles": [],
   "dlcs": [109421],
   "expanded_games": [],
   "expansions": [],
-  "forks": [],
-  "ports": [],
   "remakes": [],
   "remasters": [],
   "standalone_expansions": [],
-  "similar_games": [120, 130, 140]
+  "similar_games": [120, 130, 140],
+  "external_games": [
+    { "uid": "1245620", "source": "steam" },
+    { "uid": "10011898", "source": "psn" },
+    { "uid": "66acd000-...", "source": "xbox" }
+  ]
 }
 ```
 
 **Key observations**:
-- `websites[].type`: 1 = Official, 3 = Wikipedia, 9 = YouTube, 13 = Steam, 16 = Epic
+- `websites[].type` enriched to human-readable name (e.g. `"official"`, `"youtube"`, `"steam"`). `release_dates[].id` stripped. Both handled in `enrichImages`.
 - `game_type`: 0 = main_game, 1 = dlc_addon, 3 = bundle, 8 = remake, 9 = remaster, etc (see full table below)
 - `rating` is 0–100, `rating_count` is number of community ratings
 - `version_title` is non-null for editions (e.g. "Game of the Year Edition")
@@ -1304,6 +1307,7 @@ No user-facing account — this is an app-level token for API access.
 - Editions and updates NOT returned by parent — query `where version_parent = {id}` for editions, `where parent_game = {id} & game_type = 14` for updates
 - Image URL: `https://images.igdb.com/igdb/image/upload/t_1080p/{image_id}.jpg`
 - Video URL: `https://www.youtube.com/watch?v={video_id}`
+- `external_games[]` enriched in response — `source` is the human-readable name (e.g. `"steam"`, `"psn"`) instead of the numeric `external_game_source`. Unknown sources get `source_<N>` (e.g. `source_42`). IGDB-internal `id` stripped.
 
 ### Game type enum
 
@@ -1329,63 +1333,26 @@ No user-facing account — this is an app-level token for API access.
 
 ### `by_external`
 
-**Request**: `{ source: "steam", uid: "730" }` or `{ source: "psn", uid: "10011898" }`
+**Request**: `{ source: "steam", uid: "730" }` or `{ source: "psn", uid: "10011898" }` or `{ source: 31, uid: "..." }`
 
 ```json
-{
-  "id": 112,
-  "name": "Elden Ring",
-  "slug": "elden-ring",
-  "game_type": 0,
-  "cover": { "url": "..." }
-}
+{ "id": 112 }
 ```
 
 Or `null` if no match.
 
 **Key observations**:
 - Uses IGDB's `external_game_source` table (not deprecated `category` field)
-- Source map: `steam` = 1, `gog` = 5, `xbox` = 31, `psn` = 36, `epic` = 26
-- Returns same fields as `game` — full record
+- `source` accepts name (e.g. `"steam"`, `"psn"`) or numeric ID (e.g. `1`, `36`) — see source map above
+- Returns only the IGDB `id` — lightweight mapping. Use `game({ ids: [id] })` for full record
 - `null` means IGDB has no record for that external ID (common for Epic UUIDs, modern Xbox titleIds)
 - Returns at most 1 result
 
 ---
 
-### `external_ids`
-
-**Request**: `{ ids: 112 }` or `{ ids: [112, 353848] }`
-
-Single ID:
-
-```json
-{
-  "steam": { "uid": "1245620", "url": "https://www.igdb.com/games/elden-ring/external/steam-1245620" },
-  "psn": { "uid": "10011898", "url": "https://www.igdb.com/games/elden-ring/external/psn-10011898" },
-  "xbox": { "uid": "66acd000-...", "url": "..." },
-  "epic": { "uid": "...
-  "gog": { "uid": "...", "url": "..." }
-}
-```
-
-Multiple IDs:
-
-```json
-{
-  "112": { "steam": { "uid": "1245620" } },
-  "353848": { "steam": { "uid": "3405690" }, "psn": { "uid": "10011898" } }
-}
-```
-
-**Key observations**:
-- Known sources get named keys (`steam`, `psn`, `xbox`, `epic`, `gog`); unknown sources get `source_<N>` (e.g. `source_42`)
-- Multiple IDs return an object keyed by IGDB ID — same shape per entry
-- Essential bridge: get Steam appid from IGDB game ID → use for SGDB art lookups
-- Not all platforms resolve — Epic UUIDs and modern Xbox titleIds are typically absent
-
----
-
 ### IGDB ID mapping (verified against live data)
+
+`by_external` is the bridge: pass a platform ID → get IGDB game ID. Or use `game(id)\.external_games` to get all external IDs for a known game.
 
 | Platform | Platform's own ID | IGDB uid format | Direct bridge? | How |
 |----------|-------------------|-----------------|:--------------:|-----|
@@ -1434,7 +1401,7 @@ Or `null` if not found.
 **Key observations**:
 - Platform enum: `steam`, `origin`, `egs`, `bnet`, `uplay`, `flashpoint`, `eshop`
 - Direct platform lookup works for Steam (`appid`), Epic (`namespace`) — others need IGDB bridge
-- For PSN/Xbox: use IGDB `external_ids` → Steam appid → SGDB steam bridge
+- For PSN/Xbox: use IGDB `game(igdbId).external_games` → find steam entry → SGDB steam bridge
 - Name search is final fallback for exclusives with no bridge
 
 ---
@@ -1477,8 +1444,8 @@ Or `null` if not found.
 |--------|--------|:-------:|----------|
 | Steam | appid (int) | ✅ | `/grids/steam/{appid}` |
 | Epic | namespace (string) | ✅ | `/grids/egs/{namespace}` |
-| PSN | concept.id (int) | ❌ | IGDB `external_ids` → Steam appid → SGDB steam |
-| Xbox | titleId (int) | ❌ | IGDB `external_ids` → Steam appid → SGDB steam |
+| PSN | concept.id (int) | ❌ | IGDB `game(igdbId).external_games` → find steam entry → SGDB steam |
+| Xbox | titleId (int) | ❌ | IGDB `game(igdbId).external_games` → find steam entry → SGDB steam |
 | EA | contentId (string) | ❌ | Name search fallback |
 
 **Caching**: Game lookups stable — cache aggressively. Assets cacheable with reasonable TTL. No documented rate limit.
@@ -1542,8 +1509,8 @@ After syncing any platform, enrich each game via IGDB:
 
 ```
 platform game → IGDB by_external(platform, platformId) → store IGDB game ID (canonical)
-             → IGDB external_ids(igdbId) → check for Steam appid
-               → if found → SGDB game({ platform: "steam", platformId }) → SGDB ID
+             → IGDB game(igdbId).external_games → check for steam entry
+               → if found → SGDB game({ platform: "steam", platformId: uid }) → SGDB ID
                           → SGDB grids/heroes/logos({ sgdbId }) → artwork
                → if not found → SGDB search(name) → pick match → artwork
 ```

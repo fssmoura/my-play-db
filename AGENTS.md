@@ -53,7 +53,7 @@ my-play-db/
 │   ├── epic.js        # Epic handler — 5 actions
 │   ├── xbox.js        # Xbox handler — 4 actions
 │   ├── ea.js          # EA handler — 3 actions
-│   ├── igdb.js        # IGDB handler — 5 actions
+│   ├── igdb.js        # IGDB handler — 4 actions
 │   └── sgdb.js        # SteamGridDB handler — 5 actions
 ├── public/
 │   ├── index.html     # NPSSO link
@@ -222,19 +222,35 @@ Uses IGDB v4 (Twitch-backed game database) via OAuth client_credentials flow. No
 | --------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `auth`          | nothing                           | `{ accessToken, expiresAt }` — Twitch OAuth token (auto-refreshed in-memory)                                                                                                                                                                                              |
 | `search`        | query [+ limit=10] [+ type]       | Array of games matching the search term. Fields: name, slug, summary, game_type, cover.url (t_1080p), platforms (name + abbreviation), release_dates (date, platform, region, human). `type` filters by game_type enum |
-| `game`          | ids (single int or array of ints) | Array of full game records by IGDB id. See [game response fields](api_reference.md#game) in api_reference.md.                                                                                                                                                                           |
-| `by_external`   | source + uid                      | Single game record by external source ID (e.g. Steam appid → IGDB game). Returns `null` if not found. Uses `external_game_source` (not the deprecated `category`). |
-| `external_ids`  | ids (single int or array of ints) | For a single IGDB game ID: `{ steam: { uid, url }, psn: { uid, url }, ... }`. For multiple IDs: `{ [igdbId]: { steam: { uid }, ... } }`. Queries IGDB's `external_games` table. Known sources (`steam`, `psn`, `xbox`, `epic`, `gog`) are named; unknown ones get `source_<N>`. |
+| `game`          | ids (single int or array of ints) | Array of full game records by IGDB id. `external_games` bundled in response with `source` name (enriched from numeric ID). See [game response fields](api_reference.md#game) in api_reference.md. |
+| `by_external`   | source + uid                      | Lightweight lookup: `{ id }` (IGDB game ID) or `null`. Use `game(id)` for full record. `source` accepts name or number. |
 
-**Source map** for `by_external` — maps platform names to IGDB's `external_game_source` IDs:
+**Source map** — maps names to IGDB's `external_game_source` IDs. Used by `by_external` and baked into `game` response via `external_games[].source`:
 
-| Name  | ID |
-| ----- | -- |
-| steam | 1  |
-| gog   | 5  |
-| xbox  | 31 |
-| psn   | 36 |
-| epic  | 26 |
+| Name         | ID  |
+| ------------ | --- |
+| steam        | 1   |
+| giantbomb    | 3   |
+| gog          | 5   |
+| youtube      | 10  |
+| microsoft    | 11  |
+| apple        | 13  |
+| twitch       | 14  |
+| android      | 15  |
+| amazon       | 20  |
+| amazon_luna  | 22  |
+| amazon_adg   | 23  |
+| epic         | 26  |
+| oculus       | 28  |
+| utomik       | 29  |
+| itch         | 30  |
+| xbox         | 31  |
+| kartridge    | 32  |
+| psn          | 36  |
+| focus        | 37  |
+| xgpc         | 54  |
+| gamejolt     | 55  |
+| igdb         | 121 |
 
 **Rate limit**: 4 requests/second to IGDB (handled by the API itself — no client-side throttle needed for single-user use).
 
@@ -258,7 +274,7 @@ Each action accepts either an SGDB `gameId` or a `{ platform, platformId }` pair
 | `heroes`    | sgdbId or { platform, platformId } [+filters]            | Same shape as grids                                                                      |
 | `logos`     | sgdbId or { platform, platformId } [+filters]            | Same shape as grids (logos have no `dimensions` filter)                                  |
 
-For platforms without a direct SGDB bridge (PSN, Xbox, EA), use IGDB as intermediary: `external_ids(igdbId)` → Steam appid → SGDB steam bridge. Name search is final fallback.
+For platforms without a direct SGDB bridge (PSN, Xbox, EA), use IGDB as intermediary: `game(igdbId).external_games` → find steam entry → SGDB steam bridge. Name search is final fallback.
 
 > Detailed API responses, field observations, data flows, and sync patterns for all handlers are in [`api_reference.md`](api_reference.md).
 
