@@ -6,15 +6,55 @@ const IGDB_BASE = "https://api.igdb.com/v4";
 
 const SOURCE_MAP = {
   steam: 1,
+  giantbomb: 3,
   gog: 5,
-  xbox: 31,
-  psn: 36,
+  youtube: 10,
+  microsoft: 11,
+  apple: 13,
+  twitch: 14,
+  android: 15,
+  amazon: 20,
+  amazon_luna: 22,
+  amazon_adg: 23,
   epic: 26,
+  oculus: 28,
+  utomik: 29,
+  itch: 30,
+  xbox: 31,
+  kartridge: 32,
+  psn: 36,
+  focus: 37,
+  xgpc: 54,
+  gamejolt: 55,
+  igdb: 121,
 };
 
 const SOURCE_NAMES = Object.fromEntries(
   Object.entries(SOURCE_MAP).map(([k, v]) => [v, k]),
 );
+
+const WEBSITE_TYPES = {
+  1: "official",
+  2: "wikia",
+  3: "wikipedia",
+  4: "facebook",
+  5: "twitter",
+  6: "twitch",
+  8: "instagram",
+  9: "youtube",
+  10: "iphone",
+  11: "ipad",
+  12: "android",
+  13: "steam",
+  14: "reddit",
+  15: "discord",
+  16: "epic",
+  17: "gog",
+  18: "youtube_channel",
+  22: "xbox",
+  23: "playstation",
+  24: "nintendo",
+};
 
 let tokenCache = { accessToken: null, expiresAt: 0 };
 
@@ -98,6 +138,24 @@ function enrichImages(data) {
       delete v.video_id;
     });
   }
+  if (data.release_dates) {
+    data.release_dates.forEach((r) => delete r.id);
+  }
+  if (data.websites) {
+    data.websites.forEach((w) => {
+      delete w.id;
+      w.type = WEBSITE_TYPES[w.type] || `type_${w.type}`;
+    });
+  }
+  if (data.external_games) {
+    data.external_games.forEach((e) => {
+      delete e.id;
+      e.source =
+        SOURCE_NAMES[e.external_game_source] ||
+        `source_${e.external_game_source}`;
+      delete e.external_game_source;
+    });
+  }
 }
 
 const actions = {
@@ -129,29 +187,10 @@ const actions = {
     const idList = Array.isArray(ids) ? ids : [ids];
     const results = await igdbFetch(
       "games",
-      `where id = (${idList.join(",")}); fields name,slug,summary,storyline,game_type,version_title,rating,rating_count,updated_at,cover.id,cover.image_id,screenshots.id,screenshots.image_id,artworks.id,artworks.image_id,videos.id,videos.name,videos.video_id,genres.name,platforms.name,platforms.abbreviation,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,bundles,dlcs,expanded_games,expansions,forks,ports,remakes,remasters,standalone_expansions,similar_games,collections.name,franchise.name,websites.url,websites.type,version_parent.name,version_parent.slug,version_parent.game_type,parent_game.name,parent_game.slug,parent_game.game_type,release_dates.date,release_dates.platform,release_dates.region,release_dates.human; limit ${idList.length};`,
+      `where id = (${idList.join(",")}); fields name,slug,summary,storyline,game_type,version_title,rating,rating_count,updated_at,cover.id,cover.image_id,screenshots.id,screenshots.image_id,artworks.id,artworks.image_id,videos.id,videos.name,videos.video_id,genres.name,platforms.name,platforms.abbreviation,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,bundles,dlcs,expanded_games,expansions,external_games.uid,external_games.external_game_source,remakes,remasters,standalone_expansions,similar_games,collections.name,franchises.name,websites.url,websites.type,version_parent.name,version_parent.slug,version_parent.game_type,parent_game.name,parent_game.slug,parent_game.game_type,release_dates.date,release_dates.platform,release_dates.region,release_dates.human; limit ${idList.length};`,
     );
     enrichImages(results);
     return results;
-  },
-
-  async external_ids(options = {}) {
-    const { ids } = options;
-    if (!ids) throw new Error("ids is required");
-    const idList = Array.isArray(ids) ? ids : [ids];
-    const results = await igdbFetch(
-      "external_games",
-      `where game = (${idList.join(",")}); fields game, uid, external_game_source, name, url;`,
-    );
-    if (!results || !results.length) return {};
-    const grouped = {};
-    for (const r of results) {
-      const gameId = typeof r.game === "object" ? r.game.id : r.game;
-      if (!grouped[gameId]) grouped[gameId] = {};
-      const platform = SOURCE_NAMES[r.external_game_source] ?? `source_${r.external_game_source}`;
-      grouped[gameId][platform] = { uid: r.uid, url: r.url };
-    }
-    return idList.length === 1 ? (grouped[idList[0]] ?? {}) : grouped;
   },
 
   async by_external(options = {}) {
@@ -176,12 +215,7 @@ const actions = {
         ? externalGames[0].game.id
         : externalGames[0].game;
 
-    const gameData = await igdbFetch(
-      "games",
-      `where id = ${gameId}; fields name,slug,summary,storyline,game_type,version_title,rating,rating_count,updated_at,cover.id,cover.image_id,screenshots.id,screenshots.image_id,artworks.id,artworks.image_id,videos.id,videos.name,videos.video_id,genres.name,platforms.name,platforms.abbreviation,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,bundles,dlcs,expanded_games,expansions,forks,ports,remakes,remasters,standalone_expansions,similar_games,collections.name,franchise.name,websites.url,websites.type,version_parent.name,version_parent.slug,version_parent.game_type,parent_game.name,parent_game.slug,parent_game.game_type,release_dates.date,release_dates.platform,release_dates.region,release_dates.human;`,
-    );
-    enrichImages(gameData);
-    return gameData;
+    return { id: gameId };
   },
 };
 
