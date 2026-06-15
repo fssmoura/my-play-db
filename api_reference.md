@@ -1,6 +1,6 @@
-# API Response Analysis — PSN, Steam & Epic
+# API Reference
 
-> Generated 2026-06-12 after live-testing all actions via `vercel dev`.
+> Live-testing results via `vercel dev` — PSN, Steam, Epic, Xbox, EA (2026-06-12), IGDB, SGDB (2026-06-15).
 
 ---
 
@@ -1191,6 +1191,362 @@ auth ──► xuid + userHash + xstsToken + refreshToken (1h expiry)
 ```
 
 **For sync**: `games` is the entry point. Compare `lastTimePlayed` against stored timestamps. Titles where it's newer need re-import. Only MS/Xbox-native titles have playtime data and achievements. Games with `null` or old timestamps can be skipped.
+
+---
+
+## IGDB (`api/igdb.js`)
+
+Uses IGDB v4 (Twitch-backed game database). No user auth — Twitch Client ID + Client Secret are server-side env vars. Token auto-refreshes in-memory.
+
+### `auth`
+
+**Request**: nothing
+
+```json
+{
+  "accessToken": "Twitch OAuth JWT (~60d expiry)",
+  "expiresAt": 1747600000
+}
+```
+
+No user-facing account — this is an app-level token for API access.
+
+---
+
+### `search`
+
+**Request**: `{ query: "Elden Ring", limit: 10, type: 0 }`
+
+```json
+[
+  {
+    "id": 112,
+    "name": "Elden Ring",
+    "slug": "elden-ring",
+    "summary": "The Golden Order has been broken...",
+    "game_type": 0,
+    "cover": {
+      "url": "https://images.igdb.com/igdb/image/upload/t_1080p/co4jni.jpg"
+    },
+    "platforms": [
+      { "id": 6, "name": "PC (Microsoft Windows)", "abbreviation": "PC" },
+      { "id": 48, "name": "PlayStation 4", "abbreviation": "PS4" },
+      { "id": 49, "name": "PlayStation 5", "abbreviation": "PS5" },
+      { "id": 32, "name": "Xbox One", "abbreviation": "XOne" },
+      { "id": 169, "name": "Xbox Series X|S", "abbreviation": "XSXS" }
+    ],
+    "release_dates": [
+      { "date": 1645660800, "platform": 6, "region": 8, "human": "Feb 24, 2022" }
+    ]
+  }
+]
+```
+
+**Key observations**:
+- `type` param filters by `game_type` enum (0 = main_game) — use to exclude DLCs, bundles, etc
+- `limit` defaults to 10
+- Cover images always `t_1080p` — replace size in URL for smaller variants
+- `release_dates[].date` is unix timestamp — earliest date is the first release
+- `region`: 1 = US, 2 = EU, 8 = WW (worldwide)
+
+---
+
+### `game`
+
+**Request**: `{ ids: [112] }`
+
+```json
+{
+  "id": 112,
+  "name": "Elden Ring",
+  "slug": "elden-ring",
+  "summary": "The Golden Order has been broken...",
+  "storyline": "Rise, Tarnished, and be guided by grace...",
+  "game_type": 0,
+  "version_title": null,
+  "rating": 95.0,
+  "rating_count": 4321,
+  "updated_at": 1747000000,
+  "cover": { "url": "https://images.igdb.com/igdb/image/upload/t_1080p/co4jni.jpg" },
+  "screenshots": [{ "url": "https://images.igdb.com/igdb/image/upload/t_1080p/sc52we.jpg" }],
+  "artworks": [{ "url": "..." }],
+  "videos": [{ "name": "Story Trailer", "url": "https://www.youtube.com/watch?v=K_03kFqW8I" }],
+  "genres": [{ "id": 12, "name": "Role-playing (RPG)" }, { "id": 31, "name": "Adventure" }],
+  "platforms": [{ "id": 6, "name": "PC (Microsoft Windows)", "abbreviation": "PC" }],
+  "involved_companies": [
+    { "id": 1, "company": { "id": 100, "name": "FromSoftware" }, "developer": true, "publisher": false }
+  ],
+  "release_dates": [{ "id": 1, "date": 1645660800, "platform": 6, "region": 8, "human": "Feb 24, 2022" }],
+  "websites": [{ "url": "https://www.eldenring.com", "type": 1 }],
+  "collections": [{ "id": 100, "name": "Souls series" }],
+  "franchise": { "id": 100, "name": "Dark Souls" },
+  "parent_game": null,
+  "version_parent": null,
+  "bundles": [],
+  "dlcs": [109421],
+  "expanded_games": [],
+  "expansions": [],
+  "forks": [],
+  "ports": [],
+  "remakes": [],
+  "remasters": [],
+  "standalone_expansions": [],
+  "similar_games": [120, 130, 140]
+}
+```
+
+**Key observations**:
+- `websites[].type`: 1 = Official, 3 = Wikipedia, 9 = YouTube, 13 = Steam, 16 = Epic
+- `game_type`: 0 = main_game, 1 = dlc_addon, 3 = bundle, 8 = remake, 9 = remaster, etc (see full table below)
+- `rating` is 0–100, `rating_count` is number of community ratings
+- `version_title` is non-null for editions (e.g. "Game of the Year Edition")
+- Relationships are directional — `parent_game`/`version_parent` have full names; bare ID lists for children (`dlcs`, `bundles`, etc)
+- Editions and updates NOT returned by parent — query `where version_parent = {id}` for editions, `where parent_game = {id} & game_type = 14` for updates
+- Image URL: `https://images.igdb.com/igdb/image/upload/t_1080p/{image_id}.jpg`
+- Video URL: `https://www.youtube.com/watch?v={video_id}`
+
+### Game type enum
+
+| Value | Name |
+| ----- | ---- |
+| 0 | main_game |
+| 1 | dlc_addon |
+| 2 | expansion |
+| 3 | bundle |
+| 4 | standalone_expansion |
+| 5 | mod |
+| 6 | episode |
+| 7 | season |
+| 8 | remake |
+| 9 | remaster |
+| 10 | expanded_game |
+| 11 | port |
+| 12 | fork |
+| 13 | pack |
+| 14 | update |
+
+---
+
+### `by_external`
+
+**Request**: `{ source: "steam", uid: "730" }` or `{ source: "psn", uid: "10011898" }`
+
+```json
+{
+  "id": 112,
+  "name": "Elden Ring",
+  "slug": "elden-ring",
+  "game_type": 0,
+  "cover": { "url": "..." }
+}
+```
+
+Or `null` if no match.
+
+**Key observations**:
+- Uses IGDB's `external_game_source` table (not deprecated `category` field)
+- Source map: `steam` = 1, `gog` = 5, `xbox` = 31, `psn` = 36, `epic` = 26
+- Returns same fields as `game` — full record
+- `null` means IGDB has no record for that external ID (common for Epic UUIDs, modern Xbox titleIds)
+- Returns at most 1 result
+
+---
+
+### `external_ids`
+
+**Request**: `{ ids: 112 }` or `{ ids: [112, 353848] }`
+
+Single ID:
+
+```json
+{
+  "steam": { "uid": "1245620", "url": "https://www.igdb.com/games/elden-ring/external/steam-1245620" },
+  "psn": { "uid": "10011898", "url": "https://www.igdb.com/games/elden-ring/external/psn-10011898" },
+  "xbox": { "uid": "66acd000-...", "url": "..." },
+  "epic": { "uid": "...
+  "gog": { "uid": "...", "url": "..." }
+}
+```
+
+Multiple IDs:
+
+```json
+{
+  "112": { "steam": { "uid": "1245620" } },
+  "353848": { "steam": { "uid": "3405690" }, "psn": { "uid": "10011898" } }
+}
+```
+
+**Key observations**:
+- Known sources get named keys (`steam`, `psn`, `xbox`, `epic`, `gog`); unknown sources get `source_<N>` (e.g. `source_42`)
+- Multiple IDs return an object keyed by IGDB ID — same shape per entry
+- Essential bridge: get Steam appid from IGDB game ID → use for SGDB art lookups
+- Not all platforms resolve — Epic UUIDs and modern Xbox titleIds are typically absent
+
+---
+
+### IGDB ID mapping (verified against live data)
+
+| Platform | Platform's own ID | IGDB uid format | Direct bridge? | How |
+|----------|-------------------|-----------------|:--------------:|-----|
+| **PSN** | `concept.id` from `psn/games` (e.g. `10011898`) | Numeric string | ✅ 1:1 | PSN `games` → `by_external(psn, conceptId)` |
+| **Steam** | `appid` from `steam/games` (e.g. `1245620`) | Numeric string | ✅ 1:1 | Steam `games` → `by_external(steam, appid)` |
+| **Epic** | `namespace` / `catalogItemId` | Hex UUID (product slug, not namespace) | ❌ | Store URL slug differs from both identifiers |
+| **Xbox** | `titleId` from `xbox/games` (e.g. `1820250788`) | Xbox 360 UUID format | ❌ | IGDB only has Xbox 360 marketplace IDs |
+| **EA** | `contentId` from `ea/library` | N/A | ❌ | No EA/Origin source in IGDB |
+
+**Rate limit**: 4 req/s to IGDB (handled server-side — no client throttle needed).
+
+---
+
+## SGDB (`api/sgdb.js`)
+
+Uses SteamGridDB v2 API (community game art). Auth: static API key (`STEAMGRIDDB_API_KEY`), `Authorization: Bearer` header. No CORS headers — all requests proxy through Vercel.
+
+### `search`
+
+**Request**: `{ name: "Elden Ring" }`
+
+Endpoint: `/search/autocomplete/{term}`
+```json
+[
+  { "id": 5495669, "name": "Elden Ring", "release_date": 1645568013 }
+]
+```
+
+**Key observations**:
+- Uses `/search/autocomplete/` not `/search/` — returns partial matches
+- `release_date` is unix timestamp
+- Response is clean: id, name, release_date only (other SGDB fields stripped)
+
+---
+
+### `game`
+
+**Request**: `{ sgdbId: 5495669 }` or `{ platform: "steam", platformId: 1245620 }`
+
+```json
+{ "id": 5495669, "name": "Elden Ring", "release_date": 1645568013 }
+```
+
+Or `null` if not found.
+
+**Key observations**:
+- Platform enum: `steam`, `origin`, `egs`, `bnet`, `uplay`, `flashpoint`, `eshop`
+- Direct platform lookup works for Steam (`appid`), Epic (`namespace`) — others need IGDB bridge
+- For PSN/Xbox: use IGDB `external_ids` → Steam appid → SGDB steam bridge
+- Name search is final fallback for exclusives with no bridge
+
+---
+
+### `grids`
+
+**Request**: `{ sgdbId: 5495669 }` or `{ platform: "steam", platformId: 1245620 }`
+
+```json
+{
+  "page": 1,
+  "total": 126,
+  "limit": 100,
+  "data": [
+    {
+      "id": 43851234,
+      "width": 920,
+      "height": 430,
+      "nsfw": false,
+      "humor": false,
+      "mime": "image/webp",
+      "url": "https://cdn2.steamgriddb.com/grid/...webp",
+      "thumb": "https://cdn2.steamgriddb.com/grid/thumb/...webp"
+    }
+  ]
+}
+```
+
+**Key observations**:
+- Same shape for `heroes` and `logos` (logos have no `dimensions` filter)
+- Default includes everything: nsfw=any, humor=any, epilepsy=any, all types, all styles
+- Filters: `styles`, `dimensions`, `mimes`, `types` (static/animated), `nsfw` (yes/no/any), `humor`, `epilepsy`, `limit`, `page`
+- Dimensions differ per asset type — see SGDB docs for valid values
+- 920×430 seems to be the "Steam default" grid size
+- Thumbnail URLs are in the same directory, just `thumb/` subpath
+
+### Platform ID → SGDB bridge
+
+| Source | Our ID | Direct? | Strategy |
+|--------|--------|:-------:|----------|
+| Steam | appid (int) | ✅ | `/grids/steam/{appid}` |
+| Epic | namespace (string) | ✅ | `/grids/egs/{namespace}` |
+| PSN | concept.id (int) | ❌ | IGDB `external_ids` → Steam appid → SGDB steam |
+| Xbox | titleId (int) | ❌ | IGDB `external_ids` → Steam appid → SGDB steam |
+| EA | contentId (string) | ❌ | Name search fallback |
+
+**Caching**: Game lookups stable — cache aggressively. Assets cacheable with reasonable TTL. No documented rate limit.
+
+---
+
+## Sync workflow
+
+The API supports two patterns:
+
+**Initial sync** — pull everything once:
+
+```
+auth → profile → games (no limit) → titles (no limit) → trophies per game
+```
+
+**Incremental update** — only fetch what changed:
+
+```
+auth (via refreshToken) → recent({ limit: 20 }) → compare lastPlayedDateTime
+                        → titles({ limit: 50 }) → compare lastUpdatedDateTime
+                        → trophies only for changed titles
+```
+
+### Per-platform increments
+
+**PSN**: `titles` is the incremental entry point. Compare `lastUpdatedDateTime` against stored value. If changed → call `trophies` for that game. `games` provides playtime/playcount when needed. `recent` is even lighter for "was this played?" checks.
+
+**Steam**: `games` is the primary entry point (full library + playtime). `recent` adds 2-week delta. `game` provides metadata. Merge `schemas` + `achievements` for full trophy/achievement picture.
+
+```
+steamId → games → compare rtime_last_played → mark changed
+        → achievements per changed game (merge with schemas)
+```
+
+**Epic**: `library` is the entry point. Compare `playtime` (no timestamp available) against previous run. `progress` with `resolveNames: true` scans all namespaces for achievement schemas. `achievements` gets full details per game.
+
+```
+auth → library({ resolveNames: true }) → compare acquisitionDate
+     → catalog only for new/changed items
+     → progress({ resolveNames: true }) → achievements only for games with new unlocks
+```
+
+**Xbox**: `games` is the entry point. Compare `lastTimePlayed` against stored timestamps. Titles where it's newer need re-import. Only MS/Xbox-native titles have playtime and achievements.
+
+```
+auth → profile → games → compare lastTimePlayed per title
+                      → achievements only for titles where lastTimePlayed changed
+```
+
+**EA**: `library` is the entry point. Compare `playtimeSeconds` against previous run. `achievementSetOverride` = null means no achievements exist.
+
+```
+auth → library → compare playtime per game
+               → achievements only for games with changed playtime
+```
+
+### IGDB + SGDB enrichment
+
+After syncing any platform, enrich each game via IGDB:
+
+```
+platform game → IGDB by_external(platform, platformId) → store IGDB game ID (canonical)
+             → IGDB external_ids(igdbId) → check for Steam appid
+               → if found → SGDB game({ platform: "steam", platformId }) → SGDB ID
+                          → SGDB grids/heroes/logos({ sgdbId }) → artwork
+               → if not found → SGDB search(name) → pick match → artwork
+```
 
 ---
 
