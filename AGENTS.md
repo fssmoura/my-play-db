@@ -219,19 +219,29 @@ Uses IGDB v4 (Twitch-backed game database) via OAuth client_credentials flow. No
 | Action        | What it needs                     | Returns                                                                                                                                                                                                                                                                   |
 | ------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `auth`        | nothing                           | `{ accessToken, expiresAt }` — Twitch OAuth token (auto-refreshed in-memory)                                                                                                                                                                                              |
-| `search`      | query [+ limit=10] [+ type]       | Array of games matching the search term. Fields: name, slug, summary, first_release_date, cover.url (t_1080p), genres.name, platforms.abbreviation, involved_companies, game_type. `type` filters by game_type enum                                                       |
+| `search`      | query [+ limit=10] [+ type]       | Array of games matching the search term. Fields: name, slug, summary, game_type, cover.url (t_1080p), platforms (name + abbreviation), release_dates (date, platform, region, human). `type` filters by game_type enum |
 | `game`        | ids (single int or array of ints) | Array of full game records by IGDB id. See [game response fields](#game-response-fields) below.                                                                                                                                                                           |
-| `by_external` | source + uid                      | Single game record by external source ID (e.g. Steam appid → IGDB game). Returns `null` if not found. **LIMITATION**: numeric uids (Steam appids) fail — IGDB parsercalypse converts `"1817070"` to integer, causing `expected String but found Integer`. See workaround. |
+| `by_external` | source + uid                      | Single game record by external source ID (e.g. Steam appid → IGDB game). Returns `null` if not found. Uses `external_game_source` (not the deprecated `category`). |
 
-**Source map** for `by_external`:
+**Source map** for `by_external` — maps platform names to IGDB's `external_game_source` IDs:
 
-| Name  | Category |
-| ----- | -------- |
-| steam | 1        |
-| gog   | 5        |
-| xbox  | 31       |
-| psn   | 36       |
-| epic  | 26       |
+| Name  | ID |
+| ----- | -- |
+| steam | 1  |
+| gog   | 5  |
+| xbox  | 31 |
+| psn   | 36 |
+| epic  | 26 |
+
+**ID mapping guide** — each platform uses different external IDs in IGDB. Verified via live API testing against actual game libraries:
+
+| Platform | Platform's own ID | IGDB uid format | Direct bridge? | How |
+|----------|-------------------|-----------------|:--------------:|-----|
+| **PSN**  | `concept.id` from `psn/games` (e.g. `10011898`) | Numeric string `"10011898"` | ✅ 1:1 | PSN `games` → `by_external(psn, conceptId)` |
+| **Steam** | `appid` from `steam/games` (e.g. `1245620`) | Numeric string `"1245620"` | ✅ 1:1 | Steam `games` → `by_external(steam, appid)` |
+| **Epic**  | `namespace` / `catalogItemId` from `epic/library` | Different hex UUID (Epic's product slug UUID, not namespace/catalogItemId) | ❌ | Store URL slug is different from both identifiers |
+| **Xbox**  | `titleId` from `xbox/games` (e.g. `1820250788`) | Xbox 360 UUID format `66acd000-...-d802{8hex}` | ❌ | IGDB only has Xbox 360 marketplace IDs; modern Xbox One/Series title IDs are absent |
+| **EA**    | `contentId` from `ea/library` | N/A — IGDB has no EA/Origin external source | ❌ | No EA category in IGDB's external_game_sources table |
 
 **Rate limit**: 4 requests/second to IGDB (handled by the API itself — no client-side throttle needed for single-user use).
 
@@ -259,7 +269,7 @@ The `game` action returns games with images/videos URLs auto-constructed server-
 | `platforms[]`           | array of `{ id, name, abbreviation }`                          | Platforms                                          |
 | `involved_companies[]`  | array of `{ id, company: { id, name }, developer, publisher }` | Dev/publisher                                      |
 | `release_dates[]`       | array of `{ id, date, platform, region, human }`               | Per-platform releases                              |
-| `websites[]`            | array of `{ id, url }`                                         | External links (category not returned by IGDB)     |
+| `websites[]`            | array of `{ url, type }`                                       | External links with type ID (1=Official, 3=Wikipedia, 9=YouTube, 13=Steam, 16=Epic, etc). See `website_types` endpoint for full map. |
 | `collections[]`         | array of `{ id, name }`                                        | Collections (e.g. "Marvel's Spider-Man")           |
 | `franchise`             | object `{ id, name }`                                          | Franchise (e.g. "Spider-Man")                      |
 | `parent_game`           | object `{ id, name, slug, game_type }`                         | Parent game (for DLCs, remasters, etc)             |
@@ -319,11 +329,6 @@ GOTY Edition → version_parent { id: 19565, name: "Marvel's Spider-Man", ... } 
 | 14    | update               |
 
 The `search` action accepts an optional `type` parameter to filter results by game_type (e.g. `{"query":"Elden Ring","type":0}` returns only main games).
-
-### Known limitations
-
-- **`by_external` numeric uid**: IGDB APIcalypse parser converts all-digit quoted strings (like `"1817070"`) to integers. The `uid` field on `external_games` expects String — this causes a 400 error for Steam appids. Workaround: query `where version_parent = null & category = 0` then filter client-side, or use the `websites` endpoint with URL matching (also blocked by `://` in URLs). Non-numeric uids (Epic hex strings) work fine.
-- **`websites.category` not returned**: IGDB no longer returns the `category` field on website records. Identify site type by parsing URL domain.
 
 ## Sync workflow
 

@@ -112,7 +112,7 @@ const actions = {
 
     const results = await igdbFetch(
       "games",
-      `search "${sanitized}"${typeClause}; fields name,slug,summary,first_release_date,cover.image_id,genres.name,platforms.abbreviation,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,game_type; limit ${limit};`,
+      `search "${sanitized}"${typeClause}; fields name,slug,summary,game_type,cover.image_id,platforms.name,platforms.abbreviation,release_dates.date,release_dates.platform,release_dates.region,release_dates.human; limit ${limit};`,
     );
     enrichImages(results);
     return results;
@@ -125,7 +125,7 @@ const actions = {
     const idList = Array.isArray(ids) ? ids : [ids];
     const results = await igdbFetch(
       "games",
-      `where id = (${idList.join(",")}); fields name,slug,summary,storyline,game_type,version_title,rating,rating_count,updated_at,cover.id,cover.image_id,screenshots.id,screenshots.image_id,artworks.id,artworks.image_id,videos.id,videos.name,videos.video_id,genres.name,platforms.name,platforms.abbreviation,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,bundles,dlcs,expanded_games,expansions,forks,ports,remakes,remasters,standalone_expansions,similar_games,collections.name,franchise.name,websites.url,version_parent.name,version_parent.slug,version_parent.game_type,parent_game.name,parent_game.slug,parent_game.game_type,release_dates.date,release_dates.platform,release_dates.region,release_dates.human; limit ${idList.length};`,
+      `where id = (${idList.join(",")}); fields name,slug,summary,storyline,game_type,version_title,rating,rating_count,updated_at,cover.id,cover.image_id,screenshots.id,screenshots.image_id,artworks.id,artworks.image_id,videos.id,videos.name,videos.video_id,genres.name,platforms.name,platforms.abbreviation,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,bundles,dlcs,expanded_games,expansions,forks,ports,remakes,remasters,standalone_expansions,similar_games,collections.name,franchise.name,websites.url,websites.type,version_parent.name,version_parent.slug,version_parent.game_type,parent_game.name,parent_game.slug,parent_game.game_type,release_dates.date,release_dates.platform,release_dates.region,release_dates.human; limit ${idList.length};`,
     );
     enrichImages(results);
     return results;
@@ -143,7 +143,7 @@ const actions = {
 
     const externalGames = await igdbFetch(
       "external_games",
-      `where category = ${cat} & uid = "${uid}"; fields game;`,
+      `where external_game_source = ${cat} & uid = "${uid}"; fields game, name, url;`,
     );
 
     if (!externalGames || !externalGames.length) return null;
@@ -155,7 +155,7 @@ const actions = {
 
     const gameData = await igdbFetch(
       "games",
-      `where id = ${gameId}; fields name,slug,summary,storyline,game_type,version_title,rating,rating_count,updated_at,cover.id,cover.image_id,screenshots.id,screenshots.image_id,artworks.id,artworks.image_id,videos.id,videos.name,videos.video_id,genres.name,platforms.name,platforms.abbreviation,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,bundles,dlcs,expanded_games,expansions,forks,ports,remakes,remasters,standalone_expansions,similar_games,collections.name,franchise.name,websites.url,version_parent.name,version_parent.slug,version_parent.game_type,parent_game.name,parent_game.slug,parent_game.game_type,release_dates.date,release_dates.platform,release_dates.region,release_dates.human;`,
+      `where id = ${gameId}; fields name,slug,summary,storyline,game_type,version_title,rating,rating_count,updated_at,cover.id,cover.image_id,screenshots.id,screenshots.image_id,artworks.id,artworks.image_id,videos.id,videos.name,videos.video_id,genres.name,platforms.name,platforms.abbreviation,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,bundles,dlcs,expanded_games,expansions,forks,ports,remakes,remasters,standalone_expansions,similar_games,collections.name,franchise.name,websites.url,websites.type,version_parent.name,version_parent.slug,version_parent.game_type,parent_game.name,parent_game.slug,parent_game.game_type,release_dates.date,release_dates.platform,release_dates.region,release_dates.human;`,
     );
     enrichImages(gameData);
     return gameData;
