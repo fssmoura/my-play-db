@@ -1,5 +1,6 @@
 const https = require("https");
 const { setCorsHeaders, handlePreflight } = require("./_cors");
+const { requireUser } = require("./_auth");
 
 const LAUNCHER_CLIENT_ID = "34a02cf8f4414e29b15921876da36f9a";
 const LAUNCHER_CLIENT_SECRET = "daafbccc737745039dffe53d94fc76cf";
@@ -508,6 +509,9 @@ function readBody(req) {
 module.exports = async function handler(req, res) {
   setCorsHeaders(req, res);
   if (handlePreflight(req, res)) return;
+
+  const user = await requireUser(req, res);
+  if (!user) return;
 
   let raw;
   if (req.method === "GET") {

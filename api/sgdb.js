@@ -1,4 +1,5 @@
 const { setCorsHeaders, handlePreflight } = require("./_cors");
+const { requireUser } = require("./_auth");
 
 const API_KEY = process.env.STEAMGRIDDB_API_KEY;
 const BASE = "https://www.steamgriddb.com/api/v2";
@@ -30,14 +31,29 @@ function buildQuery(filters) {
   return `?${parts.join("&")}`;
 }
 
-const IMAGE_FIELDS = ({ id, width, height, nsfw, humor, mime, url, thumb }) => ({ id, width, height, nsfw, humor, mime, url, thumb });
+const IMAGE_FIELDS = ({
+  id,
+  width,
+  height,
+  nsfw,
+  humor,
+  mime,
+  url,
+  thumb,
+}) => ({ id, width, height, nsfw, humor, mime, url, thumb });
 
 const actions = {
   async search(options = {}) {
     const { name } = options;
     if (!name) throw new Error("name is required");
-    const data = await sgdbFetch(`/search/autocomplete/${encodeURIComponent(name)}`);
-    return data.data.map(({ id, name, release_date }) => ({ id, name, release_date }));
+    const data = await sgdbFetch(
+      `/search/autocomplete/${encodeURIComponent(name)}`,
+    );
+    return data.data.map(({ id, name, release_date }) => ({
+      id,
+      name,
+      release_date,
+    }));
   },
 
   async game(options = {}) {
@@ -47,20 +63,47 @@ const actions = {
       return data.data;
     }
     if (platform && platformId) {
-      const data = await sgdbFetch(`/games/${platform}/${encodeURIComponent(platformId)}`);
+      const data = await sgdbFetch(
+        `/games/${platform}/${encodeURIComponent(platformId)}`,
+      );
       return data.data;
     }
     throw new Error("sgdbId or { platform, platformId } is required");
   },
 
   async grids(options = {}) {
-    const { sgdbId, platform, platformId, styles, dimensions, mimes, types, nsfw, humor, epilepsy, limit, page } = options;
-    const qs = buildQuery({ styles, dimensions, mimes, types, nsfw, humor, epilepsy, limit, page });
+    const {
+      sgdbId,
+      platform,
+      platformId,
+      styles,
+      dimensions,
+      mimes,
+      types,
+      nsfw,
+      humor,
+      epilepsy,
+      limit,
+      page,
+    } = options;
+    const qs = buildQuery({
+      styles,
+      dimensions,
+      mimes,
+      types,
+      nsfw,
+      humor,
+      epilepsy,
+      limit,
+      page,
+    });
     let data;
     if (sgdbId) {
       data = await sgdbFetch(`/grids/game/${sgdbId}${qs}`);
     } else if (platform && platformId) {
-      data = await sgdbFetch(`/grids/${platform}/${encodeURIComponent(platformId)}${qs}`);
+      data = await sgdbFetch(
+        `/grids/${platform}/${encodeURIComponent(platformId)}${qs}`,
+      );
     } else {
       throw new Error("sgdbId or { platform, platformId } is required");
     }
@@ -69,13 +112,38 @@ const actions = {
   },
 
   async heroes(options = {}) {
-    const { sgdbId, platform, platformId, styles, dimensions, mimes, types, nsfw, humor, epilepsy, limit, page } = options;
-    const qs = buildQuery({ styles, dimensions, mimes, types, nsfw, humor, epilepsy, limit, page });
+    const {
+      sgdbId,
+      platform,
+      platformId,
+      styles,
+      dimensions,
+      mimes,
+      types,
+      nsfw,
+      humor,
+      epilepsy,
+      limit,
+      page,
+    } = options;
+    const qs = buildQuery({
+      styles,
+      dimensions,
+      mimes,
+      types,
+      nsfw,
+      humor,
+      epilepsy,
+      limit,
+      page,
+    });
     let data;
     if (sgdbId) {
       data = await sgdbFetch(`/heroes/game/${sgdbId}${qs}`);
     } else if (platform && platformId) {
-      data = await sgdbFetch(`/heroes/${platform}/${encodeURIComponent(platformId)}${qs}`);
+      data = await sgdbFetch(
+        `/heroes/${platform}/${encodeURIComponent(platformId)}${qs}`,
+      );
     } else {
       throw new Error("sgdbId or { platform, platformId } is required");
     }
@@ -84,25 +152,50 @@ const actions = {
   },
 
   async logos(options = {}) {
-    const { sgdbId, platform, platformId, styles, mimes, types, nsfw, humor, epilepsy, limit, page } = options;
-    const qs = buildQuery({ styles, mimes, types, nsfw, humor, epilepsy, limit, page });
+    const {
+      sgdbId,
+      platform,
+      platformId,
+      styles,
+      mimes,
+      types,
+      nsfw,
+      humor,
+      epilepsy,
+      limit,
+      page,
+    } = options;
+    const qs = buildQuery({
+      styles,
+      mimes,
+      types,
+      nsfw,
+      humor,
+      epilepsy,
+      limit,
+      page,
+    });
     let data;
     if (sgdbId) {
       data = await sgdbFetch(`/logos/game/${sgdbId}${qs}`);
     } else if (platform && platformId) {
-      data = await sgdbFetch(`/logos/${platform}/${encodeURIComponent(platformId)}${qs}`);
+      data = await sgdbFetch(
+        `/logos/${platform}/${encodeURIComponent(platformId)}${qs}`,
+      );
     } else {
       throw new Error("sgdbId or { platform, platformId } is required");
     }
     data.data = data.data.map(IMAGE_FIELDS);
     return data;
   },
-
 };
 
 module.exports = async function handler(req, res) {
   setCorsHeaders(req, res);
   if (handlePreflight(req, res)) return;
+
+  const user = await requireUser(req, res);
+  if (!user) return;
 
   const raw = req.method === "GET" ? req.query : (req.body ?? {});
   const body = {};

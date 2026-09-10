@@ -1,4 +1,4 @@
-﻿const {
+const {
   exchangeNpssoForAccessCode,
   exchangeAccessCodeForAuthTokens,
   exchangeRefreshTokenForAuthTokens,
@@ -13,6 +13,7 @@
   getUserTrophiesForSpecificTitle,
 } = require("psn-api");
 const { setCorsHeaders, handlePreflight } = require("./_cors");
+const { requireUser } = require("./_auth");
 
 const TROPHY_PROXY_ACCOUNT_ID = "6515971742264256071";
 
@@ -217,6 +218,9 @@ const actions = {
 module.exports = async function handler(req, res) {
   setCorsHeaders(req, res);
   if (handlePreflight(req, res)) return;
+
+  const user = await requireUser(req, res);
+  if (!user) return;
 
   const raw = req.method === "GET" ? req.query : (req.body ?? {});
   const body = {};

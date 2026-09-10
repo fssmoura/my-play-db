@@ -1,4 +1,5 @@
 const { setCorsHeaders, handlePreflight } = require("./_cors");
+const { requireUser } = require("./_auth");
 
 const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
 const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
@@ -139,7 +140,11 @@ function enrichImages(data) {
     });
   }
   if (data.release_dates) {
-    data.release_dates.forEach((r) => delete r.id);
+    data.release_dates.forEach((r) => {
+      delete r.id;
+      delete r.human;
+      delete r.region;
+    });
   }
   if (data.websites) {
     data.websites.forEach((w) => {
@@ -222,6 +227,9 @@ const actions = {
 module.exports = async function handler(req, res) {
   setCorsHeaders(req, res);
   if (handlePreflight(req, res)) return;
+
+  const user = await requireUser(req, res);
+  if (!user) return;
 
   const raw = req.method === "GET" ? req.query : (req.body ?? {});
   const body = {};
