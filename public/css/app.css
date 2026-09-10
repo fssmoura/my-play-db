@@ -1,0 +1,444 @@
+/* =========================================================================
+   my-play-db - all styling lives in this one file.
+
+   HOW TO CHANGE THE LOOK
+   - Colours: edit the variables in :root below. Every rule uses them, so
+     changing --bg / --text / --line recolours the whole app at once.
+   - Nothing is styled from JavaScript. There are no inline styles anywhere,
+     so any rule here is safe to override or rewrite.
+   - Class names are stable and descriptive. Renaming one means also renaming
+     it in the matching file under public/js/.
+
+   SECTIONS (in order)
+     1. variables      - colours and fonts
+     2. layout         - page frame, header, tabs
+     3. login gate     - the signed-out screen
+     4. controls       - buttons, inputs, labels
+     5. helpers        - small reusable layout classes
+     6. text + dots    - secondary text and status indicators
+     7. platform rows  - the connection list
+     8. modal          - the connect pop-up
+     9. console        - the API testing tab
+    10. mobile         - phone overrides (everything above is desktop-first)
+
+   This is deliberately plain/wireframe. Function first, design later.
+   ========================================================================= */
+
+/* ---------- 1. variables ---------- */
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #ffffff;
+  --panel: #fafafa;
+  --line: #d4d4d4;
+  --line-strong: #a3a3a3;
+  --text: #171717;
+  --muted: #737373;
+  --mono: ui-monospace, "SFMono-Regular", "Consolas", monospace;
+}
+
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------- 2. layout ---------- */
+
+header.app-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+header.app-bar h1 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.app-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+nav.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 0 20px;
+}
+
+nav.tabs button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 14px;
+  font: inherit;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+nav.tabs button[aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--text);
+  font-weight: 600;
+}
+
+main {
+  padding: 20px;
+  max-width: 900px;
+}
+
+/* ---------- 3. login gate ---------- */
+
+.gate {
+  max-width: 380px;
+  margin: 12vh auto;
+  text-align: center;
+}
+
+.gate p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ---------- 4. controls ---------- */
+
+button {
+  font: inherit;
+  padding: 6px 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: #f0f0f0;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+input[type="text"],
+select,
+textarea {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: var(--bg);
+  color: var(--text);
+  width: 100%;
+}
+
+textarea {
+  font-family: var(--mono);
+  font-size: 12px;
+  resize: vertical;
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+/* ---------- 5. helpers ----------
+   Used instead of inline styles so every rule here can be changed
+   by editing this file alone. Nothing in the JS sets styles directly. */
+
+/* A group of buttons that keep their natural width and wrap if needed. */
+.button-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.spaced-top {
+  margin-top: 6px;
+}
+
+/* ---------- 6. text + status dots ---------- */
+
+/* Secondary/explanatory text. */
+.meta {
+  font-size: 12px;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+/* One-line feedback under an action ("connected", "refreshing...", errors). */
+.status-line {
+  font-size: 12px;
+  min-height: 16px;
+}
+
+.status-line.error {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Connection state indicator. Grayscale only:
+   filled = healthy, gray = warning, hollow = not connected / expired. */
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--line-strong);
+  flex: none;
+}
+
+.dot.ok {
+  background: var(--text);
+}
+
+.dot.warn {
+  background: var(--muted);
+}
+
+.dot.bad {
+  background: var(--bg);
+  border: 1px solid var(--text);
+}
+
+/* ---------- 7. platform rows ---------- */
+
+.prow {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  margin-bottom: 6px;
+  background: var(--panel);
+}
+
+.prow-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+}
+
+.prow-name {
+  font-weight: 600;
+  flex: none;
+}
+
+.prow-status {
+  margin-left: auto;
+  flex: none;
+}
+
+.prow-btns {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.prow-btns button {
+  padding: 4px 9px;
+  font-size: 12px;
+}
+
+.prow-body {
+  padding: 0 12px 12px;
+}
+
+/* ---------- 8. modal ---------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+}
+
+.modal {
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  padding: 18px;
+  width: min(460px, calc(100vw - 32px));
+  display: grid;
+  gap: 8px;
+}
+
+.modal h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ---------- 9. console ---------- */
+
+.console-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.console-controls {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+/* Each labelled dropdown shares the width; the Run button stays natural. */
+.console-controls .control {
+  flex: 1;
+}
+
+/* Generated parameter form - one .field per option the action accepts. */
+.field-list {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 12px;
+  background: var(--panel);
+}
+
+.field label {
+  margin-bottom: 4px;
+}
+
+.field .meta {
+  margin: 4px 0 0;
+}
+
+/* Checkboxes read better with the label beside them. */
+.field-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.field-inline label {
+  margin: 0;
+  order: 2;
+}
+
+.field-inline input[type="checkbox"] {
+  width: auto;
+  order: 1;
+}
+
+.field-inline .meta {
+  order: 3;
+  flex-basis: 100%;
+}
+
+/* Marks a required parameter. */
+.req {
+  color: var(--text);
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+pre.output {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.45;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 12px;
+  max-height: 480px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+/* ---------- 10. mobile ---------- */
+
+@media (max-width: 640px) {
+  main {
+    padding: 14px;
+  }
+
+  header.app-bar {
+    padding: 10px 14px;
+  }
+
+  .app-bar-right {
+    font-size: 12px;
+    gap: 8px;
+  }
+
+  nav.tabs {
+    padding: 0 14px;
+  }
+
+  /* Row wraps: name on top, status + buttons below. */
+  .prow-head {
+    flex-wrap: wrap;
+  }
+
+  .prow-status {
+    margin-left: 0;
+  }
+
+  .prow-btns {
+    width: 100%;
+  }
+
+  .prow-btns button {
+    flex: 1;
+  }
+
+  .console-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .console-controls > div {
+    width: 100%;
+  }
+
+  /* >=16px prevents iOS zoom-on-focus. */
+  button,
+  input[type="text"],
+  select,
+  textarea {
+    font-size: 16px;
+    padding: 9px 10px;
+  }
+
+  .prow-btns button {
+    font-size: 14px;
+  }
+
+  .modal {
+    width: calc(100vw - 24px);
+  }
+}

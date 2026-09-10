@@ -4,48 +4,46 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>my-play-db</title>
+    <link rel="stylesheet" href="/css/app.css" />
   </head>
 
   <body>
-    <p>
-      <a
-        href="https://steamcommunity.com/id/xoura07?xml=1"
-        target="_blank"
-        rel="noopener"
-        >Get Steam ID</a
-      >
-    </p>
-    <p>
-      <a
-        href="https://ca.account.sony.com/api/v1/ssocookie"
-        target="_blank"
-        rel="noopener"
-        >Get NPSSO</a
-      >
-    </p>
-    <p>
-      <a
-        href="https://www.epicgames.com/id/api/redirect?clientId=34a02cf8f4414e29b15921876da36f9a&responseType=code"
-        target="_blank"
-        rel="noopener"
-        >Get Epic authorizationCode</a
-      >
-    </p>
-    <p>
-      <a
-        href="https://login.live.com/oauth20_authorize.srf?client_id=38cd2fa8-66fd-4760-afb2-405eb65d5b0c&response_type=code&approval_prompt=auto&scope=Xboxlive.signin%20Xboxlive.offline_access&redirect_uri=https://login.live.com/oauth20_desktop.srf"
-        target="_blank"
-        rel="noopener"
-        >Get Xbox authorizationCode</a
-      >
-    </p>
-    <p>
-      <a
-        href="https://accounts.ea.com/connect/auth?client_id=ORIGIN_JS_SDK&response_type=token&redirect_uri=nucleus:rest&prompt=none"
-        target="_blank"
-        rel="noopener"
-        >Get EA accessToken</a
-      >
-    </p>
+    <!-- Signed out -->
+    <section id="gate" class="gate hidden">
+      <h1>my-play-db</h1>
+      <p>Private game library. Owner access only.</p>
+      <p id="gate-error" class="status-line error"></p>
+      <button id="sign-in">Sign in with Google</button>
+    </section>
+
+    <!-- Booting -->
+    <section id="loading" class="gate">
+      <p>Loading...</p>
+    </section>
+
+    <!-- Signed in -->
+    <div id="app" class="hidden">
+      <header class="app-bar">
+        <h1>my-play-db</h1>
+        <div class="app-bar-right">
+          <span id="user-email"></span>
+          <button id="sign-out">Sign out</button>
+        </div>
+      </header>
+
+      <nav class="tabs">
+        <button data-view="connections" aria-selected="true">
+          Connections
+        </button>
+        <button data-view="console" aria-selected="false">API console</button>
+      </nav>
+
+      <main>
+        <section id="view-connections"></section>
+        <section id="view-console" class="hidden"></section>
+      </main>
+    </div>
+
+    <script type="module" src="/js/app.js"></script>
   </body>
 </html>
