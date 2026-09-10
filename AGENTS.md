@@ -133,11 +133,14 @@ my-play-db/
       credentials.js       # pure credential extractors (no imports, testable)
       connect.js           # popup / redirect / clipboard capture
       refresh.js           # in-tab auto-refresh scheduler
-      schemas.js           # per-action parameter definitions for the console
-      app.js               # boot, auth gate, tab routing
+      schemas.js             # per-action parameter definitions for the console
+      ranking.js             # pure search ranking/paging logic
+      search.js              # IGDB search fetching + cache (one request per query)
+      app.js                 # boot, auth gate, tab routing
       views/
-        connections.js     # platform list + connect/edit/delete
-        console.js         # generic action runner
+        connections.js       # platform list + connect/edit/delete
+        console.js           # generic action runner
+        search.js            # IGDB search tab (typeahead + full results)
   .env.local               # local env (managed by `vercel env pull`)
   package.json
   vercel.json              # outputDirectory + cron schedule

@@ -179,12 +179,48 @@ POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and m
 
 Uses IGDB v4 (Twitch-backed game database) via OAuth client_credentials flow. No user auth needed - the Twitch Client ID + Client Secret are in server-side env vars (set via `vercel env add` - `.env.local` unreliable on this machine due to iCloud Drive file locking).
 
-| Action        | What it needs                     | Returns                                                                                                                                                                                                                |
-| ------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth`        | nothing                           | `{ accessToken, expiresAt }` - Twitch OAuth token (auto-refreshed in-memory)                                                                                                                                           |
-| `search`      | query [+ limit=10] [+ type]       | Array of games matching the search term. Fields: name, slug, summary, game_type, cover.url (t_1080p), platforms (name + abbreviation), release_dates (date, platform, region, human). `type` filters by game_type enum |
-| `game`        | ids (single int or array of ints) | Array of full game records by IGDB id. `external_games` bundled in response with `source` name (enriched from numeric ID). See [game response fields](api-responses.md#game) in api-responses.md.                      |
-| `by_external` | source + uid                      | Lightweight lookup: `{ id }` (IGDB game ID) or `null`. Use `game(id)` for full record. `source` accepts name or number.                                                                                                |
+| Action        | What it needs                           | Returns                                                                                                                                                                                                                                                                                        |
+| ------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`        | nothing                                 | `{ accessToken, expiresAt }` - Twitch OAuth token (auto-refreshed in-memory)                                                                                                                                                                                                                   |
+| `search`      | query [+ limit=200] [+ offset] [+ type] | Everything a result card needs, in one request: `name`, `slug`, `summary`, `game_type`, `first_release_date`, `cover.url` (t_1080p), `platforms`, plus `alternative_names`, `total_rating_count`, `hypes` and `popularity` `{ visits, want_to_play }` for ranking. `type` filters by game_type |
+| `game`        | ids (single int or array of ints)       | Array of full game records by IGDB id. `external_games` bundled in response with `source` name (enriched from numeric ID). See [game response fields](api-responses.md#game) in api-responses.md.                                                                                              |
+| `by_external` | source + uid                            | Lightweight lookup: `{ id }` (IGDB game ID) or `null`. Use `game(id)` for full record. `source` accepts name or number.                                                                                                                                                                        |
+
+**`search` is deliberately one request for the whole result list.** It returns
+the display fields as well as the ranking ones, so the frontend never has to
+follow up with a second call to fill in covers or descriptions - the typeahead
+and the full list are the same list, and paging through it costs nothing. A
+200-game response is ~60-145KB and ~500-900ms; asking IGDB for 25 games costs
+the same as asking for 200, so there is nothing to gain by fetching less.
+
+Server-side it makes two IGDB calls - the search, then `popularity_primitives`
+for the ids it returned - both cached (see below). A popularity failure is
+swallowed on purpose: a search that comes back without ranking data beats one
+that 500s.
+
+Two fields exist purely to rank well:
+
+- **`alternative_names`** is how "cod", "tw3" and "botw" get matched. IGDB's
+  search already returns those games, it just ranks them near the bottom and
+  their real titles share no words with the query.
+- **`popularity`** comes from `popularity_primitives` ("Visits" and "Want to
+  Play"), the signal igdb.com itself ranks on. `total_rating_count` is ~0 for
+  anything unreleased and `hypes` is ~0 for anything released, so neither can
+  order a mixed set alone - both are still returned as a fallback for the ~1
+  game in 10 with no popularity row.
+
+**Caching lives in the handler, and it has to.** `api/igdb.js` keeps three
+in-memory caches on the warm serverless instance: search results (1h),
+popularity by game id (12h, safe because IGDB states PopScore is "updated every
+24 hours") and full `game` records by id (12h). Consecutive queries while typing
+return largely the same games, so the popularity half becomes free after the
+first one.
+
+> **Vercel's CDN cannot cache any `/api/*` response, ever.** Its documented
+> criteria require a `GET`/`HEAD` request with **no `Authorization` header**,
+> and every call here is a POST carrying the owner's bearer token. Switching to
+> GET with the token in the query string would put a JWT in URLs and logs.
+> Don't spend time on edge caching - in-process caching is all we get.
 
 **Source map** - maps names to IGDB's `external_game_source` IDs. Used by `by_external` and baked into `game` response via `external_games[].source`:
 
@@ -216,6 +252,17 @@ Uses IGDB v4 (Twitch-backed game database) via OAuth client_credentials flow. No
 **Rate limit**: 4 requests/second to IGDB (handled by the API itself - no client-side throttle needed for single-user use).
 
 The `search` action accepts an optional `type` parameter to filter results by game_type (e.g. `{"query":"Elden Ring","type":0}` returns only main games).
+
+**IGDB's own result order is not usable as-is.** Its relevance ranking collapses
+when the query contains punctuation: `search "marvel spider man"` puts Marvel's
+Spider-Man first, while `search "Marvel Spider-Man"` puts a DLC first. The
+handler deliberately returns IGDB's raw order anyway (no business logic in the
+API layer) - `public/js/ranking.js` re-ranks.
+
+Known IGDB limitation: some abbreviations return **nothing at all**, on any
+endpoint - `ac odyssey` matches no game, no alternative name and no `/v4/search`
+row. That's their data, not our matching, and there is nothing to fix on our
+side.
 
 ## API (api/sgdb.js)
 
