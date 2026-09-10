@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Steam sign-in</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        background: #fff;
+        color: #333;
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    Completing Steam sign-in...
+    <script>
+      (function () {
+        try {
+          var params = {};
+          var search = new URLSearchParams(window.location.search);
+          search.forEach(function (value, key) {
+            if (key.indexOf("openid.") === 0) params[key] = value;
+          });
+
+          if (!window.opener) {
+            document.body.textContent =
+              "Steam sign-in complete. You can close this window.";
+            return;
+          }
+
+          window.opener.postMessage(
+            { source: "steam-openid", params: params },
+            window.location.origin,
+          );
+          window.close();
+        } catch (err) {
+          document.body.textContent = String((err && err.message) || err);
+        }
+      })();
+    </script>
+  </body>
+</html>
