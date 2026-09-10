@@ -1,5 +1,6 @@
 const https = require("https");
 const { setCorsHeaders, handlePreflight } = require("./_cors");
+const { requireUser } = require("./_auth");
 
 const XBOX_CLIENT_ID = "38cd2fa8-66fd-4760-afb2-405eb65d5b0c";
 const REDIRECT_URI = "https://login.live.com/oauth20_desktop.srf";
@@ -278,6 +279,9 @@ const actions = {
 module.exports = async function handler(req, res) {
   setCorsHeaders(req, res);
   if (handlePreflight(req, res)) return;
+
+  const user = await requireUser(req, res);
+  if (!user) return;
 
   const raw = req.method === "GET" ? req.query : (req.body ?? {});
   const body = {};
