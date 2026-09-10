@@ -1,4 +1,5 @@
 const { setCorsHeaders, handlePreflight } = require("./_cors");
+const { requireUser } = require("./_auth");
 
 const STEAM_API_KEY = process.env.STEAM_API_KEY;
 
@@ -90,11 +91,55 @@ const actions = {
       appid,
     });
   },
+
+  async openid_verify(options = {}) {
+    const params = options.params;
+    if (!params) throw new Error("params is required");
+
+    const form = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (!k.startsWith("openid.")) continue;
+      if (k === "openid.mode") continue;
+      form.set(k, v);
+    }
+    form.set("openid.mode", "check_authentication");
+
+    const res = await fetch("https://steamcommunity.com/openid/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+    });
+    if (!res.ok) {
+      throw new Error(`Steam API error: ${res.status} ${res.statusText}`);
+    }
+    const text = await res.text();
+    if (!/is_valid\s*:\s*true/i.test(text)) {
+      throw new Error("Steam OpenID verification failed");
+    }
+
+    const claimedId = params["openid.claimed_id"] ?? "";
+    const match = /^https:\/\/steamcommunity\.com\/openid\/id\/(\d{17})$/.exec(
+      claimedId,
+    );
+    if (!match) {
+      throw new Error("Could not parse SteamID from OpenID response");
+    }
+    const steamId = match[1];
+
+    const summary = await steamFetch("ISteamUser", "GetPlayerSummaries", 2, {
+      steamids: steamId,
+    });
+
+    return { steamId, profile: summary?.response?.players?.[0] ?? null };
+  },
 };
 
 module.exports = async function handler(req, res) {
   setCorsHeaders(req, res);
   if (handlePreflight(req, res)) return;
+
+  const user = await requireUser(req, res);
+  if (!user) return;
 
   const raw = req.method === "GET" ? req.query : (req.body ?? {});
   const body = {};
