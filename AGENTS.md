@@ -4,6 +4,8 @@ Personal game library - pulls PSN (and eventually other platforms) data into one
 
 This is not a public service. It's a private data pipe. The API layer has zero business logic, no database, no merging. It maps 1:1 to what the source provides so a sync script or frontend can decide what to store and how.
 
+**At the start of every conversation, regardless of the prompt, read this file in full plus every doc under `docs/` before doing any work.** Don't skip docs because the task looks small or unrelated.
+
 ## Ways of working
 
 Notes on how this project has gone well - not a checklist, and not rules to
