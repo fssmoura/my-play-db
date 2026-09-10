@@ -1,0 +1,240 @@
+# API contracts
+
+Request/response shape for every `/api/*` handler. Read this before changing a
+handler or adding an action.
+
+Every handler takes `{ action, options }` by POST or GET, is CORS-restricted to
+`localhost:3000` and `my-play-db.vercel.app`, and is gated by the owner check in
+`api/_auth.js` (see [auth.md](auth.md)).
+
+Errors are always `{ "error": "message" }`. Note that per-action validation
+failures surface as **500**, not 400 - a 500 here usually means a missing option
+or an expired token, not a broken server.
+
+GET query params are parsed with `JSON.parse` per key, so numbers, booleans,
+arrays and objects in a query string must be valid JSON. Plain strings pass
+through unchanged.
+
+Real captured responses live in [api-responses.md](api-responses.md).
+
+## API (api/psn.js)
+
+POST or GET with `{ npsso, accessToken, refreshToken, action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+
+GET query params are parsed with `JSON.parse` where possible - numbers, booleans, arrays, and objects in query strings must be valid JSON. Plain strings pass through as-is.
+
+| Action      | What it needs                                   | Returns                                                                                                                 |
+| ----------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `auth`      | npsso or refreshToken                           | accessToken + refreshToken + expiry                                                                                     |
+| `profile`   | accessToken                                     | profile + presence + trophy summary                                                                                     |
+| `games`     | accessToken [+ limit/offset]                    | played games (auto-paginates, ps4/ps5/pspc). `limit` returns N most recent                                              |
+| `titles`    | accessToken [+ limit/offset]                    | trophy-focused title list (auto-paginates, page size 800). npCommunicationId + lastUpdatedDateTime + progress per title |
+| `recent`    | accessToken [+ limit/categories]                | recently played games (lightweight GraphQL, no pagination). Default limit 50.                                           |
+| `trophymap` | accessToken + titleIds[]                        | npTitleId { npCommunicationId, npServiceName }. Falls back to proxy account for titles the user never synced.           |
+| `trophies`  | accessToken + npCommunicationId + npServiceName | full trophy details for one game. If the user hasn't synced the game, returns definitions with all `earned: false`.     |
+
+Auth order: NPSSO exchangeNpssoForAccessCode exchangeAccessCodeForAuthTokens. The `auth` action is handled before the generic authorization path - do not change this order.
+
+## API (api/steam.js)
+
+POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+
+| Action          | What it needs      | Returns                                                               |
+| --------------- | ------------------ | --------------------------------------------------------------------- |
+| `profile`       | steamId            | Steam player summary (persona, avatar, profile URL)                   |
+| `games`         | steamId            | Full library (appid, name, playtime, icon)                            |
+| `recent`        | steamId [+ count]  | Recently played in last 2 weeks                                       |
+| `game`          | appids[]           | Store metadata (type, genres, dev, screenshots)                       |
+| `schemas`       | appid              | Achievement definitions per game                                      |
+| `achievements`  | steamId + appid    | Earned achievements per game                                          |
+| `openid_verify` | params (openid.\*) | `{ steamId, profile }` after Steam's `check_authentication` handshake |
+
+Steam API key is in server-side env var (`STEAM_API_KEY`), never sent from client. `steamId` is passed as option (public info).
+
+`openid_verify` backs the one-click "Sign in through Steam" flow. It re-posts the
+`openid.*` params to Steam with `openid.mode=check_authentication` and only trusts
+the SteamID64 once Steam answers `is_valid:true` - never trust the callback params
+directly, they are trivially forged.
+
+## API (api/epic.js)
+
+POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+
+Uses Epic's undocumented internal REST APIs (same endpoints as Legendary/Playnite). Auth via OAuth authorization code flow with Epic's launcher client credentials embedded in the handler.
+
+| Action         | What it needs                                                               | Returns                                                                                                                                                                                                                                                                      |
+| -------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`         | authorizationCode or refreshToken                                           | accessToken + refreshToken + accountId + displayName + expiry                                                                                                                                                                                                                |
+| `library`      | accessToken [+ epicAccountId] [+ resolveNames]                              | Owned games (auto-paginates) with playtime merged. Each record: `namespace`, `catalogItemId`, `sandboxName`, `appName`, `productId`, `sandboxType`, `acquisitionDate`, `playtime`, `platforms`. `resolveNames: true` calls catalog to replace generic names with real titles |
+| `catalog`      | accessToken + items[] ({ namespace, catalogItemId })                        | Store metadata per game: `id`, `title`, `description`, `keyImages`, `developer`, `releaseInfo`, `categories`, `mainGameItem`                                                                                                                                                 |
+| `progress`     | accessToken [+ epicAccountId] [+ sandboxIds[]] [+ names{}] [+ resolveNames] | Achievement progress per game: `sandboxId`, `productId`, `sandboxName`, `catalogItemId`, `totalAchievements`, `totalXP`, `totalUnlocked`, `earnedXP`, `achievementSets[]`                                                                                                    |
+| `achievements` | accessToken + sandboxId [+ epicAccountId] [+ sandboxName] [+ catalogItemId] | Game header (same fields as progress) + `achievements[]` with `name`, `displayName`, `displayNameLocked`, `iconUnlocked`, `iconLocked`, `XP`, `rarity`, `unlocked`, `unlockDate`, `achievementSetId`, `isBase`                                                               |
+
+### Field identity guide
+
+All Epic identifiers are returned by `library`. Use them as-is - no guessing needed:
+
+| Library field   | Maps to                                                  | Used for                      |
+| --------------- | -------------------------------------------------------- | ----------------------------- |
+| `namespace`     | `sandboxId` in progress/achievements                     | Achievement queries           |
+| `catalogItemId` | `id` in catalog API                                      | Store metadata queries        |
+| `sandboxName`   | Human-readable title (e.g. "Fall Guys", "Rocket League") | Display in UI                 |
+| `appName`       | Internal codename (e.g. "Sugar", "Jackal")               | Matches playtime `artifactId` |
+| `productId`     | `productId` in achievement schema                        | Internal Epic reference       |
+
+**Example flow** - call once, use everywhere:
+
+```
+library  records[0].namespace = "jackal"      progress sandboxId: "jackal"
+         records[0].catalogItemId = "..."       catalog items: [{ namespace: "jackal", catalogItemId: "..." }]
+         records[0].sandboxName = "Dauntless"    pass to progress/achievements via names{} or sandboxName param
+```
+
+### `progress` additional options
+
+- **`sandboxIds[]`**: Array of namespaces to check. If omitted, auto-scans the full library.
+- **`names{}`**: Optional name map to include game titles in the response. Pass as `{ [sandboxId]: "Game Name" }` or `{ [sandboxId]: { sandboxName, catalogItemId } }`. When auto-scanning, names are filled in automatically from library records.
+
+### `achievements` additional options
+
+- **`sandboxName`**: Optional game name to include in the response.
+- **`catalogItemId`**: Optional catalog item ID to include in the response.
+
+Achievement data via `launcher.store.epicgames.com/graphql` (POST only, requires `User-Agent: Mozilla/5.0 (...EpicGamesLauncher)` header). Schema queries are public; player unlock data requires an auth token. Games use Epic's internal codename as their sandboxId (e.g. `jackal` = Dauntless, `9773aa1aa54f4f7b80e44bef04986cea`/Sugar = Rocket League, `50118b7f954e450f8823df1614b24e80` = Fall Guys).
+
+**Auth flow**: User visits `https://www.epicgames.com/id/api/redirect?clientId=34a02cf8f4414e29b15921876da36f9a&responseType=code` while logged into Epic in their browser gets a JSON response with an `authorizationCode` (short-lived). Pass that code to the `auth` action. The handler exchanges it for access+refresh tokens using Epic's OAuth endpoint.
+
+No env vars needed - the launcher client id/secret are public (same ones embedded in the Epic Games Launcher binary).
+
+## API (api/xbox.js)
+
+POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+
+Uses Xbox Live REST APIs via OAuth 2.0 through Microsoft account authentication. Auth flow: user visits Microsoft OAuth URL gets authorization code handler exchanges for MSA token Xbox User Token XSTS token. The Xbox app's consumer client ID (`38cd2fa8-66fd-4760-afb2-405eb65d5b0c`) is hardcoded - no Azure app registration needed.
+
+**Auth URL** (user must visit while logged into their Microsoft account):
+
+```
+https://login.live.com/oauth20_authorize.srf?client_id=38cd2fa8-66fd-4760-afb2-405eb65d5b0c&response_type=code&approval_prompt=auto&scope=Xboxlive.signin%20Xboxlive.offline_access&redirect_uri=https://login.live.com/oauth20_desktop.srf
+```
+
+After authorizing, they're redirected to `oauth20_desktop.srf?code=...`. Pass the `code` param value to the `auth` action.
+
+| Action         | What it needs                         | Returns                                                                                                                                          |
+| -------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `auth`         | authorizationCode or refreshToken     | xuid + gamertag + userHash + xstsToken + accessToken + refreshToken + expiresIn                                                                  |
+| `profile`      | xuid + userHash + xstsToken           | Xbox profile settings (gamertag, gamerscore, avatar)                                                                                             |
+| `games`        | xuid + userHash + xstsToken           | Title history - played games with name, titleId, devices, lastTimePlayed, developer, publisher. Playtime (minutesPlayed) merged from userstats.  |
+| `achievements` | xuid + userHash + xstsToken + titleId | Full achievement list per titleId (name, description, gamerscore, icon, unlock status, timeUnlocked). `titleId` comes from the `games` response. |
+
+**Limitation**: Xbox's REST API only returns titles that have been started at least once (no full purchase library like Steam). The `games` action mirrors what's available via `titlehub.xboxlive.com` - this is the same limitation Playnite's Xbox integration has.
+
+No env vars needed - the Microsoft OAuth client ID is the Xbox app's consumer ID (same one Playnite uses).
+
+## API (api/ea.js)
+
+POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+
+Uses EA's internal GraphQL API (`service-aggregation-layer.juno.ea.com`) plus the legacy achievements REST API (`achievements.gameservices.ea.com`). Auth via OAuth implicit token flow - user visits EA auth URL while logged into EA in their browser, gets a Bearer access token directly.
+
+**Auth URL** (user must visit while logged into their EA account):
+
+```
+https://accounts.ea.com/connect/auth?client_id=ORIGIN_JS_SDK&response_type=token&redirect_uri=nucleus:rest&prompt=none
+```
+
+Returns `{ access_token, token_type, expires_in }`. Pass the `access_token` value to all actions.
+
+| Action         | What it needs                                                    | Returns                                                                                                                                                                                                   |
+| -------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`         | accessToken                                                      | accessToken + pidId + personaId + displayName                                                                                                                                                             |
+| `library`      | accessToken                                                      | Owned games with metadata merged. Each record: `originOfferId`, `productId`, `name`, `gameSlug`, `contentId`, `displayType`, `achievementSetOverride`, `playtimeSeconds`, `lastPlayedDate`                |
+| `achievements` | accessToken + personaId + achievementSetOverride [+ sandboxName] | Full achievement list with `name`, `description`, `howTo`, `xp`, `hidden`, `rarity`, `iconUrl`, `unlocked`, `unlockDate`. Uses legacy REST API (icons+descriptions) when available, falls back to GraphQL |
+
+### Field identity guide
+
+| Library field            | Maps to            | Used for                                    |
+| ------------------------ | ------------------ | ------------------------------------------- |
+| `originOfferId`          | Offer lookup key   | Legacy offers & metadata                    |
+| `gameSlug`               | URL slug           | Playtime queries                            |
+| `achievementSetOverride` | Achievement set ID | Achievements query (null = no achievements) |
+| `contentId`              | Master title ID    | Internal EA reference                       |
+| `personaId`              | Player persona ID  | Achievements query (from auth)              |
+
+**Example flow**:
+
+```
+auth  { pidId, personaId, displayName }
+library  records[0].gameSlug = "fifa-20", achievementSetOverride = "50072_194927_50844"
+achievements({ personaId, achievementSetOverride: "50072_194927_50844" })  full achievement list
+```
+
+### Auth note
+
+EA access tokens from `ORIGIN_JS_SDK` client ID expire after ~4 hours. There's no refresh flow for this client - user revisits the auth URL for a new token.
+
+## API (api/igdb.js)
+
+POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+
+Uses IGDB v4 (Twitch-backed game database) via OAuth client_credentials flow. No user auth needed - the Twitch Client ID + Client Secret are in server-side env vars (set via `vercel env add` - `.env.local` unreliable on this machine due to iCloud Drive file locking).
+
+| Action        | What it needs                     | Returns                                                                                                                                                                                                                |
+| ------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`        | nothing                           | `{ accessToken, expiresAt }` - Twitch OAuth token (auto-refreshed in-memory)                                                                                                                                           |
+| `search`      | query [+ limit=10] [+ type]       | Array of games matching the search term. Fields: name, slug, summary, game_type, cover.url (t_1080p), platforms (name + abbreviation), release_dates (date, platform, region, human). `type` filters by game_type enum |
+| `game`        | ids (single int or array of ints) | Array of full game records by IGDB id. `external_games` bundled in response with `source` name (enriched from numeric ID). See [game response fields](api-responses.md#game) in api-responses.md.                      |
+| `by_external` | source + uid                      | Lightweight lookup: `{ id }` (IGDB game ID) or `null`. Use `game(id)` for full record. `source` accepts name or number.                                                                                                |
+
+**Source map** - maps names to IGDB's `external_game_source` IDs. Used by `by_external` and baked into `game` response via `external_games[].source`:
+
+| Name        | ID  |
+| ----------- | --- |
+| steam       | 1   |
+| giantbomb   | 3   |
+| gog         | 5   |
+| youtube     | 10  |
+| microsoft   | 11  |
+| apple       | 13  |
+| twitch      | 14  |
+| android     | 15  |
+| amazon      | 20  |
+| amazon_luna | 22  |
+| amazon_adg  | 23  |
+| epic        | 26  |
+| oculus      | 28  |
+| utomik      | 29  |
+| itch        | 30  |
+| xbox        | 31  |
+| kartridge   | 32  |
+| psn         | 36  |
+| focus       | 37  |
+| xgpc        | 54  |
+| gamejolt    | 55  |
+| igdb        | 121 |
+
+**Rate limit**: 4 requests/second to IGDB (handled by the API itself - no client-side throttle needed for single-user use).
+
+The `search` action accepts an optional `type` parameter to filter results by game_type (e.g. `{"query":"Elden Ring","type":0}` returns only main games).
+
+## API (api/sgdb.js)
+
+POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+
+Uses SteamGridDB v2 API (community-driven game artwork: grids, heroes, logos). Auth via static API key (`STEAMGRIDDB_API_KEY` in Vercel env), sent as `Authorization: Bearer` header. No OAuth, no token refresh.
+
+Asset actions default to including everything (nsfw/humor/epilepsy/animated). Override via optional filters: `styles`, `dimensions`, `mimes`, `types` (static/animated), `nsfw` (yes/no/any), `humor` (yes/no/any), `epilepsy` (yes/no/any), `limit`, `page`. Styles/dimensions values differ per asset type (see SGDB docs for valid values).
+
+Each action accepts either an SGDB `gameId` or a `{ platform, platformId }` pair for direct platform ID lookups. Platform enum: `steam`, `origin`, `egs`, `bnet`, `uplay`, `flashpoint`, `eshop`.
+
+| Action   | Params                                        | Returns                                                                              |
+| -------- | --------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `search` | name                                          | [{ id, name, release_date }]                                                         |
+| `game`   | sgdbId or { platform, platformId }            | { id, name, release_date }                                                           |
+| `grids`  | sgdbId or { platform, platformId } [+filters] | { page, total, limit, data: [{ id, width, height, nsfw, humor, mime, url, thumb }] } |
+| `heroes` | sgdbId or { platform, platformId } [+filters] | Same shape as grids                                                                  |
+| `logos`  | sgdbId or { platform, platformId } [+filters] | Same shape as grids (logos have no `dimensions` filter)                              |
+
+For platforms without a direct SGDB bridge (PSN, Xbox, EA), use IGDB as intermediary: `game(igdbId).external_games` find steam entry SGDB steam bridge. Name search is final fallback.
+
+> Detailed API responses, field observations, data flows, and sync patterns for all handlers are in [`api-responses.md`](api-responses.md).
