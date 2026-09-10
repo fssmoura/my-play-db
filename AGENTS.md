@@ -524,14 +524,34 @@ Required env: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `OWNER_USER_ID`. Note `_cors.
 
 Cross-device token store, one row per `(user_id, platform)`. RLS scopes every operation to `auth.uid()`; `anon` has no grants at all.
 
-| Column               | Notes                                                 |
-| -------------------- | ----------------------------------------------------- |
-| `user_id`            | uuid, defaults to `auth.uid()`, FK `auth.users`       |
-| `platform`           | check: `psn` / `steam` / `epic` / `xbox` / `ea`       |
-| `credentials`        | jsonb - tokens needed to call the handler             |
-| `identity`           | jsonb - `{ name, accountId }` for display             |
-| `expires_at`         | timestamptz, normalized by the client (see below)     |
-| `refresh_expires_at` | timestamptz, null when the platform offers no refresh |
+**This table is about ACCESS only.** Its single job is to guarantee that, for
+platforms that allow it, tokens stay valid so an integration never silently
+breaks. It is not a profile store.
+
+| Column               | Notes                                                          |
+| -------------------- | -------------------------------------------------------------- |
+| `user_id`            | uuid, defaults to `auth.uid()`, FK `auth.users`                |
+| `platform`           | check: `psn` / `steam` / `epic` / `xbox` / `ea`                |
+| `credentials`        | jsonb - tokens needed to call the handler                      |
+| `identity`           | jsonb - **connect-time snapshot only** (see below)             |
+| `expires_at`         | timestamptz, normalized by the client                          |
+| `refresh_expires_at` | timestamptz, null when the platform offers no refresh          |
+| `last_refresh_at`    | timestamptz, when a refresh last succeeded                     |
+| `last_refresh_error` | text, message from the last failed refresh, cleared on success |
+
+**`identity` is never rewritten by a refresh.** It exists purely so one
+account's credential can be told apart from another's (`{ name, accountId }`),
+and it is captured once at connect time. Refresh paths - both `refresh.js` in
+the browser and `cron-refresh.js` on the server - deliberately omit it from the
+payload, which `ON CONFLICT DO UPDATE` then leaves untouched.
+
+Do not "helpfully" refresh identity here. Display data (usernames, avatars,
+trophy summaries, gamerscore) belongs in a **future `platform_profiles` table**
+fed by the platforms' own profile endpoints on its own schedule. Mixing the two
+is what previously made names update on Epic and Xbox but never on Steam or EA.
+
+`last_refresh_error` makes a dying integration visible in the UI instead of only
+surfacing when the refresh token finally lapses.
 
 > **Table-level `GRANT`s are required.** This project has no default privileges for `authenticated`, so RLS policies alone produce `42501 permission denied` - Postgres checks privileges _before_ policies. Any new table needs an explicit `grant ... to authenticated`.
 

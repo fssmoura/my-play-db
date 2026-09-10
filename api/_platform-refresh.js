@@ -60,7 +60,6 @@ async function refreshPsn(credentials) {
     refreshExpiresAt: new Date(
       now + tokens.refreshTokenExpiresIn * 1000,
     ).toISOString(),
-    identity: null,
   };
 }
 
@@ -113,7 +112,6 @@ async function refreshEpic(credentials) {
     },
     expiresAt: data.expires_at ?? null,
     refreshExpiresAt: data.refresh_expires_at ?? null,
-    identity: { name: data.displayName, accountId: data.account_id },
   };
 }
 
@@ -223,7 +221,6 @@ async function refreshXbox(credentials) {
       Date.now() + Number(msaTokens.expires_in) * 1000,
     ).toISOString(),
     refreshExpiresAt: null,
-    identity: { name: claims.gtg, accountId: claims.xid },
   };
 }
 

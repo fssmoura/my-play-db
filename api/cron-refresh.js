@@ -31,7 +31,7 @@ module.exports = async function handler(req, res) {
 
   let rows;
   try {
-    const listUrl = `${supabaseUrl}/rest/v1/platform_credentials?select=id,platform,credentials,identity`;
+    const listUrl = `${supabaseUrl}/rest/v1/platform_credentials?select=id,platform,credentials`;
     const response = await fetch(listUrl, { headers: restHeaders });
     if (!response.ok) {
       const detail = await response.text();
@@ -62,12 +62,15 @@ module.exports = async function handler(req, res) {
     try {
       const result = await refreshPlatform(platform, credentials);
 
+      // Access only. `identity` is a connect-time snapshot and profile data
+      // belongs in its own table, so this job never touches either.
       const payload = {
         credentials: result.credentials,
         expires_at: result.expiresAt,
         refresh_expires_at: result.refreshExpiresAt,
+        last_refresh_at: new Date().toISOString(),
+        last_refresh_error: null,
       };
-      if (result.identity) payload.identity = result.identity;
 
       const patchUrl = `${supabaseUrl}/rest/v1/platform_credentials?id=eq.${encodeURIComponent(row.id)}`;
       const patchRes = await fetch(patchUrl, {
@@ -89,6 +92,24 @@ module.exports = async function handler(req, res) {
     } catch (err) {
       errors.push({ platform, message: err.message });
       console.error(`cron-refresh: ${platform} failed: ${err.message}`);
+      // Persist the failure so a silently dying integration is visible in the
+      // app instead of only surfacing when the token finally lapses.
+      try {
+        await fetch(
+          `${supabaseUrl}/rest/v1/platform_credentials?id=eq.${encodeURIComponent(row.id)}`,
+          {
+            method: "PATCH",
+            headers: {
+              ...restHeaders,
+              "Content-Type": "application/json",
+              Prefer: "return=minimal",
+            },
+            body: JSON.stringify({ last_refresh_error: err.message }),
+          },
+        );
+      } catch {
+        /* best effort - never let bookkeeping mask the real error */
+      }
     }
   }
 

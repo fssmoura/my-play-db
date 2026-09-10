@@ -77,6 +77,13 @@ async function resumeRedirect() {
 
 function status(def, record) {
   if (!record) return { cls: "bad", text: "not connected" };
+
+  // A failing auto-refresh is the thing that silently breaks an integration,
+  // so it outranks everything else.
+  if (record.last_refresh_error) {
+    return { cls: "bad", text: "refresh failing - reconnect" };
+  }
+
   if (def.neverExpires) return { cls: "ok", text: "connected" };
 
   const left = (iso) => (iso ? new Date(iso).getTime() - Date.now() : null);
@@ -90,7 +97,7 @@ function status(def, record) {
       return { cls: "bad", text: "expired - reconnect" };
     return {
       cls: "ok",
-      text: refresh ? `auto  ${dur(refresh)} left` : "auto",
+      text: refresh ? `auto - ${dur(refresh)} left` : "auto",
     };
   }
   if (access === null) return { cls: "warn", text: "connected" };
@@ -166,9 +173,13 @@ function editorJson(record) {
   return JSON.stringify(
     {
       credentials: record.credentials ?? {},
-      identity: record.identity ?? {},
       expires_at: record.expires_at,
       refresh_expires_at: record.refresh_expires_at,
+      // Connect-time snapshot, not kept up to date. Profile data will live
+      // in its own table.
+      identity: record.identity ?? {},
+      last_refresh_at: record.last_refresh_at,
+      last_refresh_error: record.last_refresh_error,
     },
     null,
     2,
@@ -186,9 +197,11 @@ async function saveEdit(id) {
   try {
     await vault.save(id, {
       credentials: parsed.credentials ?? {},
-      identity: parsed.identity ?? {},
+      identity: parsed.identity,
       expiresAt: parsed.expires_at ?? null,
       refreshExpiresAt: parsed.refresh_expires_at ?? null,
+      // Editing by hand clears a stale failure so auto-refresh resumes.
+      lastRefreshError: parsed.last_refresh_error ?? null,
     });
     clearFailure(id);
     await reload();
@@ -227,8 +240,14 @@ async function handle(action, id) {
     setStatus(`refreshing ${id}...`);
     try {
       const updated = await def.refresh(records[id]);
-      updated.identity ??= records[id].identity;
-      await vault.save(id, updated);
+      // Access only - the identity snapshot is left untouched on purpose.
+      await vault.save(id, {
+        credentials: updated.credentials,
+        expiresAt: updated.expiresAt,
+        refreshExpiresAt: updated.refreshExpiresAt,
+        lastRefreshAt: new Date().toISOString(),
+        lastRefreshError: null,
+      });
       await reload();
       setStatus(`${id} refreshed.`);
     } catch (err) {
