@@ -39,7 +39,12 @@ export function isStale(def, record) {
 
 /**
  * Refreshes one platform and persists the result.
- * Returns the saved row, or null if it wasn't refreshable / failed.
+ *
+ * Deliberately does NOT touch `identity`. This path exists to guarantee access,
+ * nothing else; the connect-time identity snapshot is left alone and profile
+ * data is a separate concern.
+ *
+ * Returns the saved row, or null if it wasn't refreshable.
  */
 export async function refreshOne(id, record) {
   const def = PLATFORMS[id];
@@ -47,20 +52,13 @@ export async function refreshOne(id, record) {
 
   const updated = await def.refresh(record);
 
-  // Carry the identity forward - most refresh responses don't include it.
-  if (!updated.identity) {
-    if (def.identify) {
-      try {
-        updated.identity = await def.identify(updated);
-      } catch {
-        updated.identity = record.identity ?? {};
-      }
-    } else {
-      updated.identity = record.identity ?? {};
-    }
-  }
-
-  const saved = await vault.save(id, updated);
+  const saved = await vault.save(id, {
+    credentials: updated.credentials,
+    expiresAt: updated.expiresAt,
+    refreshExpiresAt: updated.refreshExpiresAt,
+    lastRefreshAt: new Date().toISOString(),
+    lastRefreshError: null,
+  });
   failed.delete(id);
   return saved;
 }
@@ -81,8 +79,15 @@ export async function refreshStale(records) {
       refreshed.push(id);
     } catch (err) {
       // Usually means the refresh token itself expired -> needs a reconnect.
+      // Persist it so a silent failure is visible rather than only surfacing
+      // when the token finally lapses.
       failed.add(id);
       errors.push({ id, message: err.message });
+      try {
+        await vault.recordRefreshFailure(id, err.message);
+      } catch {
+        /* best effort - never let bookkeeping mask the real error */
+      }
     }
   }
 
