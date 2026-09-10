@@ -1253,45 +1253,61 @@ No user-facing account - this is an app-level token for API access.
 
 ### `search`
 
-**Request**: `{ query: "Elden Ring", limit: 10, type: 0 }`
+**Request**: `{ query: "Elden Ring", limit: 3 }`
+
+One request returns everything a result card needs plus the fields used to
+rank, so the app never follows up with a second call.
 
 ```json
 [
   {
-    "id": 112,
-    "name": "Elden Ring",
-    "slug": "elden-ring",
-    "summary": "The Golden Order has been broken...",
+    "id": 325591,
+    "name": "Elden Ring Nightreign",
+    "slug": "elden-ring-nightreign",
+    "summary": "Elden Ring: Nightreign is a standalone adventure within the ELDEN RING universe...",
     "game_type": 0,
+    "first_release_date": 1748563200,
+    "total_rating_count": 107,
+    "hypes": 65,
     "cover": {
-      "url": "https://images.igdb.com/igdb/image/upload/t_1080p/co4jni.jpg"
+      "url": "https://images.igdb.com/igdb/image/upload/t_1080p/co95gk.jpg"
     },
     "platforms": [
       { "id": 6, "name": "PC (Microsoft Windows)", "abbreviation": "PC" },
-      { "id": 48, "name": "PlayStation 4", "abbreviation": "PS4" },
-      { "id": 49, "name": "PlayStation 5", "abbreviation": "PS5" },
-      { "id": 32, "name": "Xbox One", "abbreviation": "XOne" },
-      { "id": 169, "name": "Xbox Series X|S", "abbreviation": "XSXS" }
+      { "id": 167, "name": "PlayStation 5", "abbreviation": "PS5" },
+      { "id": 169, "name": "Xbox Series X|S", "abbreviation": "Series X|S" }
     ],
-    "release_dates": [
-      {
-        "date": 1645660800,
-        "platform": 6,
-        "region": 8,
-        "human": "Feb 24, 2022"
-      }
-    ]
+    "alternative_names": [
+      { "id": 167117, "name": "ELDEN RING NIGHTREIGN" },
+      { "id": 249159, "name": "Elden Ring: Nightreign" },
+      { "id": 280281, "name": "엘든 링 밤의 통치자" }
+    ],
+    "popularity": {
+      "visits": 0.000063003767625,
+      "want_to_play": 0.000224980493713
+    }
   }
 ]
 ```
 
 **Key observations**:
 
-- `type` param filters by `game_type` enum (0 = main_game) - use to exclude DLCs, bundles, etc
-- `limit` defaults to 10
-- Cover images always `t_1080p` - replace size in URL for smaller variants
-- `release_dates[].date` is unix timestamp - earliest date is the first release
-- `region`: 1 = US, 2 = EU, 8 = WW (worldwide)
+- `limit` defaults to **200**, IGDB's hard cap is 500. A request costs ~500ms
+  regardless of size, so asking for fewer buys nothing.
+- `type` filters by `game_type` enum (0 = main_game) - use to exclude DLCs,
+  bundles, etc.
+- Cover images always `t_1080p` - replace the size in the URL for variants.
+- `first_release_date` is a unix timestamp. `release_dates` is deliberately not
+  requested: it is several objects per game and only the first release matters
+  for display.
+- `popularity` is merged in from `popularity_primitives` server-side. Values
+  are tiny normalized floats - meaningful only relative to each other.
+- **Coverage is not total.** For a 49-result `gta` search: 47 had popularity,
+  46 had alternative names, 48 had a cover and 48 had a summary. Anything
+  reading these fields has to tolerate them being absent.
+- `alternative_names` includes localised titles and acronyms, which is how
+  "cod" and "tw3" match. It also includes edition aliases, which is why ranking
+  only falls back to them when the real title matches nothing.
 
 ---
 
