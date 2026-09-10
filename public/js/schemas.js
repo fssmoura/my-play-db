@@ -232,7 +232,13 @@ export const SCHEMAS = {
         hint: "Game name to search for.",
         placeholder: "Elden Ring",
       },
-      { name: "limit", type: "number", default: 10, hint: "Max results." },
+      {
+        name: "limit",
+        type: "number",
+        default: 200,
+        hint: "Max results. IGDB caps search at 500.",
+      },
+      { name: "offset", type: "number", hint: "Skip this many results." },
       {
         name: "type",
         type: "number",

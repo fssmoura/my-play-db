@@ -6,7 +6,16 @@ import {
   readAuthErrorFromUrl,
 } from "./session.js";
 import * as connections from "./views/connections.js";
+import * as search from "./views/search.js";
 import * as apiConsole from "./views/console.js";
+
+// Tab id -> view module. Sections are `#view-<id>` in index.html, and the tab
+// order comes from the buttons there, not from this map.
+const VIEWS = {
+  connections,
+  console: apiConsole,
+  search,
+};
 
 const el = {
   loading: document.getElementById("loading"),
@@ -36,9 +45,20 @@ async function applySession(session) {
 
   if (!mountedViews) {
     mountedViews = true;
-    await connections.mount(document.getElementById("view-connections"));
-    await apiConsole.mount(document.getElementById("view-console"));
+
+    // Landing on a shared or refreshed search URL should show that search.
+    // Selected *before* mounting, because the search view's own restore does a
+    // network round trip and the wrong tab must not be visible meanwhile.
+    if (new URLSearchParams(location.search).has("q")) selectTab("search");
+
+    for (const [id, view] of Object.entries(VIEWS)) {
+      await view.mount(document.getElementById(`view-${id}`));
+    }
   }
+}
+
+function selectTab(view) {
+  document.querySelector(`nav.tabs button[data-view="${view}"]`)?.click();
 }
 
 function wireTabs() {
@@ -48,12 +68,11 @@ function wireTabs() {
       buttons.forEach((b) =>
         b.setAttribute("aria-selected", String(b === btn)),
       );
-      document
-        .getElementById("view-connections")
-        .classList.toggle("hidden", btn.dataset.view !== "connections");
-      document
-        .getElementById("view-console")
-        .classList.toggle("hidden", btn.dataset.view !== "console");
+      for (const id of Object.keys(VIEWS)) {
+        document
+          .getElementById(`view-${id}`)
+          .classList.toggle("hidden", btn.dataset.view !== id);
+      }
     });
   });
 }
