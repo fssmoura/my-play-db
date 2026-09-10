@@ -19,7 +19,8 @@
      7. platform rows  - the connection list
      8. modal          - the connect pop-up
      9. console        - the API testing tab
-    10. mobile         - phone overrides (everything above is desktop-first)
+    10. search         - the IGDB search tab
+    11. mobile         - phone overrides (everything above is desktop-first)
 
    This is deliberately plain/wireframe. Function first, design later.
    ========================================================================= */
@@ -379,7 +380,146 @@ pre.output {
   margin: 0;
 }
 
-/* ---------- 10. mobile ---------- */
+/* ---------- 10. search ---------- */
+
+.search-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.search-controls {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.search-box {
+  flex: 1;
+  position: relative;
+}
+
+.search-type {
+  flex: none;
+  width: 180px;
+}
+
+/* Suggestion dropdown, anchored to the input. */
+.suggest {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-top: none;
+  border-radius: 0 0 2px 2px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.suggest-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--line);
+}
+
+.suggest-item:last-child {
+  border-bottom: none;
+}
+
+.suggest-item:hover,
+.suggest-item.active {
+  background: #2a2a2a;
+}
+
+.suggest-name {
+  font-weight: 600;
+}
+
+.suggest-empty {
+  padding: 7px 10px;
+}
+
+.search-results-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.search-filter {
+  width: 220px;
+  flex: none;
+}
+
+.result-list {
+  display: grid;
+  gap: 8px;
+}
+
+.result {
+  display: flex;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--panel);
+  padding: 10px;
+}
+
+.result-cover {
+  width: 64px;
+  height: 88px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.result-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.result-body {
+  min-width: 0;
+}
+
+.result-name {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.result-body .meta {
+  margin: 0 0 3px;
+}
+
+/* Keep long summaries from dominating the list. */
+.result-summary {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+/* ---------- 11. mobile ---------- */
 
 @media (max-width: 640px) {
   main {
@@ -423,6 +563,22 @@ pre.output {
 
   .console-controls > div {
     width: 100%;
+  }
+
+  .search-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-type,
+  .search-filter {
+    width: 100%;
+  }
+
+  .search-results-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
   }
 
   /* >=16px prevents iOS zoom-on-focus. */
