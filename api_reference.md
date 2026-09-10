@@ -1,12 +1,12 @@
 # API Reference
 
-> Live-testing results via `vercel dev` — PSN, Steam, Epic, Xbox, EA (2026-06-12), IGDB, SGDB (2026-06-15).
+> Live-testing results via `vercel dev` - PSN, Steam, Epic, Xbox, EA (2026-06-12), IGDB, SGDB (2026-06-15).
 
 ---
 
 ## PSN (`api/psn.js`)
 
-Account: **xoura7** — Level 281, Tier 3, 17 Platinums
+Account: **xoura7** - Level 281, Tier 3, 17 Platinums
 
 ### `auth`
 
@@ -22,9 +22,10 @@ Account: **xoura7** — Level 281, Tier 3, 17 Platinums
 ```
 
 **Notes**:
+
 - NPSSO expires very quickly (~minutes). Always use `refreshToken` for subsequent calls.
 - `refreshToken` is a plain UUID, not a JWT.
-- `expiresIn` from psn-api is in seconds — the handler converts to ISO.
+- `expiresIn` from psn-api is in seconds - the handler converts to ISO.
 - `accessTokenExpiry` is ~1h, `refreshTokenExpiry` is ~10d.
 
 ---
@@ -75,18 +76,24 @@ Account: **xoura7** — Level 281, Tier 3, 17 Platinums
     "trophyLevel": 281,
     "trophyPoint": 51390,
     "tier": 3,
-    "earnedTrophies": { "bronze": 1580, "silver": 405, "gold": 116, "platinum": 17 }
+    "earnedTrophies": {
+      "bronze": 1580,
+      "silver": 405,
+      "gold": 116,
+      "platinum": 17
+    }
   }
 }
 ```
 
 **Key fields for storage**:
-- `onlineId` — PSN display name
-- `profilePictures` — avatar URLs by size (s/m/l/xl)
-- `isPlus` — PS Plus subscriber
-- `presence` — last online date per platform (PS5)
-- `trophyLevel` / `tier` — aggregate trophy stats
-- `earnedTrophies` — counts per tier
+
+- `onlineId` - PSN display name
+- `profilePictures` - avatar URLs by size (s/m/l/xl)
+- `isPlus` - PS Plus subscriber
+- `presence` - last online date per platform (PS5)
+- `trophyLevel` / `tier` - aggregate trophy stats
+- `earnedTrophies` - counts per tier
 
 ---
 
@@ -99,7 +106,7 @@ Account: **xoura7** — Level 281, Tier 3, 17 Platinums
   "titles": [
     {
       "titleId": "PPSA27360_00",
-      "name": "EA SPORTS FC™ 26",
+      "name": "EA SPORTS FC 26",
       "category": "ps5_native_game",
       "service": "none(purchased)",
       "playCount": 62,
@@ -121,7 +128,8 @@ Account: **xoura7** — Level 281, Tier 3, 17 Platinums
 ```
 
 **Key observations**:
-- `playDuration` is ISO 8601 duration (`PT106H56M38S` = 106h56m) — needs parsing
+
+- `playDuration` is ISO 8601 duration (`PT106H56M38S` = 106h56m) - needs parsing
 - `playCount` is an integer (62 times launched)
 - `category`: `ps4_game` / `ps5_native_game` / `pspc_game`
 - `service`: `none(purchased)` / `ps_plus` / `ps_now`
@@ -159,11 +167,12 @@ Account: **xoura7** — Level 281, Tier 3, 17 Platinums
 ```
 
 **Key observations**:
-- Lighter than `games` — no playtime, no play count, no concept metadata
+
+- Lighter than `games` - no playtime, no play count, no concept metadata
 - Has `conceptId` (numeric string) and `entitlementId` (product entitlement)
 - `subscriptionService`: `NONE` / `PS_PLUS_EXTRA` / etc.
 - `isActive`: true/false (service entitlements can expire)
-- No pagination — returns all recent activity
+- No pagination - returns all recent activity
 - Default limit 50 per AGENTS.md
 
 ---
@@ -179,11 +188,16 @@ Account: **xoura7** — Level 281, Tier 3, 17 Platinums
       "npServiceName": "trophy2",
       "npCommunicationId": "NPWR49547_00",
       "trophySetVersion": "01.01",
-      "trophyTitleName": "EA SPORTS FC™ 26 Trophies",
+      "trophyTitleName": "EA SPORTS FC 26 Trophies",
       "trophyTitleIconUrl": "https://psnobj.prod.dl.playstation.net/...",
       "trophyTitlePlatform": "PS5",
       "hasTrophyGroups": false,
-      "definedTrophies": { "bronze": 28, "silver": 12, "gold": 3, "platinum": 1 },
+      "definedTrophies": {
+        "bronze": 28,
+        "silver": 12,
+        "gold": 3,
+        "platinum": 1
+      },
       "progress": 28,
       "earnedTrophies": { "bronze": 12, "silver": 4, "gold": 0, "platinum": 0 },
       "lastUpdatedDateTime": "2026-06-05T14:19:54Z"
@@ -194,14 +208,15 @@ Account: **xoura7** — Level 281, Tier 3, 17 Platinums
 ```
 
 **Key observations**:
-- **This is the primary sync entry point** — ordered by most recent trophy activity
-- `progress` is a percentage (0-100) — calculated from defined vs earned
+
+- **This is the primary sync entry point** - ordered by most recent trophy activity
+- `progress` is a percentage (0-100) - calculated from defined vs earned
 - `lastUpdatedDateTime` = when the last trophy was earned (use for incremental sync)
 - `npCommunicationId` = the key needed for `trophies` action (e.g. `NPWR49547_00`)
 - `npServiceName` = always `"trophy2"` for PS4/PS5 (legacy PS3/Vita used `"trophy"`)
-- `hasTrophyGroups`: true = game has DLC trophy groups (e.g. Ghost of Yōtei has 3 groups)
-- `definedTrophies` vs `earnedTrophies` — counts per tier, not individual trophies
-- Total trophy titles: 164 (less than 172 total games — some games have no trophies)
+- `hasTrophyGroups`: true = game has DLC trophy groups (e.g. Ghost of Ytei has 3 groups)
+- `definedTrophies` vs `earnedTrophies` - counts per tier, not individual trophies
+- Total trophy titles: 164 (less than 172 total games - some games have no trophies)
 
 ---
 
@@ -226,12 +241,13 @@ Account: **xoura7** — Level 281, Tier 3, 17 Platinums
 ```
 
 **Key observations**:
+
 - Input: `titleId` strings from `games`/`recent` responses (e.g. `"PPSA27360_00"`)
 - Output: maps to `npCommunicationId` + `npServiceName` needed for `trophies`
-- NOT concept IDs — passing `concept.id` numeric values (e.g. `10011898`) resolves nothing
-- Falls back to proxy account (`TROPHY_PROXY_ACCOUNT_ID = "6515971742264256071"`) for titles the user hasn't synced — this ensures even unplayed games get mapped
-- Batches 5 at a time, concurrency 10 — fast for large title lists
-- Essential bridge between `games` → `trophies` pipeline
+- NOT concept IDs - passing `concept.id` numeric values (e.g. `10011898`) resolves nothing
+- Falls back to proxy account (`TROPHY_PROXY_ACCOUNT_ID = "6515971742264256071"`) for titles the user hasn't synced - this ensures even unplayed games get mapped
+- Batches 5 at a time, concurrency 10 - fast for large title lists
+- Essential bridge between `games` `trophies` pipeline
 
 ---
 
@@ -265,13 +281,14 @@ Account: **xoura7** — Level 281, Tier 3, 17 Platinums
 ```
 
 **Key observations**:
+
 - `trophyType`: `"platinum"` / `"gold"` / `"silver"` / `"bronze"`
 - `trophyRare`: 0 = common, 1 = rare, 2 = very rare (Sony's internal rarity tiers)
 - `trophyEarnedRate`: global percentage of players who earned this (e.g. `"0.1"`)
-- `earned`: boolean — merged from `getUserTrophiesEarnedForTitle` vs definitions
+- `earned`: boolean - merged from `getUserTrophiesEarnedForTitle` vs definitions
 - `earnedDateTime`: ISO string when earned, `null` if not earned
 - `trophyGroupId`: `"default"` for base game, other values for DLC groups
-- If user hasn't synced the game: falls back to proxy account → `earned: false` for all trophies
+- If user hasn't synced the game: falls back to proxy account `earned: false` for all trophies
 - Merges definitions + earned data in a single response (no client-side merge needed)
 
 ---
@@ -279,28 +296,28 @@ Account: **xoura7** — Level 281, Tier 3, 17 Platinums
 ### PSN Data Flow
 
 ```
-auth ──► refreshToken (persist)
-  │
-  ├──► profile ──► onlineId, avatars, presence, trophySummary
-  │
-  ├──► games ──► titleId, concept (genres, media), playtime, dates
-  │
-  ├──► recent ──► lightweight recently played (no playtime)
-  │
-  ├──► titles ──► npCommunicationId + progress + lastUpdatedDateTime
-  │     │
-  │     └──► trophies ──► full trophy list per game
-  │
-  └──► trophymap ──► titleId → npCommunicationId (bridge for trophies)
+auth  refreshToken (persist)
+
+   profile  onlineId, avatars, presence, trophySummary
+
+   games  titleId, concept (genres, media), playtime, dates
+
+   recent  lightweight recently played (no playtime)
+
+   titles  npCommunicationId + progress + lastUpdatedDateTime
+
+        trophies  full trophy list per game
+
+   trophymap  titleId  npCommunicationId (bridge for trophies)
 ```
 
-**For sync**: `titles` is the incremental entry point. Compare `lastUpdatedDateTime` against stored value. If changed → call `trophies` for that game. `games` provides playtime/playcount when you need it. `recent` is even lighter for just "was this played?" checks.
+**For sync**: `titles` is the incremental entry point. Compare `lastUpdatedDateTime` against stored value. If changed call `trophies` for that game. `games` provides playtime/playcount when you need it. `recent` is even lighter for just "was this played?" checks.
 
 ---
 
 ## Steam (`api/steam.js`)
 
-Account: **xoura** — 79 games, created Sep 2014
+Account: **xoura** - 79 games, created Sep 2014
 
 ### `profile`
 
@@ -330,13 +347,14 @@ Account: **xoura** — 79 games, created Sep 2014
 ```
 
 **Key observations**:
+
 - `steamid` is a 17-digit numeric string (community ID)
 - `personastate`: 0 = offline, 1 = online, 2 = busy, 3 = away, 4 = snooze, 5 = looking to trade, 6 = looking to play
 - `communityvisibilitystate`: 1 = private, 3 = public
 - `timecreated` is unix timestamp (1411322759 = 22 Sep 2014)
 - `lastlogoff` is unix timestamp
 - No banner/background image, no level, no game count in profile response
-- Avatars: 3 sizes — `avatar` (small), `avatarmedium`, `avatarfull`
+- Avatars: 3 sizes - `avatar` (small), `avatarmedium`, `avatarfull`
 
 ---
 
@@ -369,28 +387,29 @@ Account: **xoura** — 79 games, created Sep 2014
 ```
 
 **Key observations**:
+
 - `playtime_forever` is in **minutes** (not ISO 8601 like PSN)
 - `rtime_last_played`: unix timestamp, **0** = never launched
 - `playtime_disconnected`: minutes where the game ran offline (no Steam tracking)
-- `has_community_visible_stats`: true/false — indicates if game has achievements/stats
+- `has_community_visible_stats`: true/false - indicates if game has achievements/stats
 - `content_descriptorids`: content warning flags (e.g. blood, violence)
 - Icon URL construction: `https://media.steampowered.com/steamcommunity/public/images/apps/{appid}/{img_icon_url}.jpg`
 - No `playCount` field (unlike PSN)
 
 **Top games by playtime**:
 
-| # | Game | Minutes | Hours |
-|---|---|---|---|
-| 1 | Counter-Strike 2 | 95,079 | ~1,584h |
-| 2 | Marvel Rivals | 14,400 | ~240h |
-| 3 | Palworld | 8,561 | ~142h |
-| 4 | MARVEL SNAP | 8,021 | ~133h |
-| 5 | Apex Legends | 6,525 | ~108h |
-| 6 | Brawlhalla | 4,663 | ~77h |
-| 7 | Balatro | 4,219 | ~70h |
-| 8 | MyDockFinder | 4,216 | ~70h |
-| 9 | eFootball PES 2020 | 4,080 | ~68h |
-| 10 | EA SPORTS FIFA 21 | 3,443 | ~57h |
+| #   | Game               | Minutes | Hours   |
+| --- | ------------------ | ------- | ------- |
+| 1   | Counter-Strike 2   | 95,079  | ~1,584h |
+| 2   | Marvel Rivals      | 14,400  | ~240h   |
+| 3   | Palworld           | 8,561   | ~142h   |
+| 4   | MARVEL SNAP        | 8,021   | ~133h   |
+| 5   | Apex Legends       | 6,525   | ~108h   |
+| 6   | Brawlhalla         | 4,663   | ~77h    |
+| 7   | Balatro            | 4,219   | ~70h    |
+| 8   | MyDockFinder       | 4,216   | ~70h    |
+| 9   | eFootball PES 2020 | 4,080   | ~68h    |
+| 10  | EA SPORTS FIFA 21  | 3,443   | ~57h    |
 
 ---
 
@@ -416,9 +435,10 @@ Account: **xoura** — 79 games, created Sep 2014
 ```
 
 **Key observations**:
+
 - Same fields as `games` but adds `playtime_2weeks` (minutes in last 2 weeks)
 - No `rtime_last_played` field (unlike `games`)
-- Lightweight — no store metadata, no screenshots
+- Lightweight - no store metadata, no screenshots
 - `total_count` is the actual count (not a total in the system)
 - Only shows games played in the last 2 weeks
 
@@ -457,15 +477,16 @@ Account: **xoura** — 79 games, created Sep 2014
 ```
 
 **Key observations**:
-- Very rich — full store listing with descriptions (HTML), screenshots, videos
-- `is_free`: boolean — helpful for filtering
+
+- Very rich - full store listing with descriptions (HTML), screenshots, videos
+- `is_free`: boolean - helpful for filtering
 - `developers` / `publishers`: arrays of strings
 - `genres`: array of `{ id, description }` objects
-- `screenshots`: array of `{ id, path_thumbnail, path_full }` — note: thumbnails are lower res, `path_full` is the original
-- `header_image`: main store capsule (460×215, jpg)
+- `screenshots`: array of `{ id, path_thumbnail, path_full }` - note: thumbnails are lower res, `path_full` is the original
+- `header_image`: main store capsule (460215, jpg)
 - `background`: full-width background for store page
 - `achievements.total`: count only (use `schemas` for actual definitions)
-- No `short_description` in PSN equivalent — this is unique to Steam
+- No `short_description` in PSN equivalent - this is unique to Steam
 
 ---
 
@@ -503,11 +524,12 @@ Account: **xoura** — 79 games, created Sep 2014
 ```
 
 **Key observations**:
-- `achievements[]`: definitions — `name` (API key), `displayName` (localized), `icon`/`icongray`, `hidden` flag, `description`
-- `stats[]`: separate from achievements — numerical tracking stats
-- CS2 has only **1** achievement (PLAY_CS2) — old CS:GO achievements were removed during Source 2 migration. Most games have more.
+
+- `achievements[]`: definitions - `name` (API key), `displayName` (localized), `icon`/`icongray`, `hidden` flag, `description`
+- `stats[]`: separate from achievements - numerical tracking stats
+- CS2 has only **1** achievement (PLAY_CS2) - old CS:GO achievements were removed during Source 2 migration. Most games have more.
 - `gameName` may differ from store name (`ValveTestApp260` in some cases)
-- Not all games have achievements — MARVEL SNAP returned 0 achievements
+- Not all games have achievements - MARVEL SNAP returned 0 achievements
 
 ---
 
@@ -532,12 +554,13 @@ Account: **xoura** — 79 games, created Sep 2014
 ```
 
 **Key observations**:
-- `apiname`: matches `name` in `schemas` response — use as join key
+
+- `apiname`: matches `name` in `schemas` response - use as join key
 - `achieved`: 1 = earned, 0 = not earned
 - `unlocktime`: unix timestamp, `0` if not earned
-- No description, icon, or hidden flag — that data is in `schemas`
+- No description, icon, or hidden flag - that data is in `schemas`
 - Must **merge** `schemas` (definitions with icons/descriptions) + `achievements` (earned status) client-side
-- Some games return `error: "Requested app has no stats"` — handle gracefully
+- Some games return `error: "Requested app has no stats"` - handle gracefully
 
 ---
 
@@ -545,18 +568,18 @@ Account: **xoura** — 79 games, created Sep 2014
 
 ```
 steamId (public info)
-  │
-  ├──► profile ──► personaname, avatar, profile URL
-  │
-  ├──► games ──► full library (appid, name, playtime, last_played)
-  │
-  ├──► recent ──► last 2 weeks (includes playtime_2weeks)
-  │
-  ├──► game ──► store metadata (dev, publisher, genres, screenshots, desc)
-  │
-  ├──► schemas ──► achievement definitions (name, displayName, icon, hidden)
-  │
-  └──► achievements ──► earned status per player (achieved, unlocktime)
+
+   profile  personaname, avatar, profile URL
+
+   games  full library (appid, name, playtime, last_played)
+
+   recent  last 2 weeks (includes playtime_2weeks)
+
+   game  store metadata (dev, publisher, genres, screenshots, desc)
+
+   schemas  achievement definitions (name, displayName, icon, hidden)
+
+   achievements  earned status per player (achieved, unlocktime)
 ```
 
 **For sync**: `games` is the primary entry point (full library + playtime). `recent` adds 2-week delta. `game` provides metadata. Merge `schemas` + `achievements` for full trophy/achievement picture.
@@ -565,7 +588,7 @@ steamId (public info)
 
 ## Epic (`api/epic.js`)
 
-Account: **xoura07** — 73 library items, 18 games with achievements
+Account: **xoura07** - 73 library items, 18 games with achievements
 
 ### `auth`
 
@@ -588,10 +611,11 @@ Account: **xoura07** — 73 library items, 18 games with achievements
 ```
 
 **Key observations**:
+
 - Both `access_token` and `refresh_token` are JWT format (`eg1~...`)
 - Access token lasts **36 hours** (much longer than PSN's 1h)
 - Refresh token lasts **365 days**
-- `account_id` is a UUID-like string — needed for other endpoints
+- `account_id` is a UUID-like string - needed for other endpoints
 - `displayName` is the Epic display name
 - `country` is set to PT
 
@@ -630,41 +654,42 @@ Account: **xoura07** — 73 library items, 18 games with achievements
 ```
 
 **Key observations**:
+
 - Auto-paginates through all pages
 - Playtime is in **seconds** (not minutes like Steam, not ISO 8601 like PSN)
-- Top playtime: Fortnite (1,821,881s ≈ 506h), Rocket League (362,977s ≈ 100h), Rogue Company (42,898s)
+- Top playtime: Fortnite (1,821,881s 506h), Rocket League (362,977s 100h), Rogue Company (42,898s)
 - Deduplicates by namespace, splits multi-artifact entries (e.g. Fortnite base + Rocket Racing get separate entries under `fn`)
 - `sandboxName` can be generic like `"Live"`, `"shoal Production"`, `"mistletoe Production"` for games not in catalog
-- `resolveNames: true` calls `catalog` to replace generic names — works for catalog-published games
+- `resolveNames: true` calls `catalog` to replace generic names - works for catalog-published games
 - `appName` is the internal codename used for playtime matching (see field identity guide below)
 
 **Field identity guide**:
 
-| Library field | Maps to | Used for |
-|---|---|---|
-| `namespace` | `sandboxId` in progress/achievements | Achievement queries |
-| `catalogItemId` | `id` in catalog API | Store metadata queries |
-| `sandboxName` | Human-readable title | Display in UI |
-| `appName` | Internal codename (e.g. `"Sugar"`, `"Jackal"`) | Matches playtime `artifactId` |
-| `productId` | `productId` in achievement schema | Internal Epic reference |
+| Library field   | Maps to                                        | Used for                      |
+| --------------- | ---------------------------------------------- | ----------------------------- |
+| `namespace`     | `sandboxId` in progress/achievements           | Achievement queries           |
+| `catalogItemId` | `id` in catalog API                            | Store metadata queries        |
+| `sandboxName`   | Human-readable title                           | Display in UI                 |
+| `appName`       | Internal codename (e.g. `"Sugar"`, `"Jackal"`) | Matches playtime `artifactId` |
+| `productId`     | `productId` in achievement schema              | Internal Epic reference       |
 
-**Notable namespace → game mappings from this account**:
+**Notable namespace game mappings from this account**:
 
-| Namespace | AppName | Game | Playtime (s) |
-|---|---|---|---|
-| `fn` | Fortnite | Fortnite | 1,821,881 |
-| `9773aa1aa54f4f7b80e44bef04986cea` | Sugar | Rocket League | 362,977 |
-| `50118b7f954e450f8823df1614b24e80` | 0a2d9f... | Fall Guys | 8,027 |
-| `jackal` | Jackal | Dauntless | 5,700 |
-| `933ada2ec45e4184ae840d64c99e0ba9` | Pewee | Rogue Company | 42,898 |
-| `catnip` | Catnip | Borderlands 3 | 1,465 |
-| `ark` | aafc587f... | Ark | 12,744 |
-| `calluna` | Calluna | Control | — |
-| `angelonia` | Angelonia | Watch Dogs 2 | — |
-| `turtle` | Turtle | Maneater | — |
-| `wombat` | Wombat | World War Z | — |
-| `ue` | UE_5.0 / UE_4.25 | Unreal Engine | 1,284 / 189,497 |
-| `cbd5b3d310a54b12bf3fe8c41994174f` | 602eb4ab... | Valorant | 57 |
+| Namespace                          | AppName          | Game          | Playtime (s)    |
+| ---------------------------------- | ---------------- | ------------- | --------------- |
+| `fn`                               | Fortnite         | Fortnite      | 1,821,881       |
+| `9773aa1aa54f4f7b80e44bef04986cea` | Sugar            | Rocket League | 362,977         |
+| `50118b7f954e450f8823df1614b24e80` | 0a2d9f...        | Fall Guys     | 8,027           |
+| `jackal`                           | Jackal           | Dauntless     | 5,700           |
+| `933ada2ec45e4184ae840d64c99e0ba9` | Pewee            | Rogue Company | 42,898          |
+| `catnip`                           | Catnip           | Borderlands 3 | 1,465           |
+| `ark`                              | aafc587f...      | Ark           | 12,744          |
+| `calluna`                          | Calluna          | Control       | -               |
+| `angelonia`                        | Angelonia        | Watch Dogs 2  | -               |
+| `turtle`                           | Turtle           | Maneater      | -               |
+| `wombat`                           | Wombat           | World War Z   | -               |
+| `ue`                               | UE_5.0 / UE_4.25 | Unreal Engine | 1,284 / 189,497 |
+| `cbd5b3d310a54b12bf3fe8c41994174f` | 602eb4ab...      | Valorant      | 57              |
 
 ---
 
@@ -698,11 +723,12 @@ Account: **xoura07** — 73 library items, 18 games with achievements
 ```
 
 **Key observations**:
+
 - Groups items by namespace for batched API calls
 - `keyImages` types: `Featured`, `AndroidIcon`, `DieselStoreFrontTall`, `OfferImageWide`, etc.
 - `releaseInfo` contains platform availability and add date
 - Returns full store metadata: `title`, `description` (HTML), `developer`, `categories`
-- Requires `catalogItemId` from library — not all library entries have one
+- Requires `catalogItemId` from library - not all library entries have one
 - Used implicitly by `library({ resolveNames: true })` and `progress({ resolveNames: true })`
 
 ---
@@ -745,6 +771,7 @@ Account: **xoura07** — 73 library items, 18 games with achievements
 ```
 
 **Key observations**:
+
 - 18 games have achievements out of 73 library entries
 - Auto-scans full library if `sandboxIds` not provided
 - Achievement sets: base game (`isBase: true`) + DLC / expansion sets
@@ -754,13 +781,13 @@ Account: **xoura07** — 73 library items, 18 games with achievements
 
 **Games on this account with achievements (top 5):**
 
-| Sandbox | Game | Achievements | Unlocked | XP |
-|---|---|---|---|---|
-| `f4a904fcef2447439c35c4e6457f3027` | Death Stranding | 63 | 0/63 | 0/1000 |
-| `9773aa1aa54f4f7b80e44bef04986cea` | Rocket League | 88 | 53/88 | 590/1000 |
-| `jackal` | Dauntless | 46 | 0/46 | 0/2000 |
-| `catnip` | Borderlands 3 | 20 | 0/20 | 0/1000 |
-| `2c42520d342a46d7a6e0cfa77b4715de` | Dying Light | 78 | 0/78 | 0/1000 |
+| Sandbox                            | Game            | Achievements | Unlocked | XP       |
+| ---------------------------------- | --------------- | ------------ | -------- | -------- |
+| `f4a904fcef2447439c35c4e6457f3027` | Death Stranding | 63           | 0/63     | 0/1000   |
+| `9773aa1aa54f4f7b80e44bef04986cea` | Rocket League   | 88           | 53/88    | 590/1000 |
+| `jackal`                           | Dauntless       | 46           | 0/46     | 0/2000   |
+| `catnip`                           | Borderlands 3   | 20           | 0/20     | 0/1000   |
+| `2c42520d342a46d7a6e0cfa77b4715de` | Dying Light     | 78           | 0/78     | 0/1000   |
 
 ---
 
@@ -807,11 +834,12 @@ Account: **xoura07** — 73 library items, 18 games with achievements
 ```
 
 **Key observations**:
+
 - Merges schema definitions + player data in one response (both from GraphQL, parallel requests)
 - `rarity` is a percentage (e.g. `9` = 9% of players earned it)
 - `XP` per achievement, summed to `totalXP`
 - Different icons for unlocked vs locked (`iconUnlocked` / `iconLocked`)
-- `displayNameLocked` can be `null` — hidden achievement title
+- `displayNameLocked` can be `null` - hidden achievement title
 - Only games with achievements on the `progress` list will return data here
 - `achievementSetId` ties each achievement to its set (base or DLC)
 
@@ -820,24 +848,24 @@ Account: **xoura07** — 73 library items, 18 games with achievements
 ### Epic Data Flow
 
 ```
-auth ──► access_token + refresh_token (36h / 365d)
-  │
-  ├──► library ──► namespace, catalogItemId, sandboxName, appName, playtime (seconds)
-  │     │
-  │     └──► catalog ──► title, description, developer, keyImages, releaseInfo
-  │
-  └──► progress ──► games with achievements + progress summary
-        │
-        └──► achievements ──► full details per game (icons, XP, rarity, earned)
+auth  access_token + refresh_token (36h / 365d)
+
+   library  namespace, catalogItemId, sandboxName, appName, playtime (seconds)
+
+        catalog  title, description, developer, keyImages, releaseInfo
+
+   progress  games with achievements + progress summary
+
+         achievements  full details per game (icons, XP, rarity, earned)
 ```
 
-**For sync**: `library` is the entry point. `progress` with `resolveNames: true` scans all namespaces for achievement schemas. `achievements` gets full details per game. Playtime is in seconds — compare against previous run for incremental detection (no "last played" timestamp exists in Epic's API). `catalogItemId` + `namespace` from library records serve as the lookup keys for `catalog` queries.
+**For sync**: `library` is the entry point. `progress` with `resolveNames: true` scans all namespaces for achievement schemas. `achievements` gets full details per game. Playtime is in seconds - compare against previous run for incremental detection (no "last played" timestamp exists in Epic's API). `catalogItemId` + `namespace` from library records serve as the lookup keys for `catalog` queries.
 
 ---
 
 ## EA (`api/ea.js`)
 
-Account: **fssmoura7** — 7 games
+Account: **fssmoura7** - 7 games
 
 ### `auth`
 
@@ -853,9 +881,10 @@ Account: **fssmoura7** — 7 games
 ```
 
 **Key observations**:
-- Takes the raw `access_token` from the EA implicit grant URL — no exchange flow
+
+- Takes the raw `access_token` from the EA implicit grant URL - no exchange flow
 - `personaId` is required for the `achievements` action
-- Token expires in ~4 hours (14,399s), **no refresh flow available** — user revisits auth URL
+- Token expires in ~4 hours (14,399s), **no refresh flow available** - user revisits auth URL
 - `pidId` is the EA player ID, `personaId` is the platform-specific persona
 
 ---
@@ -870,7 +899,7 @@ Account: **fssmoura7** — 7 games
     {
       "originOfferId": "offer-8a172204-3e5a-4325-820a-e4a2c41cdb39",
       "productId": "prod-1003-cfea34b7-0d68-410b-9173-5d7e6800b6d2",
-      "name": "Need for Speed™ Heat",
+      "name": "Need for Speed Heat",
       "gameSlug": "need-for-speed-heat",
       "contentId": "1005-cfea34b7-0d68-410b-9173-5d7e6800b6d2",
       "displayType": "FULL_GAME",
@@ -883,34 +912,35 @@ Account: **fssmoura7** — 7 games
 ```
 
 **Key observations**:
+
 - 7 games owned on EA (Origin desktop app)
 - Playtime in **seconds** (like Epic)
 - `gameSlug` is the URL-friendly name used for playtime lookups
 - `achievementSetOverride` is `null` for games without achievements (e.g. The Sims 4)
-- `lastPlayedDate` is `1970-01-01` for most games — EA resets timestamps for games not played recently (or this is a bug in the API)
-- Three GraphQL queries fire sequentially: entitlements → recentGames (playtime) → legacyOffers (metadata)
+- `lastPlayedDate` is `1970-01-01` for most games - EA resets timestamps for games not played recently (or this is a bug in the API)
+- Three GraphQL queries fire sequentially: entitlements recentGames (playtime) legacyOffers (metadata)
 
 **Full library:**
 
-| Name | Slug | Playtime (s) | Hours | Achievement Set | Last Played |
-|---|---|---|---|---|---|
-| Need for Speed™ Heat | need-for-speed-heat | 116,315 | ~32h | `50317_195133_50844` | 1970-01-01 |
-| EA SPORTS™ FIFA 20 | fifa-20 | 904,685 | ~251h | `50072_194927_50844` | 2020-10-20 |
-| The Sims™ 4 | the-sims-4 | 5,247 | ~1.5h | (null) | 1970-01-01 |
-| Apex Legends™ | apex-legends | 9,059 | ~2.5h | `193634_194908_50844` | 1970-01-01 |
-| STAR WARS™ Battlefront™ II | star-wars-battlefront-2 | 75,184 | ~21h | `75158_193864_50844` | 1970-01-01 |
-| FIFA 19 | fifa-19 | 1,027,878 | ~285h | `50072_193612_50844` | 1970-01-01 |
-| FIFA 18 | fifa-18 | 1,811,150 | ~503h | `50072_193608_50844` | 1970-01-01 |
+| Name                     | Slug                    | Playtime (s) | Hours | Achievement Set       | Last Played |
+| ------------------------ | ----------------------- | ------------ | ----- | --------------------- | ----------- |
+| Need for Speed Heat      | need-for-speed-heat     | 116,315      | ~32h  | `50317_195133_50844`  | 1970-01-01  |
+| EA SPORTS FIFA 20        | fifa-20                 | 904,685      | ~251h | `50072_194927_50844`  | 2020-10-20  |
+| The Sims 4               | the-sims-4              | 5,247        | ~1.5h | (null)                | 1970-01-01  |
+| Apex Legends             | apex-legends            | 9,059        | ~2.5h | `193634_194908_50844` | 1970-01-01  |
+| STAR WARS Battlefront II | star-wars-battlefront-2 | 75,184       | ~21h  | `75158_193864_50844`  | 1970-01-01  |
+| FIFA 19                  | fifa-19                 | 1,027,878    | ~285h | `50072_193612_50844`  | 1970-01-01  |
+| FIFA 18                  | fifa-18                 | 1,811,150    | ~503h | `50072_193608_50844`  | 1970-01-01  |
 
 **Field identity guide**:
 
-| Library field | Maps to | Used for |
-|---|---|---|
-| `originOfferId` | Offer lookup key | Legacy offers & metadata |
-| `gameSlug` | URL slug | Playtime queries |
+| Library field            | Maps to            | Used for                                    |
+| ------------------------ | ------------------ | ------------------------------------------- |
+| `originOfferId`          | Offer lookup key   | Legacy offers & metadata                    |
+| `gameSlug`               | URL slug           | Playtime queries                            |
 | `achievementSetOverride` | Achievement set ID | Achievements query (null = no achievements) |
-| `contentId` | Master title ID | Internal EA reference |
-| `personaId` | Player persona ID | Achievements query (from auth) |
+| `contentId`              | Master title ID    | Internal EA reference                       |
+| `personaId`              | Player persona ID  | Achievements query (from auth)              |
 
 ---
 
@@ -920,7 +950,7 @@ Account: **fssmoura7** — 7 games
 
 Has **two tiers** depending on whether the legacy REST API has data for the given achievement set:
 
-**Tier 1 — Legacy REST API** (older Origin-era games: FIFA 19 and before):
+**Tier 1 - Legacy REST API** (older Origin-era games: FIFA 19 and before):
 
 ```json
 {
@@ -945,7 +975,7 @@ Has **two tiers** depending on whether the legacy REST API has data for the give
 }
 ```
 
-**Tier 2 — GraphQL fallback** (newer games: FIFA 20, NFS Heat, Apex Legends):
+**Tier 2 - GraphQL fallback** (newer games: FIFA 20, NFS Heat, Apex Legends):
 
 ```json
 {
@@ -965,45 +995,46 @@ Has **two tiers** depending on whether the legacy REST API has data for the give
 ```
 
 **Key observations**:
-- Handler tries legacy REST API first — if the achievement set ID exists there, returns rich data
-- Falls back to GraphQL if legacy API doesn't have the set — returns minimal data
+
+- Handler tries legacy REST API first - if the achievement set ID exists there, returns rich data
+- Falls back to GraphQL if legacy API doesn't have the set - returns minimal data
 - **Rich data fields**: `description`, `howTo`, `xp`, `hidden`, `rarity` (global %), `iconUrl`, `unlocked`, `unlockDate`
 - **Minimal data fields**: `id`, `name`, `unlocked`, `unlockDate`
-- The cutoff is roughly **2020** — older Origin-era games have legacy data, newer games use GraphQL only
+- The cutoff is roughly **2020** - older Origin-era games have legacy data, newer games use GraphQL only
 
 **Achievement data quality by game on this account:**
 
-| Game | Rich? | Total | Unlocked | Notes |
-|---|---|---|---|---|
-| FIFA 18 | ✅ Legacy | ? | ? | Not directly tested, likely rich |
-| FIFA 19 | ✅ Legacy | 22 | 22 | Icons, descriptions, rarity, XP all present |
-| FIFA 20 | ❌ GraphQL | 31 | 15 | Name + status only |
-| NFS Heat | ❌ GraphQL | 42 | 16 | Name + status only |
-| Apex Legends | ? | ? | ? | Live service, likely GraphQL |
-| Battlefront II | ? | ? | ? | 2017 game, could go either way |
+| Game           | Rich?   | Total | Unlocked | Notes                                       |
+| -------------- | ------- | ----- | -------- | ------------------------------------------- |
+| FIFA 18        | Legacy  | ?     | ?        | Not directly tested, likely rich            |
+| FIFA 19        | Legacy  | 22    | 22       | Icons, descriptions, rarity, XP all present |
+| FIFA 20        | GraphQL | 31    | 15       | Name + status only                          |
+| NFS Heat       | GraphQL | 42    | 16       | Name + status only                          |
+| Apex Legends   | ?       | ?     | ?        | Live service, likely GraphQL                |
+| Battlefront II | ?       | ?     | ?        | 2017 game, could go either way              |
 
 ---
 
 ### EA Data Flow
 
 ```
-auth ──► accessToken (4h expiry, no refresh)
-  │
-  ├──► library ──► game list + playtime (seconds) + achievement set IDs
-  │
-  └──► achievements ──► per-game details
-        │
-        ├── Legacy REST (older games) ──► icons, descriptions, rarity, XP
-        └── GraphQL (newer games) ────► name + status only
+auth  accessToken (4h expiry, no refresh)
+
+   library  game list + playtime (seconds) + achievement set IDs
+
+   achievements  per-game details
+
+         Legacy REST (older games)  icons, descriptions, rarity, XP
+         GraphQL (newer games)  name + status only
 ```
 
-**For sync**: `library` is the entry point. Compare `playtimeSeconds` against previous run for incremental detection (lastPlayedDate is unreliable). Each record includes `achievementSetOverride` — `null` means no achievements exist. Achievements data quality varies by game age: pre-2020 games get full details, post-2020 games get minimal data.
+**For sync**: `library` is the entry point. Compare `playtimeSeconds` against previous run for incremental detection (lastPlayedDate is unreliable). Each record includes `achievementSetOverride` - `null` means no achievements exist. Achievements data quality varies by game age: pre-2020 games get full details, post-2020 games get minimal data.
 
 ---
 
 ## Xbox (`api/xbox.js`)
 
-Account: **xoura7** — 56 titles tracked, 235 Gamerscore
+Account: **xoura7** - 56 titles tracked, 235 Gamerscore
 
 ### `auth`
 
@@ -1022,7 +1053,8 @@ Account: **xoura7** — 56 titles tracked, 235 Gamerscore
 ```
 
 **Key observations**:
-- Full OAuth 2.0 chain: `authorizationCode → MSA token → User token → XSTS token`
+
+- Full OAuth 2.0 chain: `authorizationCode  MSA token  User token  XSTS token`
 - `xuid` is the Xbox User ID (numeric, ~16 digits)
 - `userHash` + `xstsToken` form the `XBL3.0 x={userHash};{xstsToken}` auth header needed for all subsequent calls
 - `refreshToken` is a Microsoft account refresh token (not a JWT like Epic)
@@ -1042,7 +1074,10 @@ Account: **xoura7** — 56 titles tracked, 235 Gamerscore
       "hostId": "2535458901403801",
       "settings": [
         { "id": "GameDisplayName", "value": "xoura7" },
-        { "id": "GameDisplayPicRaw", "value": "https://images-eds-ssl.xboxlive.com/image?url=..." },
+        {
+          "id": "GameDisplayPicRaw",
+          "value": "https://images-eds-ssl.xboxlive.com/image?url=..."
+        },
         { "id": "Gamerscore", "value": "235" },
         { "id": "Gamertag", "value": "xoura7" }
       ],
@@ -1053,6 +1088,7 @@ Account: **xoura7** — 56 titles tracked, 235 Gamerscore
 ```
 
 **Key observations**:
+
 - Only 4 settings requested: `GameDisplayName`, `GameDisplayPicRaw`, `Gamerscore`, `Gamertag`
 - `Gamerscore` is total across all games (235)
 - Profile picture is a URL from Xbox CDN
@@ -1089,31 +1125,32 @@ Account: **xoura7** — 56 titles tracked, 235 Gamerscore
 ```
 
 **Key observations**:
-- **56 titles** tracked (only games started at least once — no full purchase library)
+
+- **56 titles** tracked (only games started at least once - no full purchase library)
 - `lastTimePlayed` is ISO 8601 datetime
-- MinutesPlayed merged from `userstats.xboxlive.com/batch` — only available for Microsoft Store/Xbox-native titles (UWP, Game Pass)
+- MinutesPlayed merged from `userstats.xboxlive.com/batch` - only available for Microsoft Store/Xbox-native titles (UWP, Game Pass)
 - Most games show `minutesPlayed: 0` or `null` (non-MS games like Steam titles that appear via Xbox app tracking on PC)
 - Games with playtime data on this account: Minecraft Dungeons (679 min), Forza Horizon 5 (294 min), Halo Infinite (56 min), Minecraft Launcher (0 min), Microsoft Solitaire Collection (0 min)
 - `detail` includes: `developerName`, `publisherName`, `description`, `shortDescription`, `releaseDate`, `genres`, `displayImage`
 - `devices` in titleHistory: `XboxSeries`, `XboxOne`, `PC`, `Mobile`, etc.
-- No separate catalog endpoint — metadata is inline in the games response
+- No separate catalog endpoint - metadata is inline in the games response
 
 **Full title list (56 total, sorted by last played):**
 
-| Game | Last Played | Minutes | Developer |
-|---|---|---|---|
-| Fortnite | 2026-06-05 | — | Epic Games |
-| Rocket League | 2026-05-31 | — | Psyonix |
-| League of Legends | 2026-03-23 | — | Riot Games |
-| Among Us | 2026-01-10 | — | Innersloth |
-| Minecraft Launcher | 2025-12-28 | 0 | Mojang/Microsoft |
-| Minecraft | 2025-12-28 | — | Mojang AB |
-| Osu! | 2025-12-27 | — | ppy |
-| Risk of Rain 2 | 2025-09-16 | — | Hopoo Games |
-| Minecraft Dungeons | 2023-03-26 | 679 | Mojang Studios |
-| Forza Horizon 5 | 2022-09-12 | 294 | Playground Games |
-| Halo Infinite | 2022-07-25 | 56 | 343 Industries |
-| ... (45 more) | | | |
+| Game               | Last Played | Minutes | Developer        |
+| ------------------ | ----------- | ------- | ---------------- |
+| Fortnite           | 2026-06-05  | -       | Epic Games       |
+| Rocket League      | 2026-05-31  | -       | Psyonix          |
+| League of Legends  | 2026-03-23  | -       | Riot Games       |
+| Among Us           | 2026-01-10  | -       | Innersloth       |
+| Minecraft Launcher | 2025-12-28  | 0       | Mojang/Microsoft |
+| Minecraft          | 2025-12-28  | -       | Mojang AB        |
+| Osu!               | 2025-12-27  | -       | ppy              |
+| Risk of Rain 2     | 2025-09-16  | -       | Hopoo Games      |
+| Minecraft Dungeons | 2023-03-26  | 679     | Mojang Studios   |
+| Forza Horizon 5    | 2022-09-12  | 294     | Playground Games |
+| Halo Infinite      | 2022-07-25  | 56      | 343 Industries   |
+| ... (45 more)      |             |         |                  |
 
 ---
 
@@ -1127,7 +1164,7 @@ Account: **xoura7** — 56 titles tracked, 235 Gamerscore
     {
       "id": "1",
       "serviceConfigId": "00000000-0000-0000-0000-00007900c3c7",
-      "name": "Welcome to México",
+      "name": "Welcome to Mxico",
       "progressState": "Achieved",
       "progression": {
         "requirements": [],
@@ -1142,8 +1179,8 @@ Account: **xoura7** — 56 titles tracked, 235 Gamerscore
       ],
       "platforms": ["XboxOne"],
       "isSecret": false,
-      "description": "Arrive at Horizon Festival México",
-      "lockedDescription": "Arrive at Horizon Festival México",
+      "description": "Arrive at Horizon Festival Mxico",
+      "lockedDescription": "Arrive at Horizon Festival Mxico",
       "achievementType": "Persistent",
       "participationType": "Individual",
       "rewards": [
@@ -1159,35 +1196,36 @@ Account: **xoura7** — 56 titles tracked, 235 Gamerscore
 ```
 
 **Key observations**:
+
 - `progressState`: `"Achieved"` or `"NotAchieved"` (not boolean like other platforms)
 - `rewards[].value`: gamerscore per achievement
 - `rewards[].type`: always `"Gamerscore"`
 - `timeUnlocked`: ISO 8601 datetime, `0001-01-01T00:00:00` if not earned
-- `isSecret`: boolean — hidden achievement
+- `isSecret`: boolean - hidden achievement
 - `mediaAssets[].url`: achievement icon
 - `description` / `lockedDescription`: same text (no hidden description trick like PSN's unearned display)
 - `platforms`: which platform the achievement was unlocked on
-- `maxItems=1000` is the request limit — should cover all games
+- `maxItems=1000` is the request limit - should cover all games
 
 **Tested games:**
 
-| Game | titleId | Achievements | Earned |
-|---|---|---|---|
-| Minecraft Dungeons | 1739375565 | 104 | 10 |
-| Forza Horizon 5 | 2030093255 | 164 | 3 |
+| Game               | titleId    | Achievements | Earned |
+| ------------------ | ---------- | ------------ | ------ |
+| Minecraft Dungeons | 1739375565 | 104          | 10     |
+| Forza Horizon 5    | 2030093255 | 164          | 3      |
 
 ---
 
 ### Xbox Data Flow
 
 ```
-auth ──► xuid + userHash + xstsToken + refreshToken (1h expiry)
-  │
-  ├──► profile ──► gamertag, gamerscore, avatar URL
-  │
-  ├──► games ──► title history + metadata + playtime (minutes)
-  │
-  └──► achievements ──► per-game list (gamerscore, description, icon, earned status)
+auth  xuid + userHash + xstsToken + refreshToken (1h expiry)
+
+   profile  gamertag, gamerscore, avatar URL
+
+   games  title history + metadata + playtime (minutes)
+
+   achievements  per-game list (gamerscore, description, icon, earned status)
 ```
 
 **For sync**: `games` is the entry point. Compare `lastTimePlayed` against stored timestamps. Titles where it's newer need re-import. Only MS/Xbox-native titles have playtime data and achievements. Games with `null` or old timestamps can be skipped.
@@ -1196,7 +1234,7 @@ auth ──► xuid + userHash + xstsToken + refreshToken (1h expiry)
 
 ## IGDB (`api/igdb.js`)
 
-Uses IGDB v4 (Twitch-backed game database). No user auth — Twitch Client ID + Client Secret are server-side env vars. Token auto-refreshes in-memory.
+Uses IGDB v4 (Twitch-backed game database). No user auth - Twitch Client ID + Client Secret are server-side env vars. Token auto-refreshes in-memory.
 
 ### `auth`
 
@@ -1209,7 +1247,7 @@ Uses IGDB v4 (Twitch-backed game database). No user auth — Twitch Client ID + 
 }
 ```
 
-No user-facing account — this is an app-level token for API access.
+No user-facing account - this is an app-level token for API access.
 
 ---
 
@@ -1236,17 +1274,23 @@ No user-facing account — this is an app-level token for API access.
       { "id": 169, "name": "Xbox Series X|S", "abbreviation": "XSXS" }
     ],
     "release_dates": [
-      { "date": 1645660800, "platform": 6, "region": 8, "human": "Feb 24, 2022" }
+      {
+        "date": 1645660800,
+        "platform": 6,
+        "region": 8,
+        "human": "Feb 24, 2022"
+      }
     ]
   }
 ]
 ```
 
 **Key observations**:
-- `type` param filters by `game_type` enum (0 = main_game) — use to exclude DLCs, bundles, etc
+
+- `type` param filters by `game_type` enum (0 = main_game) - use to exclude DLCs, bundles, etc
 - `limit` defaults to 10
-- Cover images always `t_1080p` — replace size in URL for smaller variants
-- `release_dates[].date` is unix timestamp — earliest date is the first release
+- Cover images always `t_1080p` - replace size in URL for smaller variants
+- `release_dates[].date` is unix timestamp - earliest date is the first release
 - `region`: 1 = US, 2 = EU, 8 = WW (worldwide)
 
 ---
@@ -1267,16 +1311,31 @@ No user-facing account — this is an app-level token for API access.
   "rating": 95.0,
   "rating_count": 4321,
   "updated_at": 1747000000,
-  "cover": { "url": "https://images.igdb.com/igdb/image/upload/t_1080p/co4jni.jpg" },
-  "screenshots": [{ "url": "https://images.igdb.com/igdb/image/upload/t_1080p/sc52we.jpg" }],
+  "cover": {
+    "url": "https://images.igdb.com/igdb/image/upload/t_1080p/co4jni.jpg"
+  },
+  "screenshots": [
+    { "url": "https://images.igdb.com/igdb/image/upload/t_1080p/sc52we.jpg" }
+  ],
   "artworks": [{ "url": "..." }],
-  "videos": [{ "name": "Story Trailer", "url": "https://www.youtube.com/watch?v=K_03kFqW8I" }],
+  "videos": [
+    {
+      "name": "Story Trailer",
+      "url": "https://www.youtube.com/watch?v=K_03kFqW8I"
+    }
+  ],
   "genres": [{ "name": "Role-playing (RPG)" }, { "name": "Adventure" }],
   "platforms": [{ "name": "PC (Microsoft Windows)", "abbreviation": "PC" }],
   "involved_companies": [
-    { "company": { "name": "FromSoftware" }, "developer": true, "publisher": false }
+    {
+      "company": { "name": "FromSoftware" },
+      "developer": true,
+      "publisher": false
+    }
   ],
-  "release_dates": [{ "date": 1645660800, "platform": 6, "region": 8, "human": "Feb 24, 2022" }],
+  "release_dates": [
+    { "date": 1645660800, "platform": 6, "region": 8, "human": "Feb 24, 2022" }
+  ],
   "websites": [{ "url": "https://www.eldenring.com", "type": "official" }],
   "collections": [{ "name": "Souls series" }],
   "franchises": [{ "name": "Dark Souls" }],
@@ -1299,35 +1358,36 @@ No user-facing account — this is an app-level token for API access.
 ```
 
 **Key observations**:
+
 - `websites[].type` enriched to human-readable name (e.g. `"official"`, `"youtube"`, `"steam"`). `release_dates[].id` stripped. Both handled in `enrichImages`.
 - `game_type`: 0 = main_game, 1 = dlc_addon, 3 = bundle, 8 = remake, 9 = remaster, etc (see full table below)
-- `rating` is 0–100, `rating_count` is number of community ratings
+- `rating` is 0-100, `rating_count` is number of community ratings
 - `version_title` is non-null for editions (e.g. "Game of the Year Edition")
-- Relationships are directional — `parent_game`/`version_parent` have full names; bare ID lists for children (`dlcs`, `bundles`, etc)
-- Editions and updates NOT returned by parent — query `where version_parent = {id}` for editions, `where parent_game = {id} & game_type = 14` for updates
+- Relationships are directional - `parent_game`/`version_parent` have full names; bare ID lists for children (`dlcs`, `bundles`, etc)
+- Editions and updates NOT returned by parent - query `where version_parent = {id}` for editions, `where parent_game = {id} & game_type = 14` for updates
 - Image URL: `https://images.igdb.com/igdb/image/upload/t_1080p/{image_id}.jpg`
 - Video URL: `https://www.youtube.com/watch?v={video_id}`
-- `external_games[]` enriched in response — `source` is the human-readable name (e.g. `"steam"`, `"psn"`) instead of the numeric `external_game_source`. Unknown sources get `source_<N>` (e.g. `source_42`). IGDB-internal `id` stripped.
+- `external_games[]` enriched in response - `source` is the human-readable name (e.g. `"steam"`, `"psn"`) instead of the numeric `external_game_source`. Unknown sources get `source_<N>` (e.g. `source_42`). IGDB-internal `id` stripped.
 
 ### Game type enum
 
-| Value | Name |
-| ----- | ---- |
-| 0 | main_game |
-| 1 | dlc_addon |
-| 2 | expansion |
-| 3 | bundle |
-| 4 | standalone_expansion |
-| 5 | mod |
-| 6 | episode |
-| 7 | season |
-| 8 | remake |
-| 9 | remaster |
-| 10 | expanded_game |
-| 11 | port |
-| 12 | fork |
-| 13 | pack |
-| 14 | update |
+| Value | Name                 |
+| ----- | -------------------- |
+| 0     | main_game            |
+| 1     | dlc_addon            |
+| 2     | expansion            |
+| 3     | bundle               |
+| 4     | standalone_expansion |
+| 5     | mod                  |
+| 6     | episode              |
+| 7     | season               |
+| 8     | remake               |
+| 9     | remaster             |
+| 10    | expanded_game        |
+| 11    | port                 |
+| 12    | fork                 |
+| 13    | pack                 |
+| 14    | update               |
 
 ---
 
@@ -1342,9 +1402,10 @@ No user-facing account — this is an app-level token for API access.
 Or `null` if no match.
 
 **Key observations**:
+
 - Uses IGDB's `external_game_source` table (not deprecated `category` field)
-- `source` accepts name (e.g. `"steam"`, `"psn"`) or numeric ID (e.g. `1`, `36`) — see source map above
-- Returns only the IGDB `id` — lightweight mapping. Use `game({ ids: [id] })` for full record
+- `source` accepts name (e.g. `"steam"`, `"psn"`) or numeric ID (e.g. `1`, `36`) - see source map above
+- Returns only the IGDB `id` - lightweight mapping. Use `game({ ids: [id] })` for full record
 - `null` means IGDB has no record for that external ID (common for Epic UUIDs, modern Xbox titleIds)
 - Returns at most 1 result
 
@@ -1352,37 +1413,37 @@ Or `null` if no match.
 
 ### IGDB ID mapping (verified against live data)
 
-`by_external` is the bridge: pass a platform ID → get IGDB game ID. Or use `game(id)\.external_games` to get all external IDs for a known game.
+`by_external` is the bridge: pass a platform ID get IGDB game ID. Or use `game(id)\.external_games` to get all external IDs for a known game.
 
-| Platform | Platform's own ID | IGDB uid format | Direct bridge? | How |
-|----------|-------------------|-----------------|:--------------:|-----|
-| **PSN** | `concept.id` from `psn/games` (e.g. `10011898`) | Numeric string | ✅ 1:1 | PSN `games` → `by_external(psn, conceptId)` |
-| **Steam** | `appid` from `steam/games` (e.g. `1245620`) | Numeric string | ✅ 1:1 | Steam `games` → `by_external(steam, appid)` |
-| **Epic** | `namespace` / `catalogItemId` | Hex UUID (product slug, not namespace) | ❌ | Store URL slug differs from both identifiers |
-| **Xbox** | `titleId` from `xbox/games` (e.g. `1820250788`) | Xbox 360 UUID format | ❌ | IGDB only has Xbox 360 marketplace IDs |
-| **EA** | `contentId` from `ea/library` | N/A | ❌ | No EA/Origin source in IGDB |
+| Platform  | Platform's own ID                               | IGDB uid format                        | Direct bridge? | How                                          |
+| --------- | ----------------------------------------------- | -------------------------------------- | :------------: | -------------------------------------------- |
+| **PSN**   | `concept.id` from `psn/games` (e.g. `10011898`) | Numeric string                         |      1:1       | PSN `games` `by_external(psn, conceptId)`    |
+| **Steam** | `appid` from `steam/games` (e.g. `1245620`)     | Numeric string                         |      1:1       | Steam `games` `by_external(steam, appid)`    |
+| **Epic**  | `namespace` / `catalogItemId`                   | Hex UUID (product slug, not namespace) |                | Store URL slug differs from both identifiers |
+| **Xbox**  | `titleId` from `xbox/games` (e.g. `1820250788`) | Xbox 360 UUID format                   |                | IGDB only has Xbox 360 marketplace IDs       |
+| **EA**    | `contentId` from `ea/library`                   | N/A                                    |                | No EA/Origin source in IGDB                  |
 
-**Rate limit**: 4 req/s to IGDB (handled server-side — no client throttle needed).
+**Rate limit**: 4 req/s to IGDB (handled server-side - no client throttle needed).
 
 ---
 
 ## SGDB (`api/sgdb.js`)
 
-Uses SteamGridDB v2 API (community game art). Auth: static API key (`STEAMGRIDDB_API_KEY`), `Authorization: Bearer` header. No CORS headers — all requests proxy through Vercel.
+Uses SteamGridDB v2 API (community game art). Auth: static API key (`STEAMGRIDDB_API_KEY`), `Authorization: Bearer` header. No CORS headers - all requests proxy through Vercel.
 
 ### `search`
 
 **Request**: `{ name: "Elden Ring" }`
 
 Endpoint: `/search/autocomplete/{term}`
+
 ```json
-[
-  { "id": 5495669, "name": "Elden Ring", "release_date": 1645568013 }
-]
+[{ "id": 5495669, "name": "Elden Ring", "release_date": 1645568013 }]
 ```
 
 **Key observations**:
-- Uses `/search/autocomplete/` not `/search/` — returns partial matches
+
+- Uses `/search/autocomplete/` not `/search/` - returns partial matches
 - `release_date` is unix timestamp
 - Response is clean: id, name, release_date only (other SGDB fields stripped)
 
@@ -1399,9 +1460,10 @@ Endpoint: `/search/autocomplete/{term}`
 Or `null` if not found.
 
 **Key observations**:
+
 - Platform enum: `steam`, `origin`, `egs`, `bnet`, `uplay`, `flashpoint`, `eshop`
-- Direct platform lookup works for Steam (`appid`), Epic (`namespace`) — others need IGDB bridge
-- For PSN/Xbox: use IGDB `game(igdbId).external_games` → find steam entry → SGDB steam bridge
+- Direct platform lookup works for Steam (`appid`), Epic (`namespace`) - others need IGDB bridge
+- For PSN/Xbox: use IGDB `game(igdbId).external_games` find steam entry SGDB steam bridge
 - Name search is final fallback for exclusives with no bridge
 
 ---
@@ -1431,24 +1493,25 @@ Or `null` if not found.
 ```
 
 **Key observations**:
+
 - Same shape for `heroes` and `logos` (logos have no `dimensions` filter)
 - Default includes everything: nsfw=any, humor=any, epilepsy=any, all types, all styles
 - Filters: `styles`, `dimensions`, `mimes`, `types` (static/animated), `nsfw` (yes/no/any), `humor`, `epilepsy`, `limit`, `page`
-- Dimensions differ per asset type — see SGDB docs for valid values
-- 920×430 seems to be the "Steam default" grid size
+- Dimensions differ per asset type - see SGDB docs for valid values
+- 920430 seems to be the "Steam default" grid size
 - Thumbnail URLs are in the same directory, just `thumb/` subpath
 
-### Platform ID → SGDB bridge
+### Platform ID SGDB bridge
 
-| Source | Our ID | Direct? | Strategy |
-|--------|--------|:-------:|----------|
-| Steam | appid (int) | ✅ | `/grids/steam/{appid}` |
-| Epic | namespace (string) | ✅ | `/grids/egs/{namespace}` |
-| PSN | concept.id (int) | ❌ | IGDB `game(igdbId).external_games` → find steam entry → SGDB steam |
-| Xbox | titleId (int) | ❌ | IGDB `game(igdbId).external_games` → find steam entry → SGDB steam |
-| EA | contentId (string) | ❌ | Name search fallback |
+| Source | Our ID             | Direct? | Strategy                                                       |
+| ------ | ------------------ | :-----: | -------------------------------------------------------------- |
+| Steam  | appid (int)        |         | `/grids/steam/{appid}`                                         |
+| Epic   | namespace (string) |         | `/grids/egs/{namespace}`                                       |
+| PSN    | concept.id (int)   |         | IGDB `game(igdbId).external_games` find steam entry SGDB steam |
+| Xbox   | titleId (int)      |         | IGDB `game(igdbId).external_games` find steam entry SGDB steam |
+| EA     | contentId (string) |         | Name search fallback                                           |
 
-**Caching**: Game lookups stable — cache aggressively. Assets cacheable with reasonable TTL. No documented rate limit.
+**Caching**: Game lookups stable - cache aggressively. Assets cacheable with reasonable TTL. No documented rate limit.
 
 ---
 
@@ -1456,51 +1519,51 @@ Or `null` if not found.
 
 The API supports two patterns:
 
-**Initial sync** — pull everything once:
+**Initial sync** - pull everything once:
 
 ```
-auth → profile → games (no limit) → titles (no limit) → trophies per game
+auth  profile  games (no limit)  titles (no limit)  trophies per game
 ```
 
-**Incremental update** — only fetch what changed:
+**Incremental update** - only fetch what changed:
 
 ```
-auth (via refreshToken) → recent({ limit: 20 }) → compare lastPlayedDateTime
-                        → titles({ limit: 50 }) → compare lastUpdatedDateTime
-                        → trophies only for changed titles
+auth (via refreshToken)  recent({ limit: 20 })  compare lastPlayedDateTime
+                         titles({ limit: 50 })  compare lastUpdatedDateTime
+                         trophies only for changed titles
 ```
 
 ### Per-platform increments
 
-**PSN**: `titles` is the incremental entry point. Compare `lastUpdatedDateTime` against stored value. If changed → call `trophies` for that game. `games` provides playtime/playcount when needed. `recent` is even lighter for "was this played?" checks.
+**PSN**: `titles` is the incremental entry point. Compare `lastUpdatedDateTime` against stored value. If changed call `trophies` for that game. `games` provides playtime/playcount when needed. `recent` is even lighter for "was this played?" checks.
 
 **Steam**: `games` is the primary entry point (full library + playtime). `recent` adds 2-week delta. `game` provides metadata. Merge `schemas` + `achievements` for full trophy/achievement picture.
 
 ```
-steamId → games → compare rtime_last_played → mark changed
-        → achievements per changed game (merge with schemas)
+steamId  games  compare rtime_last_played  mark changed
+         achievements per changed game (merge with schemas)
 ```
 
 **Epic**: `library` is the entry point. Compare `playtime` (no timestamp available) against previous run. `progress` with `resolveNames: true` scans all namespaces for achievement schemas. `achievements` gets full details per game.
 
 ```
-auth → library({ resolveNames: true }) → compare acquisitionDate
-     → catalog only for new/changed items
-     → progress({ resolveNames: true }) → achievements only for games with new unlocks
+auth  library({ resolveNames: true })  compare acquisitionDate
+      catalog only for new/changed items
+      progress({ resolveNames: true })  achievements only for games with new unlocks
 ```
 
 **Xbox**: `games` is the entry point. Compare `lastTimePlayed` against stored timestamps. Titles where it's newer need re-import. Only MS/Xbox-native titles have playtime and achievements.
 
 ```
-auth → profile → games → compare lastTimePlayed per title
-                      → achievements only for titles where lastTimePlayed changed
+auth  profile  games  compare lastTimePlayed per title
+                       achievements only for titles where lastTimePlayed changed
 ```
 
 **EA**: `library` is the entry point. Compare `playtimeSeconds` against previous run. `achievementSetOverride` = null means no achievements exist.
 
 ```
-auth → library → compare playtime per game
-               → achievements only for games with changed playtime
+auth  library  compare playtime per game
+                achievements only for games with changed playtime
 ```
 
 ### IGDB + SGDB enrichment
@@ -1508,11 +1571,11 @@ auth → library → compare playtime per game
 After syncing any platform, enrich each game via IGDB:
 
 ```
-platform game → IGDB by_external(platform, platformId) → store IGDB game ID (canonical)
-             → IGDB game(igdbId).external_games → check for steam entry
-               → if found → SGDB game({ platform: "steam", platformId: uid }) → SGDB ID
-                          → SGDB grids/heroes/logos({ sgdbId }) → artwork
-               → if not found → SGDB search(name) → pick match → artwork
+platform game  IGDB by_external(platform, platformId)  store IGDB game ID (canonical)
+              IGDB game(igdbId).external_games  check for steam entry
+                if found  SGDB game({ platform: "steam", platformId: uid })  SGDB ID
+                           SGDB grids/heroes/logos({ sgdbId })  artwork
+                if not found  SGDB search(name)  pick match  artwork
 ```
 
 ---
@@ -1538,50 +1601,57 @@ platform game → IGDB by_external(platform, platformId) → store IGDB game ID 
 ## Integration Notes
 
 **Timestamps**: Five different formats across platforms:
+
 - PSN: ISO 8601 datetime
 - Steam: unix timestamp (`rtime_last_played`, 0 = never)
 - Epic: no last-played timestamp
-- EA: ISO datetime (but often returns `1970-01-01` — unreliable)
+- EA: ISO datetime (but often returns `1970-01-01` - unreliable)
 - Xbox: ISO 8601 datetime (`titleHistory.lastTimePlayed`)
 
 **Playtime**: Five different formats:
-- PSN: ISO 8601 duration (`PT106H56M38S`) → parse to hours/minutes
-- Steam: minutes (integer) → pass through
-- Epic: seconds (integer) → divide by 60 for minutes
-- EA: seconds (integer) → divide by 60 for minutes
-- Xbox: minutes (integer, MS-native titles only) — most games return null
+
+- PSN: ISO 8601 duration (`PT106H56M38S`) parse to hours/minutes
+- Steam: minutes (integer) pass through
+- Epic: seconds (integer) divide by 60 for minutes
+- EA: seconds (integer) divide by 60 for minutes
+- Xbox: minutes (integer, MS-native titles only) - most games return null
 
 **Achievements**:
+
 - PSN: merges definitions+earned in one `trophies` call
 - Steam: requires two calls (`schemas` + `achievements`) + client-side merge
 - Epic: merges definitions+earned in one `achievements` call
 - EA: merges in one call, but data quality varies (legacy API vs GraphQL fallback)
-- Xbox: merges in one call — includes description, icon URL, gamerscore, progress state
+- Xbox: merges in one call - includes description, icon URL, gamerscore, progress state
 
 **Incremental sync**:
-- PSN: `titles` → compare `lastUpdatedDateTime` → `trophies` for changed games
-- Steam: `games` → compare `rtime_last_played` → mark changed → `achievements` per changed game
-- Epic: `library` → compare `playtime` (no timestamp) → `progress` → `achievements` for changed games
-- EA: `library` → compare `playtimeSeconds` → `achievements` for games with changed playtime
-- Xbox: `games` → compare `lastTimePlayed` → achievements only for changed titles
+
+- PSN: `titles` compare `lastUpdatedDateTime` `trophies` for changed games
+- Steam: `games` compare `rtime_last_played` mark changed `achievements` per changed game
+- Epic: `library` compare `playtime` (no timestamp) `progress` `achievements` for changed games
+- EA: `library` compare `playtimeSeconds` `achievements` for games with changed playtime
+- Xbox: `games` compare `lastTimePlayed` achievements only for changed titles
 
 **Icon URLs**:
+
 - PSN: absolute URLs in response
-- Steam: `img_icon_url` hashes — construct URL
+- Steam: `img_icon_url` hashes - construct URL
 - Epic: absolute URLs (`shared-static-prod.epicgames.com/epic-achievements/...`)
-- EA: absolute URLs (`achievements.gameservices.ea.com/achievements/icons/...`) — legacy only
-- Xbox: absolute URLs (`images-eds-ssl.xboxlive.com/image?url=...`) — via `mediaAssets`
+- EA: absolute URLs (`achievements.gameservices.ea.com/achievements/icons/...`) - legacy only
+- Xbox: absolute URLs (`images-eds-ssl.xboxlive.com/image?url=...`) - via `mediaAssets`
 
 **Auth patterns**:
-- PSN: NPSSO → access code → access token (1h) + refresh token (10d)
+
+- PSN: NPSSO access code access token (1h) + refresh token (10d)
 - Steam: static API key in server env var (never sent to client)
-- Epic: authorization code → access token (36h) + refresh token (365d)
-- EA: implicit grant → access token (4h), **no refresh available**
-- Xbox: authorization code → MSA token → User token → XSTS token (1h, refresh available)
+- Epic: authorization code access token (36h) + refresh token (365d)
+- EA: implicit grant access token (4h), **no refresh available**
+- Xbox: authorization code MSA token User token XSTS token (1h, refresh available)
 
 **Library granularity**:
-- PSN: 172 games, 164 with trophies — includes PS+ titles
-- Steam: 79 games — full purchase library (free games opt-in)
-- Epic: 73 items — includes free claimed games + launcher/tools
-- EA: 7 games — Origin purchases only
-- Xbox: 56 titles — only started games (no full purchase library), mixes MS-native + Steam/standalone
+
+- PSN: 172 games, 164 with trophies - includes PS+ titles
+- Steam: 79 games - full purchase library (free games opt-in)
+- Epic: 73 items - includes free claimed games + launcher/tools
+- EA: 7 games - Origin purchases only
+- Xbox: 56 titles - only started games (no full purchase library), mixes MS-native + Steam/standalone
