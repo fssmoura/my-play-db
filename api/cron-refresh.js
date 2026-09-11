@@ -3,8 +3,12 @@ const {
   REFRESHABLE_PLATFORMS,
 } = require("./_platform-refresh");
 
-// Scheduled token refresher. Runs daily via Vercel Cron so platform refresh
-// tokens are rolled forward even when nobody opens the app.
+// How long a cached game survives without being seen in a search.
+const CACHE_MAX_AGE = "90 days";
+
+// Scheduled maintenance. Runs daily via Vercel Cron so platform refresh tokens
+// are rolled forward even when nobody opens the app, and so the search cache
+// cannot grow without limit.
 // Never logs or returns token values - platform names and messages only.
 module.exports = async function handler(req, res) {
   const cronSecret = process.env.CRON_SECRET;
@@ -113,6 +117,35 @@ module.exports = async function handler(req, res) {
     }
   }
 
+  // Retention for the search cache. `games` grows with what gets searched
+  // rather than with what you have, so it is the only table here without a
+  // natural ceiling. Anything untouched for CACHE_MAX_AGE and with no
+  // player_games row is dropped; see prune_games_cache() for the reasoning.
+  //
+  // Runs after the refresh loop and never affects it: token refreshes are the
+  // job that actually matters, and housekeeping failing must not look like
+  // them failing.
+  let pruned = null;
+  try {
+    const pruneRes = await fetch(
+      `${supabaseUrl}/rest/v1/rpc/prune_games_cache`,
+      {
+        method: "POST",
+        headers: { ...restHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ max_age: CACHE_MAX_AGE }),
+      },
+    );
+    if (!pruneRes.ok) {
+      const detail = await pruneRes.text();
+      throw new Error(`${pruneRes.status} ${detail}`);
+    }
+    pruned = await pruneRes.json();
+    console.log(`cron-refresh: pruned ${pruned} cached game(s)`);
+  } catch (err) {
+    errors.push({ task: "prune_games_cache", message: err.message });
+    console.error(`cron-refresh: prune failed: ${err.message}`);
+  }
+
   // Always 200 so Vercel doesn't flag the cron as failing; detail is in the body.
-  return res.status(200).json({ ok: true, refreshed, skipped, errors });
+  return res.status(200).json({ ok: true, refreshed, skipped, pruned, errors });
 };
