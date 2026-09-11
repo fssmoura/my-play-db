@@ -4,7 +4,7 @@ Personal game library - pulls PSN (and eventually other platforms) data into one
 
 This is not a public service. It's a private data pipe. The API layer has zero business logic, no database, no merging. It maps 1:1 to what the source provides so a sync script or frontend can decide what to store and how.
 
-**At the start of every conversation, regardless of the prompt, read this file in full plus every doc under `docs/` before doing any work.** Don't skip docs because the task looks small or unrelated.
+**Read this file in full at the start of every conversation.** The detail lives in `docs/` - don't pull it all in upfront, but know it's there and read the relevant one before working in that area (see [Reference docs](#reference-docs)). If you're unsure whether one applies, read it; guessing at something a doc already answers is the expensive mistake, not the reading.
 
 ## Ways of working
 
@@ -46,6 +46,10 @@ asked about. Ask when there's a real fork in the road or a genuine blocker.
   logic without rewriting it.
 - Functional still has to be usable. Wireframe means unstyled, not awkward.
 - Run independent work in parallel rather than one thing at a time.
+- Context isn't free. Read what the task needs rather than everything, and
+  don't redo reading, testing or verification already done earlier in the same
+  conversation. This is about not repeating work - never about skipping it.
+  Anything you actually changed still gets tested.
 - Keep the docs current as things change, including deleting what stopped being
   true.
 - Prefer deleting to leaving something half-working.
