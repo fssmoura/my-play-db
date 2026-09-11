@@ -63,7 +63,8 @@ Supabase (Postgres). Three tables: `games`, `player_games`, `achievements`.
 | `hypes`                 | integer     | IGDB                 | Ranking only. Meaningful for unreleased games                                           |
 | `first_release_date`    | integer     | IGDB                 | Unix seconds. Duplicates the earliest `release_dates` entry; search returns it directly |
 | `name_normalized`       | text        | derived              | `normalizeName(name)` - lookup key for search, see below                                |
-| `synced_at`             | timestamptz | system               | Last time this row was written                                                          |
+| `synced_at`             | timestamptz | system               | Last time this row was written **by anything**                                          |
+| `fully_synced_at`       | timestamptz | system               | Last time the **complete** IGDB record was pulled. `null` = never, see below            |
 
 **Image array strategy**: PSN images always go first. IGDB images appended after. When a game is later synced from Steam/Epic/etc., images are extended not replaced - existing PSN images stay at the front.
 
@@ -77,15 +78,62 @@ remains the answer.
 
 **Rows arrive two ways, and only one of them is complete:**
 
-| Written by                                      | Touches                                                                                                                                                           | Leaves alone    |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| `cache_search_games()` - every committed search | `name`, `slug`, `name_normalized`, `summary`, `game_type`, `first_release_date`, `platforms`, `cover`, `alternative_names`, `popularity`, `hypes`, `rating_count` | everything else |
-| a full detail sync                              | everything                                                                                                                                                        | -               |
+| Written by                                      | Touches                                                                                                                                                           | Leaves alone     |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `cache_search_games()` - every committed search | `name`, `slug`, `name_normalized`, `summary`, `game_type`, `first_release_date`, `platforms`, `cover`, `alternative_names`, `popularity`, `hypes`, `rating_count` | everything else  |
+| `cache_game_details()` - the game detail page   | every IGDB-sourced column, plus `fully_synced_at`                                                                                                                 | `banner`, `logo` |
 
 There is deliberately **no "is this row complete?" flag**. A search write names
 only search-grade columns, so it physically cannot thin out a fully synced row -
 the distinction falls out of the write instead of needing a second timestamp to
 record it. `synced_at` means "last touched", nothing more.
+
+### `fully_synced_at` and the daily refresh
+
+`synced_at` cannot tell you whether the **detail** columns are current, because
+every search rewrites it while touching none of them. Search for a game daily
+and its `synced_at` is always minutes old, even if `storyline`, `websites` and
+`screenshots` have never been fetched at all. So the detail path gets its own
+clock:
+
+- **`fully_synced_at is null`** - no full pull has ever happened. True of every
+  row search created. The detail page pulls before rendering, so you never see
+  a half-empty page pretending to be a full one.
+- **`fully_synced_at` within 24 hours** - rendered straight from the database.
+  **Zero IGDB calls.**
+- **older than that** - re-pulled, written, rendered.
+
+**Why a timer and not a change signal.** Because IGDB doesn't have one. Its
+`updated_at` moves on ~76% of games every 24 hours while the content is
+provably identical, and `checksum` moves in lockstep with it - both measured,
+see [api.md](api.md#updated_at-and-checksum-are-not-change-signals). There is
+nothing to poll and nothing to subscribe to, so there is no cron sweep and no
+webhook here. The same measurement shows the data barely moves, which is what
+makes a 24-hour interval generous rather than risky.
+
+The interval lives in `FULL_SYNC_TTL_MS` in `public/js/game.js`.
+
+### `cache_game_details()`
+
+Writes one complete IGDB record. It exists as a function rather than a
+client-side upsert for two reasons a plain upsert could not honour:
+
+1. **`cover` and `screenshots` are extended, not replaced**, via
+   `merge_image_array()`, so PSN artwork keeps its place at the front of the
+   array (the image rule above).
+2. **`banner` and `logo` are never named.** They are PSN-only; IGDB has no
+   equivalent, and naming them would blank them on every detail sync.
+
+Every other column is `coalesce`d against what is stored, so a sparse IGDB
+response can only add information. It writes `alternative_names`, `popularity`
+and `hypes` too - the fields search ranks on - which is safe precisely because
+the `game` action is a superset of `search` and always returns them. If that
+stops being true, this write starts degrading search. That is the one real
+hazard in this pair of functions.
+
+`security invoker`, so RLS still applies, with `grant execute to authenticated`
+like everything else here. Helpers `jsonb_to_text_array()`,
+`jsonb_to_int_array()` and `merge_image_array()` support it.
 
 `cache_search_games(payload jsonb)` exists rather than a plain client-side
 upsert because it also has to extend `cover` instead of replacing it (the image

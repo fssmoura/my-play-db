@@ -60,6 +60,27 @@ asked about. Ask when there's a real fork in the road or a genuine blocker.
 - **`vercel dev`** - local server at localhost:3000 (only way to test API functions). Do NOT use VS Code Live Server.
 - **`npx prettier --write <file>`** - formatting. No linter, no test framework, no build step configured.
 
+### MCP servers (agent tooling, not part of the app)
+
+Two MCP servers are configured in the owner's opencode setup. They are tools
+for the assistant, **not dependencies of my-play-db** - the app reaches
+Supabase through `public/js/supabase.js` and IGDB through `api/igdb.js`, and
+neither knows MCP exists. Config lives in `~/.config/opencode/opencode.json`,
+outside this repo; credentials are Windows user env vars, never in a file here.
+
+| Server     | Use it for                                                                      |
+| ---------- | ------------------------------------------------------------------------------- |
+| `supabase` | Inspecting schema, running SQL, applying migrations, checking advisors and logs |
+| `igdb`     | IGDB schema and data questions - `get_schema`, `query`, `aggregate`, `search`   |
+
+**Prefer these over guessing or scraping docs.** The IGDB one in particular
+answers in seconds what otherwise means reading api-docs.igdb.com end to end.
+
+Caveat worth remembering: an MCP query hits IGDB's _live_ database, which is
+not necessarily what `api/igdb.js` returns - the handler reshapes images, renames
+fields and merges popularity. Use MCP to learn what IGDB has; use the harness or
+`vercel dev` to check what our API actually returns.
+
 Testing notes:
 
 - Handlers can be invoked directly with a mocked `req`/`res` instead of going
@@ -131,7 +152,8 @@ my-play-db/
       config.js            # Supabase URL + publishable key (browser-safe)
       supabase.js          # supabase-js client (ESM from esm.sh)
       session.js           # Google OAuth sign in/out, JWT access
-      api.js               # single /api/* caller, injects bearer token
+      api.js                 # single /api/* caller, injects bearer token
+      navigate.js            # tab-to-tab navigation (pushState + subscribers)
       vault.js             # platform_credentials CRUD
       platforms.js         # per-platform connect/refresh + expiry normalization
       credentials.js         # pure credential extractors (no imports, testable)
@@ -139,13 +161,15 @@ my-play-db/
       refresh.js             # in-tab auto-refresh scheduler
       schemas.js             # per-action parameter definitions for the console
       ranking.js             # pure search ranking/merging/paging logic
-      games-cache.js         # `games` table as a local search head start
+      games-cache.js         # `games` table: search cache + single-game read/write
       search.js              # search orchestration: DB head start + IGDB, cached
+      game.js                # one game: daily freshness rule + IGDB pull
       app.js                 # boot, auth gate, tab routing
       views/
         connections.js       # platform list + connect/edit/delete
         console.js           # generic action runner
         search.js            # IGDB search tab (typeahead + full results)
+        game.js              # game detail tab (?game=<igdb id>)
   .env.local               # local env (managed by `vercel env pull`)
   package.json
   vercel.json              # outputDirectory + cron schedule
@@ -195,6 +219,19 @@ the linked doc - this list exists so they cannot be missed.
   is `player_games`. A search write touches only search-grade columns, which is
   what stops it thinning out a fully synced row - there is no completeness flag
   to check.
+- **Two writers, two clocks.** `cache_search_games()` stamps `synced_at`;
+  `cache_game_details()` stamps `fully_synced_at`. Neither reads the other's,
+  and that is the point - `synced_at` is rewritten by every search, so it can
+  never say whether the detail columns are current.
+- **`cache_game_details()` also writes the three fields search ranks on**
+  (`alternative_names`, `popularity`, `hypes`). That is only safe because
+  `igdb.js`'s `game` action is a strict superset of its `search` action. Break
+  that superset and opening a detail page silently degrades that game's search
+  ranking.
+- **IGDB's `updated_at` and `checksum` are not change signals - don't rebuild
+  this.** Measured: ~76% of cached games have `updated_at` move within 24 hours
+  while the content is byte-identical, and `checksum` moves with it. Hence a
+  plain 24-hour timer, no cron sweep, no webhook. See docs/api.md.
 - **`games` self-prunes after 90 days.** `prune_games_cache()` runs from the
   nightly cron and deletes cached rows nothing has searched lately. A
   `player_games` row is the _only_ thing that makes a `games` row permanent -
