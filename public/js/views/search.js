@@ -1,9 +1,9 @@
 import {
   search,
+  remember,
   narrowLast,
   warmUp,
   debounce,
-  latestOnly,
   QUICK_LIMIT,
   PAGE_SIZE,
   DEBOUNCE_MS,
@@ -31,13 +31,31 @@ const state = {
   suggestions: [], // top 5 for the dropdown
   highlight: -1, // keyboard selection in the dropdown
   committed: false, // has a search been run
+  partial: false, // showing the local head start, IGDB still in flight
 };
 
 /** Only show a "working" message if the wait is long enough to notice. */
 const BUSY_AFTER_MS = 250;
 
 let root;
-const runSearch = latestOnly((query, type) => search(query, { type }));
+
+/**
+ * Guards against out-of-order responses: a slow search for "eld" must not
+ * overwrite the results for "elden ring". Both channels are guarded - the
+ * local head start as well as the final list - because a cache lookup for an
+ * abandoned query can easily land after a newer query has already painted.
+ */
+let sequence = 0;
+async function runSearch(query, type, onPartial) {
+  const mine = ++sequence;
+  const games = await search(query, {
+    type,
+    onPartial: (partial) => {
+      if (mine === sequence) onPartial?.(partial);
+    },
+  });
+  return mine === sequence ? games : undefined;
+}
 
 export async function mount(el) {
   root = el;
@@ -167,18 +185,28 @@ async function preview() {
   if (!state.query) return;
 
   try {
-    const games = await runSearch(state.query, state.type);
+    const games = await runSearch(state.query, state.type, showTop);
     if (games === undefined) return; // superseded by a newer keystroke
 
-    state.suggestions = games.slice(0, QUICK_LIMIT);
-    state.highlight = -1;
-    renderSuggestions();
-    if (document.activeElement === el("#s-query")) showSuggestions(true);
+    showTop(games);
   } catch (error) {
     state.suggestions = [];
     showSuggestions(false);
     setStatus(error.message, true);
   }
+}
+
+/** Puts the best few of a list into the dropdown, without opening it. */
+function setSuggestions(games) {
+  state.suggestions = games.slice(0, QUICK_LIMIT);
+  state.highlight = -1;
+  renderSuggestions();
+}
+
+/** As above, but opens the dropdown if the box still has focus. */
+function showTop(games) {
+  setSuggestions(games);
+  if (document.activeElement === el("#s-query")) showSuggestions(true);
 }
 
 function renderSuggestions() {
@@ -245,6 +273,11 @@ function pick(index) {
  * Runs the committed search. The dropdown has usually already fetched this
  * exact query, in which case this is a cache hit and the list appears with no
  * wait at all.
+ *
+ * Otherwise it draws twice: locally cached games first, then the full IGDB
+ * list over the top. Cached games carry the same ranking fields as fresh ones
+ * and the cards are reconciled by id, so the second draw adds rows rather than
+ * rearranging the ones already on screen.
  */
 async function commit(restore = null) {
   debouncedPreview.cancel();
@@ -256,22 +289,37 @@ async function commit(restore = null) {
   }
 
   const working = setTimeout(() => setStatus("Searching..."), BUSY_AFTER_MS);
+  const filter = restore?.filter ?? "";
+  const page = restore?.page ?? 0;
+
+  const paint = (games, partial) => {
+    state.results = games;
+    state.committed = true;
+    state.partial = partial;
+    state.filter = filter;
+    state.page = page;
+    renderResults();
+  };
 
   try {
-    const games = await runSearch(state.query, state.type);
+    const games = await runSearch(state.query, state.type, (partial) => {
+      clearTimeout(working);
+      paint(partial, true);
+      setSuggestions(partial);
+    });
     if (games === undefined) return; // superseded
 
-    state.results = games;
-    state.suggestions = games.slice(0, QUICK_LIMIT);
-    state.committed = true;
-    state.filter = restore?.filter ?? "";
-    state.page = restore?.page ?? 0;
-
-    renderResults();
+    paint(games, false);
+    setSuggestions(games);
     if (restore?.updateUrl !== false) writeUrl({ push: !restore });
+
+    // Grow the catalogue for next time. Not awaited: a failed cache write must
+    // never turn a search that worked into an error.
+    remember(games);
   } catch (error) {
     state.results = [];
     state.committed = false;
+    state.partial = false;
     renderResults();
     setStatus(error.message, true);
   } finally {
@@ -294,48 +342,120 @@ function visibleResults() {
  * Draws the whole result area in one pass - status, filter, count, pager and
  * cards. Everything it needs is already in memory, so this is synchronous:
  * paging and filtering are instant.
+ *
+ * While the local head start is showing, the count, type filter and pager stay
+ * hidden. They describe the full result set, and saying "6 results" only to
+ * say "200 results" a moment later is the one thing that would give the two
+ * stages away.
  */
 function renderResults() {
   const shown = visibleResults();
   const total = pageCount(shown, PAGE_SIZE);
   state.page = Math.min(state.page, total - 1);
 
-  el("#s-results-head").classList.toggle("hidden", !state.committed);
-  el("#s-pager").classList.toggle("hidden", shown.length <= PAGE_SIZE);
+  const settled = state.committed && !state.partial;
+  el("#s-results-head").classList.toggle("hidden", !settled);
+  el("#s-pager").classList.toggle(
+    "hidden",
+    !settled || shown.length <= PAGE_SIZE,
+  );
 
   if (!state.committed) {
-    el("#s-results").innerHTML = "";
+    renderCards([]);
     return;
   }
 
-  setStatus(`"${state.query}" - ${state.results.length} result(s).`);
+  if (settled) {
+    setStatus(`"${state.query}" - ${state.results.length} result(s).`);
 
-  el("#s-filter").innerHTML = [
-    `<option value="">all types (${state.results.length})</option>`,
-    ...typeCounts(state.results).map(
-      ({ type, count }) =>
-        `<option value="${type ?? ""}" ${String(type) === state.filter ? "selected" : ""}>${escapeHtml(
-          gameTypeLabel(type),
-        )} (${count})</option>`,
-    ),
-  ].join("");
+    el("#s-filter").innerHTML = [
+      `<option value="">all types (${state.results.length})</option>`,
+      ...typeCounts(state.results).map(
+        ({ type, count }) =>
+          `<option value="${type ?? ""}" ${String(type) === state.filter ? "selected" : ""}>${escapeHtml(
+            gameTypeLabel(type),
+          )} (${count})</option>`,
+      ),
+    ].join("");
 
-  const from = shown.length ? state.page * PAGE_SIZE + 1 : 0;
-  const to = Math.min(shown.length, (state.page + 1) * PAGE_SIZE);
-  el("#s-count").textContent = shown.length
-    ? `showing ${from}-${to} of ${shown.length}`
-    : "no results";
+    const from = shown.length ? state.page * PAGE_SIZE + 1 : 0;
+    const to = Math.min(shown.length, (state.page + 1) * PAGE_SIZE);
+    el("#s-count").textContent = shown.length
+      ? `showing ${from}-${to} of ${shown.length}`
+      : "no results";
 
-  el("#s-prev").disabled = state.page === 0;
-  el("#s-next").disabled = state.page >= total - 1;
-  el("#s-page").textContent = `Page ${state.page + 1} of ${total}`;
+    el("#s-prev").disabled = state.page === 0;
+    el("#s-next").disabled = state.page >= total - 1;
+    el("#s-page").textContent = `Page ${state.page + 1} of ${total}`;
+  }
 
-  el("#s-results").innerHTML = shown.length
-    ? pageSlice(shown, state.page, PAGE_SIZE).map(resultHtml).join("")
-    : `<p class="meta">Nothing matches that type filter.</p>`;
+  renderCards(pageSlice(shown, state.page, PAGE_SIZE));
+
+  if (settled && !shown.length) {
+    el("#s-results").innerHTML =
+      `<p class="meta">Nothing matches that type filter.</p>`;
+  }
 }
 
-function resultHtml(game) {
+/**
+ * Updates the result cards in place, matched up by game id.
+ *
+ * The list is drawn twice per search, and replacing the container's HTML each
+ * time would rebuild every card - throwing away and re-creating cover images
+ * that are usually identical. Instead cards that survive both draws are moved,
+ * and only ones whose content actually changed are re-rendered.
+ */
+function renderCards(games) {
+  const container = el("#s-results");
+
+  // Anything that isn't a card (the empty-state message) goes first.
+  for (const node of [...container.children]) {
+    if (!node.dataset?.id) node.remove();
+  }
+
+  const existing = new Map();
+  for (const node of container.children) existing.set(node.dataset.id, node);
+
+  let previous = null;
+  for (const game of games) {
+    const id = String(game.id);
+    let node = existing.get(id);
+
+    if (node) {
+      existing.delete(id);
+    } else {
+      node = document.createElement("article");
+      node.className = "result";
+      node.dataset.id = id;
+    }
+
+    const signature = resultSignature(game);
+    if (node.dataset.signature !== signature) {
+      node.dataset.signature = signature;
+      node.innerHTML = resultInner(game);
+    }
+
+    const target = previous ? previous.nextSibling : container.firstChild;
+    if (node !== target) container.insertBefore(node, target);
+    previous = node;
+  }
+
+  for (const node of existing.values()) node.remove();
+}
+
+/** Everything a card displays, so an unchanged card is left alone. */
+function resultSignature(game) {
+  return [
+    game.name,
+    game.game_type,
+    releaseYear(game),
+    game.cover?.url,
+    game.summary,
+    (game.platforms ?? []).length,
+  ].join("\u0000");
+}
+
+function resultInner(game) {
   const year = releaseYear(game);
   const platforms = (game.platforms ?? [])
     .map((p) => p.abbreviation || p.name)
@@ -343,7 +463,6 @@ function resultHtml(game) {
     .join(", ");
 
   return `
-    <article class="result">
       <div class="result-cover">
         ${
           game.cover?.url
@@ -359,7 +478,6 @@ function resultHtml(game) {
         ${platforms ? `<p class="meta">${escapeHtml(platforms)}</p>` : ""}
         ${game.summary ? `<p class="result-summary meta">${escapeHtml(game.summary)}</p>` : ""}
       </div>
-    </article>
   `;
 }
 
@@ -394,6 +512,7 @@ async function restoreFromUrl() {
     state.results = [];
     state.suggestions = [];
     state.committed = false;
+    state.partial = false;
     el("#s-query").value = "";
     showSuggestions(false);
     renderResults();

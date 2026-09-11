@@ -1,15 +1,31 @@
 /**
- * IGDB search: one request per query, cached, ranked.
+ * Search: one IGDB request per query, cached, ranked, with a local head start.
  *
  * A search returns everything a result card needs, so there is no second
  * lookup to fill in covers or descriptions - the typeahead and the full list
  * are the same list, and paging through it costs nothing.
  *
- * Ranking and list maths live in `ranking.js` (pure, unit-tested). This file
- * is only about fetching and caching.
+ * TWO STAGES, ONE IGDB REQUEST
+ *
+ * The `games` table and IGDB are asked at the same moment. The local lookup
+ * lands in ~50ms and paints through `onPartial`; IGDB lands in ~600ms, is
+ * merged over the top by id, and resolves the promise. That is a head start,
+ * not a second source - IGDB remains the answer, and the local rows only ever
+ * get there first.
+ *
+ * This is still one IGDB request per query. If you find yourself adding a
+ * second one to this path, that is the mistake repeating.
+ *
+ * Ranking and list maths live in `ranking.js` (pure). Cache reads and writes
+ * live in `games-cache.js`. This file is only about orchestrating the two.
  */
 import { call } from "./api.js";
-import { rankGames, narrow } from "./ranking.js";
+import { rankGames, narrow, mergeById } from "./ranking.js";
+import {
+  searchCached,
+  saveSearchResults,
+  clearCache as clearGamesCache,
+} from "./games-cache.js";
 
 /** How many suggestions the typeahead shows. */
 export const QUICK_LIMIT = 5;
@@ -24,9 +40,10 @@ const cache = new Map();
 const CACHE_MAX = 60;
 
 /**
- * In-flight requests, keyed like the cache. Without this, two things wanting
- * the same query at the same time (typing, then immediately hitting Search)
- * each fire their own request and wait on the slower one.
+ * In-flight searches, keyed like the cache. Each entry holds both halves of a
+ * search, so two callers wanting the same query at the same time (typing, then
+ * immediately hitting Search) share one IGDB request *and* one cache lookup
+ * rather than each firing their own.
  */
 const inflight = new Map();
 
@@ -36,6 +53,7 @@ let last = { query: "", games: [] };
 export function clearCache() {
   cache.clear();
   inflight.clear();
+  clearGamesCache();
   last = { query: "", games: [] };
 }
 
@@ -43,12 +61,45 @@ function cacheKey(query, type) {
   return `${query}|${type ?? ""}`;
 }
 
+/** Starts both halves of a search and returns them separately. */
+function begin(term, type, key) {
+  // Hardened to never reject: no head start is a non-event, not an error, and
+  // this promise is also listened to on the onPartial channel where a
+  // rejection would go unhandled.
+  const cached = searchCached(term, type).catch(() => []);
+
+  const games = (async () => {
+    const options = { query: term, limit: SEARCH_LIMIT };
+    if (type != null && !Number.isNaN(type)) options.type = type;
+
+    const raw = await call("igdb", "search", options);
+    const fresh = Array.isArray(raw) ? raw : [];
+
+    // Cached rows carry the same ranking fields as fresh ones, so merging and
+    // re-ranking cannot reshuffle what the head start already put on screen -
+    // it can only add to it.
+    const ranked = rankGames(mergeById(await cached, fresh), term);
+
+    if (cache.size >= CACHE_MAX) cache.clear();
+    cache.set(key, ranked);
+    last = { query: term, games: ranked };
+    return ranked;
+  })().finally(() => inflight.delete(key));
+
+  return { cached, games };
+}
+
 /**
- * Searches IGDB and returns the games ranked best-first.
+ * Searches and returns the games ranked best-first.
  *
  * @param {string} query
- * @param {{ type?: number|string|null }} opts `type` filters by game_type
- *   server-side; "" or null means no filter.
+ * @param {object} opts
+ * @param {number|string|null} [opts.type] filters by game_type server-side;
+ *   "" or null means no filter.
+ * @param {(games: object[]) => void} [opts.onPartial] called with locally
+ *   cached results if they arrive before IGDB does. Never called after the
+ *   returned promise settles, and never called with an empty list, so a caller
+ *   only ever hears about a head start worth drawing.
  */
 export async function search(query, opts = {}) {
   const term = String(query ?? "").trim();
@@ -63,24 +114,31 @@ export async function search(query, opts = {}) {
     return cached;
   }
 
-  const running = inflight.get(key);
-  if (running) return running;
+  let entry = inflight.get(key);
+  if (!entry) {
+    entry = begin(term, type, key);
+    inflight.set(key, entry);
+  }
 
-  const request = (async () => {
-    const options = { query: term, limit: SEARCH_LIMIT };
-    if (type != null && !Number.isNaN(type)) options.type = type;
+  let settled = false;
+  if (typeof opts.onPartial === "function") {
+    entry.cached.then((games) => {
+      if (!settled && games.length) opts.onPartial(games);
+    });
+  }
 
-    const raw = await call("igdb", "search", options);
-    const ranked = rankGames(Array.isArray(raw) ? raw : [], term);
+  return entry.games.finally(() => {
+    settled = true;
+  });
+}
 
-    if (cache.size >= CACHE_MAX) cache.clear();
-    cache.set(key, ranked);
-    last = { query: term, games: ranked };
-    return ranked;
-  })().finally(() => inflight.delete(key));
-
-  inflight.set(key, request);
-  return request;
+/**
+ * Writes a committed search back to the local cache, so the next search for
+ * these games has a head start and so the catalogue grows as it is used.
+ * Deliberately not awaited by callers - it must never delay or fail a search.
+ */
+export function remember(games) {
+  return saveSearchResults(games);
 }
 
 /**
@@ -117,18 +175,4 @@ export function debounce(fn, wait = DEBOUNCE_MS) {
   };
   wrapped.cancel = () => clearTimeout(timer);
   return wrapped;
-}
-
-/**
- * Guards against out-of-order responses: a slow request for "eld" must not
- * overwrite the results for "elden ring". Superseded calls resolve to
- * undefined, which the caller should ignore.
- */
-export function latestOnly(fn) {
-  let seq = 0;
-  return async (...args) => {
-    const mine = ++seq;
-    const value = await fn(...args);
-    return mine === seq ? value : undefined;
-  };
 }

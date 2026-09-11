@@ -130,12 +130,13 @@ my-play-db/
       api.js               # single /api/* caller, injects bearer token
       vault.js             # platform_credentials CRUD
       platforms.js         # per-platform connect/refresh + expiry normalization
-      credentials.js       # pure credential extractors (no imports, testable)
-      connect.js           # popup / redirect / clipboard capture
-      refresh.js           # in-tab auto-refresh scheduler
+      credentials.js         # pure credential extractors (no imports, testable)
+      connect.js             # popup / redirect / clipboard capture
+      refresh.js             # in-tab auto-refresh scheduler
       schemas.js             # per-action parameter definitions for the console
-      ranking.js             # pure search ranking/paging logic
-      search.js              # IGDB search fetching + cache (one request per query)
+      ranking.js             # pure search ranking/merging/paging logic
+      games-cache.js         # `games` table as a local search head start
+      search.js              # search orchestration: DB head start + IGDB, cached
       app.js                 # boot, auth gate, tab routing
       views/
         connections.js       # platform list + connect/edit/delete
@@ -182,7 +183,18 @@ the linked doc - this list exists so they cannot be missed.
 
 - **New tables need an explicit `grant ... to authenticated`.** This project has
   no default privileges, and Postgres checks privileges _before_ RLS policies,
-  so policies alone produce `42501 permission denied`.
+  so policies alone produce `42501 permission denied`. Functions need
+  `grant execute` for the same reason.
+- **`games` is a cache of IGDB records, not a list of games owned.** Ownership
+  is `player_games`. A search write touches only search-grade columns, which is
+  what stops it thinning out a fully synced row - there is no completeness flag
+  to check.
+- **Cached games store `alternative_names`, `popularity`, `hypes` and
+  `first_release_date` purely so they score identically to the same game from
+  IGDB.** Search paints the cache first and merges IGDB over it; equal scores
+  are the only reason that merge doesn't visibly reshuffle. Drop one of those
+  fields from the write and the bug comes back looking like a rendering
+  problem.
 
 **Frontend**
 

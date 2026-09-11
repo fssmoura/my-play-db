@@ -209,6 +209,34 @@ export function narrow(games, previousQuery, query) {
   return kept.length ? rankGames(kept, term) : null;
 }
 
+/**
+ * Combines cached games with freshly fetched ones, newest data winning.
+ *
+ * Used for the two-stage search: the local cache paints first, IGDB replaces
+ * it a moment later. Merging by id is what keeps that from being jarring - the
+ * same game arriving twice is one entry, not two, and the IGDB copy is the one
+ * kept, so nothing on screen is showing older data than it has to.
+ *
+ * Cached games IGDB didn't return are kept rather than dropped. They matched
+ * the query (the caller filters on that before getting here), so they are a
+ * genuine addition rather than noise.
+ *
+ * Returns an unranked list - `rankGames` still has to be run over the result.
+ */
+export function mergeById(cached, fresh) {
+  const out = [];
+  const seen = new Set();
+
+  for (const list of [fresh, cached]) {
+    for (const game of list ?? []) {
+      if (game?.id == null || seen.has(game.id)) continue;
+      seen.add(game.id);
+      out.push(game);
+    }
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------------ lists -- */
 
 /** Earliest release year for a game, or null. */
