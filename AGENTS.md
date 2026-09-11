@@ -184,11 +184,17 @@ the linked doc - this list exists so they cannot be missed.
 - **New tables need an explicit `grant ... to authenticated`.** This project has
   no default privileges, and Postgres checks privileges _before_ RLS policies,
   so policies alone produce `42501 permission denied`. Functions need
-  `grant execute` for the same reason.
+  `grant execute` for the same reason, and **`service_role` has no table
+  privileges either** - anything the nightly cron touches needs granting, or a
+  `security definer` function to go through.
 - **`games` is a cache of IGDB records, not a list of games owned.** Ownership
   is `player_games`. A search write touches only search-grade columns, which is
   what stops it thinning out a fully synced row - there is no completeness flag
   to check.
+- **`games` self-prunes after 90 days.** `prune_games_cache()` runs from the
+  nightly cron and deletes cached rows nothing has searched lately. A
+  `player_games` row is the _only_ thing that makes a `games` row permanent -
+  being fully detail-synced does not protect it.
 - **Cached games store `alternative_names`, `popularity`, `hypes` and
   `first_release_date` purely so they score identically to the same game from
   IGDB.** Search paints the cache first and merges IGDB over it; equal scores

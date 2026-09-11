@@ -126,6 +126,50 @@ Known gap: a game searched once and then ignored for weeks keeps its old
 popularity until something searches it again. Closing that would mean a nightly
 refresh pass aimed at upcoming releases - deliberately not built.
 
+### Cache retention
+
+`games` is the only table here without a natural ceiling. `player_games` and
+`achievements` grow with what the platforms report about you; `games` grows with
+whatever gets **searched**, so its only real limit is IGDB's catalogue - ~375k
+games at ~1.4 kB a row, which is more than the 500 MB a free Supabase project
+gets before it is forced into read-only mode.
+
+That matters more than it sounds, because **read-only blocks `DELETE` as well as
+`INSERT`**. Cleaning up has to happen well before the limit; it cannot be the
+response to hitting it.
+
+`prune_games_cache(max_age interval default '90 days')` runs nightly from
+`api/cron-refresh.js` and deletes rows that are both:
+
+- **stale** - `synced_at` is older than `max_age`. Every committed search
+  rewrites `synced_at` for the results it saw, so a game that keeps turning up
+  in searches keeps resetting its own clock and is never pruned. "Stale" really
+  means "nothing you have searched lately surfaced this".
+- **not referenced by `player_games`** - any game with a `player_games` row is
+  kept indefinitely, whatever its age.
+
+Note `player_games` means "a platform gave us data about this game" - owned,
+played, or merely present in an API response, depending on the platform. It is
+not strictly an ownership list, but it is the thing worth keeping, so it is what
+protects a row.
+
+Rows that have been fully detail-synced are **not** spared. A game whose detail
+page was opened once and never revisited is still just cache, and IGDB can
+return it again on demand.
+
+The exclusion lives in SQL rather than in the caller because
+`player_games.igdb_id` references `games.id`: Postgres would refuse such a
+delete anyway, and a caller that forgot the condition would fail the entire
+batch rather than skip those rows.
+
+The function is `security definer`. `service_role` has no table privileges here,
+and this way the cron can run exactly this one operation instead of being handed
+blanket delete rights on `games`. `execute` is revoked from `public` and granted
+only to `service_role`, so the browser cannot call it.
+
+Deleted space is reclaimed lazily by autovacuum, so the reported table size will
+not drop immediately after a prune. That is normal.
+
 ### `player_games` columns
 
 | Column         | Type                | Notes                                                                                       |
