@@ -7,7 +7,9 @@ import {
 } from "./session.js";
 import * as connections from "./views/connections.js";
 import * as search from "./views/search.js";
+import * as game from "./views/game.js";
 import * as apiConsole from "./views/console.js";
+import { onNavigate } from "./navigate.js";
 
 // Tab id -> view module. Sections are `#view-<id>` in index.html, and the tab
 // order comes from the buttons there, not from this map.
@@ -15,6 +17,7 @@ const VIEWS = {
   connections,
   console: apiConsole,
   search,
+  game,
 };
 
 const el = {
@@ -46,10 +49,13 @@ async function applySession(session) {
   if (!mountedViews) {
     mountedViews = true;
 
-    // Landing on a shared or refreshed search URL should show that search.
-    // Selected *before* mounting, because the search view's own restore does a
-    // network round trip and the wrong tab must not be visible meanwhile.
-    if (new URLSearchParams(location.search).has("q")) selectTab("search");
+    // Landing on a shared or refreshed URL should show the tab it describes.
+    // Selected *before* mounting, because those views restore themselves with
+    // a network round trip and the wrong tab must not be visible meanwhile.
+    // `game` wins over `q`: it is the more specific request.
+    const params = new URLSearchParams(location.search);
+    if (params.has("game")) selectTab("game");
+    else if (params.has("q")) selectTab("search");
 
     for (const [id, view] of Object.entries(VIEWS)) {
       await view.mount(document.getElementById(`view-${id}`));
@@ -79,6 +85,10 @@ function wireTabs() {
 
 async function boot() {
   wireTabs();
+
+  // One view asking to open another (search result -> game page). The view
+  // itself updates the URL; this only brings the right tab to the front.
+  onNavigate((view) => selectTab(view));
 
   const authError = readAuthErrorFromUrl();
   if (authError) el.gateError.textContent = authError;

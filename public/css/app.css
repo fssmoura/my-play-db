@@ -18,9 +18,10 @@
      6. text + dots    - secondary text and status indicators
      7. platform rows  - the connection list
      8. modal          - the connect pop-up
-     9. console        - the API testing tab
-    10. search         - the IGDB search tab
-    11. mobile         - phone overrides (everything above is desktop-first)
+      9. console        - the API testing tab
+     10. search         - the IGDB search tab
+     11. game page      - the single-game detail tab
+     12. mobile         - phone overrides (everything above is desktop-first)
 
    This is deliberately plain/wireframe. Function first, design later.
    ========================================================================= */
@@ -190,6 +191,21 @@ label {
   font-size: 12px;
   color: var(--muted);
   word-break: break-word;
+}
+
+/* Links. The browser default is a blue that fails against --bg, and a colour
+   outside :root would break the "recolour everything from the variables" rule.
+   So links read as body text and are marked by the underline instead. */
+a {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--line-strong);
+}
+
+a:hover,
+a:focus-visible {
+  text-decoration-color: var(--text);
 }
 
 /* One-line feedback under an action ("connected", "refreshing...", errors). */
@@ -471,6 +487,16 @@ pre.output {
   border-radius: 2px;
   background: var(--panel);
   padding: 10px;
+  cursor: pointer;
+}
+
+.result:hover {
+  border-color: var(--line-strong);
+}
+
+/* Keyboard users tab to the title link, so the whole card shows the focus. */
+.result:focus-within {
+  border-color: var(--text);
 }
 
 .result-cover {
@@ -499,6 +525,18 @@ pre.output {
   font-size: 14px;
 }
 
+/* The whole card is clickable, so the title doesn't need to advertise itself
+   as a link as well. It stays a real <a> for middle-click and keyboard use. */
+.result-name a {
+  text-decoration: none;
+}
+
+.result:hover .result-name a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--line-strong);
+}
+
 .result-body .meta {
   margin: 0 0 3px;
 }
@@ -519,7 +557,165 @@ pre.output {
   padding-top: 4px;
 }
 
-/* ---------- 11. mobile ---------- */
+/* ---------- 11. game page ---------- */
+
+.game-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.game-head {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.game-cover {
+  flex: 0 0 120px;
+  aspect-ratio: 3 / 4;
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.game-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.game-head-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.game-head-body h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.game-head-body button {
+  align-self: flex-start;
+  margin-top: 0.35rem;
+}
+
+.game-section h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.25rem;
+}
+
+.game-fields {
+  margin: 0;
+  display: grid;
+  /* Label column is fixed so every row lines up down the page, which is what
+     makes a mostly-empty record readable at a glance. */
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 0.4rem 1rem;
+}
+
+.game-field {
+  display: contents;
+}
+
+.game-field dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.game-field dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.game-field.is-empty dt,
+.game-field.is-empty dd {
+  opacity: 0.5;
+}
+
+.game-prose {
+  margin: 0;
+  white-space: pre-wrap;
+  max-width: 70ch;
+}
+
+.game-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.game-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* The image itself is the affordance here, so no underline. */
+.game-images a {
+  text-decoration: none;
+  line-height: 0;
+}
+
+.game-images img {
+  height: 80px;
+  width: auto;
+  border: 1px solid var(--line);
+  display: block;
+}
+
+.game-images a:hover img,
+.game-images a:focus-visible img {
+  border-color: var(--line-strong);
+}
+
+.game-idlist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+/* Id chips: the box is the affordance, so the underline comes off and the
+   border carries the hover state instead. */
+.game-idlist a,
+.game-field a[data-game-id] {
+  border: 1px solid var(--line);
+  padding: 0.05rem 0.35rem;
+  font-size: 0.85rem;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.game-idlist a:hover,
+.game-idlist a:focus-visible,
+.game-field a[data-game-id]:hover,
+.game-field a[data-game-id]:focus-visible {
+  border-color: var(--line-strong);
+  background: var(--panel);
+}
+
+.game-json {
+  margin: 0;
+  max-height: 18rem;
+  overflow: auto;
+  border: 1px solid var(--line);
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+}
+
+/* ---------- 12. mobile ---------- */
 
 @media (max-width: 640px) {
   main {
@@ -579,6 +775,22 @@ pre.output {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
+  }
+
+  /* Labels stack above their values - a 180px column leaves nothing usable. */
+  .game-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0 0;
+  }
+
+  .game-field {
+    display: block;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .game-cover {
+    flex-basis: 90px;
   }
 
   /* >=16px prevents iOS zoom-on-focus. */

@@ -176,7 +176,7 @@ export async function searchCached(query, type = null) {
   return rankGames(games, query);
 }
 
-/* ------------------------------------------------------------------ write -- */
+/* ------------------------------------------------------- write: search -- */
 
 /**
  * Saves what a committed search returned, so the next search for it has a head
@@ -206,4 +206,148 @@ export async function saveSearchResults(games) {
   } catch {
     return 0;
   }
+}
+
+/* ------------------------------------------------- read/write: one game -- */
+
+/**
+ * The whole stored row for one game, exactly as the table holds it.
+ *
+ * Deliberately not adapted into the IGDB shape the way `fromDbRow` does for
+ * search. The detail page's job is to show what the database contains, so it
+ * renders the row itself and nothing quietly reinterprets it on the way.
+ *
+ * Returns null when we hold nothing for that id. Throws on a real failure -
+ * unlike the search path, a detail page with no data has nothing to show, so
+ * the caller needs to know the difference between "no row" and "lookup broke".
+ */
+export async function loadGame(id) {
+  const { data, error } = await supabase
+    .from("games")
+    .select("*")
+    .eq("id", Number(id))
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ?? null;
+}
+
+/** IGDB involved_companies -> the names on one side of the credit. */
+function companyNames(game, role) {
+  const names = (game.involved_companies ?? [])
+    .filter((entry) => entry?.[role] && entry.company?.name)
+    .map((entry) => entry.company.name);
+  return names.length ? [...new Set(names)] : null;
+}
+
+/** [{url}] -> [url], or null when there is nothing to say. */
+function urls(list) {
+  const out = (list ?? []).map((item) => item?.url).filter(Boolean);
+  return out.length ? out : null;
+}
+
+/** An id array as IGDB sends it, or null. Objects are unwrapped to their id. */
+function ids(list) {
+  const out = (list ?? [])
+    .map((item) => (typeof item === "object" ? item?.id : item))
+    .filter((value) => Number.isFinite(Number(value)))
+    .map(Number);
+  return out.length ? out : null;
+}
+
+/** A reference that may arrive expanded or as a bare id. */
+function refId(value) {
+  if (value == null) return null;
+  const id = typeof value === "object" ? value.id : value;
+  return Number.isFinite(Number(id)) ? Number(id) : null;
+}
+
+/**
+ * IGDB game -> the payload `cache_game_details` expects.
+ *
+ * `external_games` is folded into the `external_ids` shape the table uses -
+ * `{ steam: ["252950"], psn: ["203715"] }` - because a source can legitimately
+ * have several uids for one game.
+ *
+ * Returns null for anything missing the columns `games` requires.
+ */
+export function toDetailRow(game) {
+  if (!game?.id || !game?.name || !game?.slug) return null;
+
+  const externalIds = {};
+  for (const entry of game.external_games ?? []) {
+    if (!entry?.source || !entry?.uid) continue;
+    (externalIds[entry.source] ??= []).push(String(entry.uid));
+  }
+
+  const popularity = game.popularity;
+  const hasPopularity =
+    popularity && typeof popularity === "object"
+      ? Object.keys(popularity).length > 0
+      : false;
+
+  return {
+    id: game.id,
+    name: game.name,
+    slug: game.slug,
+    name_normalized: normalizeName(game.name),
+    summary: game.summary ?? null,
+    storyline: game.storyline ?? null,
+    genres: (game.genres ?? []).map((g) => g?.name).filter(Boolean).length
+      ? game.genres.map((g) => g.name).filter(Boolean)
+      : null,
+    cover: game.cover?.url ? [game.cover.url] : null,
+    screenshots: urls(game.screenshots),
+    artworks: urls(game.artworks),
+    developer: companyNames(game, "developer"),
+    publisher: companyNames(game, "publisher"),
+    game_type: game.game_type ?? null,
+    release_dates: game.release_dates ?? null,
+    platforms: game.platforms ?? null,
+    // `total_rating` is the combined critic-and-user score. See GAME_FIELDS in
+    // api/igdb.js for why it must not be the IGDB-users-only `rating`.
+    rating: game.total_rating ?? null,
+    rating_count: game.total_rating_count ?? null,
+    videos: game.videos ?? null,
+    websites: game.websites ?? null,
+    collections: game.collections ?? null,
+    franchises: game.franchises ?? null,
+    dlcs: ids(game.dlcs),
+    bundles: ids(game.bundles),
+    standalone_expansions: ids(game.standalone_expansions),
+    remasters: ids(game.remasters),
+    remakes: ids(game.remakes),
+    expansions: ids(game.expansions),
+    expanded_games: ids(game.expanded_games),
+    similar_games: ids(game.similar_games),
+    parent_game: refId(game.parent_game),
+    version_title: game.version_title ?? null,
+    version_parent: refId(game.version_parent),
+    external_ids: Object.keys(externalIds).length ? externalIds : null,
+    // The three fields search ranks on. Written here too, so a detail sync
+    // keeps them current instead of letting them drift.
+    alternative_names: game.alternative_names ?? null,
+    popularity: hasPopularity ? popularity : null,
+    hypes: game.hypes ?? null,
+    first_release_date: game.first_release_date ?? null,
+  };
+}
+
+/**
+ * Writes one full IGDB record. Unlike the search write-through this is NOT
+ * fire and forget: the detail page reads the row straight back afterwards, so
+ * a failed write would show stale data while claiming to be fresh.
+ */
+export async function saveGameDetails(game) {
+  const payload = toDetailRow(game);
+  if (!payload)
+    throw new Error("IGDB returned a game with no id, name or slug");
+
+  const { data, error } = await supabase.rpc("cache_game_details", { payload });
+  if (error) throw error;
+
+  // The row just changed, so any cached search lookup holding the old version
+  // must not outlive it.
+  lookups.clear();
+  return data ?? 0;
 }

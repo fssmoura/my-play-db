@@ -17,6 +17,13 @@ import {
   pageSlice,
   pageCount,
 } from "../ranking.js";
+import { go } from "../navigate.js";
+
+/** Opens a game's detail page. Deliberately routed through navigate.js rather
+ *  than importing the game view - see the note there. */
+function openGame(id) {
+  go("game", { game: Number(id) });
+}
 
 /**
  * Everything the view knows, in one place. Nothing is read back out of the
@@ -142,6 +149,25 @@ function render() {
     if (!item) return;
     event.preventDefault();
     pick(Number(item.dataset.index));
+  });
+
+  // A result card opens that game's page. The title is a real <a> so
+  // middle-click and "open in new tab" behave normally; this makes the rest of
+  // the card a target too, which is mostly what you actually aim at.
+  el("#s-results").addEventListener("click", (event) => {
+    // Modified clicks belong to the browser - that is what keeps the title's
+    // href useful for opening a game in a new tab.
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey)
+      return;
+
+    const card = event.target.closest("[data-id]");
+    if (!card) return;
+
+    // Don't hijack someone selecting the summary text.
+    if (String(window.getSelection() ?? "")) return;
+
+    event.preventDefault();
+    openGame(card.dataset.id);
   });
 }
 
@@ -471,7 +497,9 @@ function resultInner(game) {
         }
       </div>
       <div class="result-body">
-        <h3 class="result-name">${escapeHtml(game.name)}</h3>
+        <h3 class="result-name">
+          <a href="?game=${Number(game.id)}">${escapeHtml(game.name)}</a>
+        </h3>
         <p class="meta">
           IGDB ${game.id} &middot; ${escapeHtml(gameTypeLabel(game.game_type))}${year ? ` &middot; ${year}` : ""}
         </p>
