@@ -32,15 +32,40 @@ Three tabs behind a Google login gate: **Connections**, **API console**,
   "candidates" pool, a "suggest" fast path, and a per-page hydrate for covers
   and summaries), which meant clicking Search re-fetched games it already had
   and then drew the page in four stages. If you find yourself adding a second
-  request to the search path, that is the mistake repeating.
+  **IGDB** request to the search path, that is the mistake repeating.
+
+  **The local head start.** The `games` table is asked at the same moment IGDB
+  is. It answers in ~50ms against IGDB's ~600ms, so a search can paint whatever
+  we already hold before the real answer arrives, then merge IGDB over the top
+  by id. It is still one IGDB request - the cache lookup runs in parallel and
+  is never on the critical path.
+
+  Two things keep the second paint from being noticeable, and both are
+  load-bearing:
+
+  - **Ranking parity.** Cached rows store `alternative_names`, `popularity`,
+    `hypes` and `first_release_date` for no reason other than to make a cached
+    game score _identically_ to the same game from IGDB. Equal scores mean the
+    merge can only append; drop one of those fields from the cache write and
+    the list visibly reshuffles half a second after every search.
+  - **Cards are reconciled by id**, not redrawn. `renderCards()` moves the
+    nodes that survive both paints and only re-renders ones whose content
+    changed, so covers are not thrown away and recreated.
+
+  The count, type filter and pager stay hidden until IGDB lands
+  (`state.partial`). They describe the full result set, and showing
+  "6 results" only to say "200 results" a moment later is the one thing that
+  would give the two stages away.
 
   The split across files:
 
-  - `ranking.js` - pure functions, no imports: scoring, ordering, filtering,
-    paging maths.
-  - `search.js` - fetching and caching only. One cache, plus an in-flight map
-    so typing and immediately hitting Search share a request rather than each
-    firing their own.
+  - `ranking.js` - pure functions, no imports: scoring, ordering, merging,
+    filtering, paging maths.
+  - `games-cache.js` - the `games` table as a search cache: reads, the
+    write-through, and the adapters between the DB shape and the IGDB shape.
+  - `search.js` - orchestration only. One cache, plus an in-flight map so
+    typing and immediately hitting Search share both the IGDB request and the
+    cache lookup rather than each firing their own.
   - `views/search.js` - all the DOM. Keeps one `state` object and renders from
     it; nothing is read back out of the inputs.
 
@@ -55,9 +80,14 @@ Three tabs behind a Google login gate: **Connections**, **API console**,
   - **The result area is drawn in one pass.** Status, filter, count, pager and
     cards are all written by `renderResults()`. Drawing them as each piece
     arrived is what made a search look like three separate loads.
+  - **Out-of-order guarding covers both channels.** A cache lookup for an
+    abandoned query lands fast and will happily overwrite a newer search if the
+    sequence check in `runSearch()` is removed.
   - **Ranking detail lives in [api.md](api.md#api-apiigdbjs)** - why IGDB's own
     order is unusable, why alternative names are a fallback and not a
     best-of, and why popularity comes from `popularity_primitives`.
+  - **Cache behaviour lives in [database.md](database.md#games-as-a-search-cache)**
+    - what a search writes, and why it cannot thin out a fully synced row.
 
 ### Built to be replaced
 
@@ -69,7 +99,8 @@ point of the whole structure - keep it intact.
 untouched:
 
 `api.js` `vault.js` `session.js` `platforms.js` `credentials.js` `connect.js`
-`refresh.js` `schemas.js` `search.js` `ranking.js` `config.js` `supabase.js`
+`refresh.js` `schemas.js` `search.js` `games-cache.js` `ranking.js` `config.js`
+`supabase.js`
 
 **Presentation** - throwaway, rewrite freely:
 
