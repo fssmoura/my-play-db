@@ -206,6 +206,34 @@ async function popularityFor(ids) {
 const SEARCH_FIELDS =
   "fields name,slug,summary,game_type,first_release_date,total_rating_count,hypes,alternative_names.name,cover.image_id,platforms.name,platforms.abbreviation";
 
+/**
+ * The games half of a detail lookup. A strict superset of SEARCH_FIELDS: the
+ * first line below is exactly what a search asks for, and everything after it
+ * is the detail-only remainder.
+ *
+ * Keep it that way. `search` and `game` both write to the same `games` row,
+ * and the moment this stops covering a field search ranks on, a detail write
+ * starts quietly degrading search results for that game.
+ */
+const GAME_FIELDS = [
+  // --- everything SEARCH_FIELDS asks for
+  "name,slug,summary,game_type,first_release_date,total_rating_count,hypes",
+  "alternative_names.name,cover.image_id,platforms.name,platforms.abbreviation",
+  // --- detail-only
+  "storyline,version_title,total_rating",
+  "screenshots.image_id,artworks.image_id,videos.name,videos.video_id",
+  "genres.name,release_dates.date,release_dates.platform",
+  "involved_companies.company.id,involved_companies.company.name",
+  "involved_companies.developer,involved_companies.publisher",
+  "collections.id,collections.name,franchises.id,franchises.name",
+  "websites.url,websites.type",
+  "external_games.uid,external_games.external_game_source",
+  "bundles,dlcs,expanded_games,expansions,remakes,remasters",
+  "standalone_expansions,similar_games",
+  "parent_game.name,parent_game.slug,parent_game.game_type",
+  "version_parent.name,version_parent.slug,version_parent.game_type",
+].join(",");
+
 async function gameSearch({ query, type, limit, offset = 0 }) {
   const key = `${query}|${type ?? ""}|${limit}|${offset}`;
   const cached = readCache(searchCache, key, SEARCH_TTL);
@@ -320,6 +348,21 @@ const actions = {
     return games.map((g) => ({ ...g, popularity: byGame[g.id] ?? {} }));
   },
 
+  /**
+   * The full record for one or more games - everything `games` stores.
+   *
+   * DELIBERATELY A SUPERSET OF `search`. This action predates the search
+   * feature and drifted behind it; anything `search` returns, this returns
+   * too. That matters because both write to the same `games` row, and a
+   * detail write that omitted `alternative_names`, `popularity` or `hypes`
+   * would silently degrade search ranking for that game.
+   *
+   * Note `total_rating`/`total_rating_count` rather than `rating`/`rating_count`:
+   * the former is IGDB's combined critic-and-user score, which is what `games`
+   * stores and what `search` writes. Asking for the user-only score here would
+   * mean the same column held two different meanings depending on which page
+   * last touched it.
+   */
   async game(options = {}) {
     const { ids } = options;
     if (!ids) throw new Error("ids is required");
@@ -337,7 +380,7 @@ const actions = {
     if (missing.length) {
       const results = await igdbFetch(
         "games",
-        `where id = (${missing.join(",")}); fields name,slug,summary,storyline,game_type,version_title,rating,rating_count,updated_at,cover.id,cover.image_id,screenshots.id,screenshots.image_id,artworks.id,artworks.image_id,videos.id,videos.name,videos.video_id,genres.name,platforms.name,platforms.abbreviation,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,bundles,dlcs,expanded_games,expansions,external_games.uid,external_games.external_game_source,remakes,remasters,standalone_expansions,similar_games,collections.name,franchises.name,websites.url,websites.type,version_parent.name,version_parent.slug,version_parent.game_type,parent_game.name,parent_game.slug,parent_game.game_type,release_dates.date,release_dates.platform,release_dates.region,release_dates.human; limit ${missing.length};`,
+        `where id = (${missing.join(",")}); fields ${GAME_FIELDS}; limit ${missing.length};`,
       );
       enrichImages(results);
       for (const record of results) {
@@ -346,8 +389,12 @@ const actions = {
       }
     }
 
-    // Preserve the order asked for; drop ids IGDB didn't return.
-    return idList.map((id) => out[id]).filter(Boolean);
+    const found = idList.map((id) => out[id]).filter(Boolean);
+    if (!found.length) return [];
+
+    // Same enrichment `search` applies, for the same reason - see SEARCH_FIELDS.
+    const byGame = await popularityFor(found.map((g) => g.id));
+    return found.map((g) => ({ ...g, popularity: byGame[g.id] ?? {} }));
   },
 
   async by_external(options = {}) {
