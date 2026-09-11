@@ -183,8 +183,26 @@ Uses IGDB v4 (Twitch-backed game database) via OAuth client_credentials flow. No
 | ------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `auth`        | nothing                                 | `{ accessToken, expiresAt }` - Twitch OAuth token (auto-refreshed in-memory)                                                                                                                                                                                                                   |
 | `search`      | query [+ limit=200] [+ offset] [+ type] | Everything a result card needs, in one request: `name`, `slug`, `summary`, `game_type`, `first_release_date`, `cover.url` (t_1080p), `platforms`, plus `alternative_names`, `total_rating_count`, `hypes` and `popularity` `{ visits, want_to_play }` for ranking. `type` filters by game_type |
-| `game`        | ids (single int or array of ints)       | Array of full game records by IGDB id. `external_games` bundled in response with `source` name (enriched from numeric ID). See [game response fields](api-responses.md#game) in api-responses.md.                                                                                              |
+| `game`        | ids (single int or array of ints)       | Array of full game records by IGDB id. **A strict superset of `search`** - see below. `external_games` bundled in response with `source` name (enriched from numeric ID). See [game response fields](api-responses.md#game) in api-responses.md.                                               |
 | `by_external` | source + uid                            | Lightweight lookup: `{ id }` (IGDB game ID) or `null`. Use `game(id)` for full record. `source` accepts name or number.                                                                                                                                                                        |
+
+**`game` must stay a superset of `search`.** Both write to the same `games`
+row - `search` through `cache_search_games()`, the game detail page through
+`cache_game_details()`. If `game` stops returning a field that `search` ranks
+on, opening that game's detail page silently degrades its search ranking.
+
+`GAME_FIELDS` in the handler is written in two halves for exactly this reason:
+the first block is character-for-character what `SEARCH_FIELDS` asks for, the
+second is the detail-only remainder. It also merges `popularity` the same way
+`search` does, which costs a second IGDB call (`popularity_primitives` is a
+separate endpoint and cannot be joined into a games query).
+
+> **`total_rating`, never `rating`.** IGDB publishes two scores: `rating` is
+> IGDB users only, `total_rating` blends in professional critics. `games.rating`
+> / `games.rating_count` mean the combined one, which is what `search` stores.
+> Until this was fixed, `game` asked for the user-only pair - harmless while
+> nothing wrote the detail response back, and a silent corruption of the column
+> the moment the detail page did.
 
 **`search` is deliberately one request for the whole result list.** It returns
 the display fields as well as the ranking ones, so the frontend never has to
@@ -249,7 +267,40 @@ first one.
 | gamejolt    | 55  |
 | igdb        | 121 |
 
-**Rate limit**: 4 requests/second to IGDB (handled by the API itself - no client-side throttle needed for single-user use).
+**Rate limit**: 4 requests/second to IGDB, and **no monthly quota at all**
+(confirmed in IGDB's docs). For single-user use this is effectively
+unreachable - a game detail page costs two requests, so you would have to open
+two pages a second, continuously, to hit it. Worth stating plainly because it
+keeps getting treated as a constraint: the reason to avoid IGDB calls here is
+page speed, not budget.
+
+### `updated_at` and `checksum` are not change signals
+
+IGDB publishes `updated_at` ("last date this entry was updated") and `checksum`
+("hash of the object") on every game. Both look like they answer _"has this
+changed since we last looked?"_. **Neither does**, and this was measured
+against this project's own cached games rather than assumed:
+
+- **76%** of 500 cached games had `updated_at` move within 24 hours; 96% within
+  30 days. That includes Skyrim (2011), GTA V (2013) and Witcher 3 (2015).
+- Comparing **40** of those stored rows against IGDB field by field - name,
+  release date, cover, rating count, summary - found **zero** differences,
+  despite most being flagged as "updated" that same day.
+- Re-sampling all 1,578 cached games minutes apart: 4 had `updated_at` move,
+  and the **checksum moved on all 4**. It tracks the same internal churn.
+
+IGDB is touching records for its own housekeeping. So there is nothing to poll,
+compare, or subscribe to - which is also why the game detail page uses a plain
+timer, and why there is no cron sweep and no webhook. See
+[database.md](database.md#fully_synced_at-and-the-daily-refresh).
+
+**Webhooks are ruled out for the same reason, plus three more.** IGDB can push
+create/update/delete events, but registration is per _endpoint_, not per game:
+you receive every change to all ~375k games and discard the ~99.6% that aren't
+yours. The payload is unexpanded (ID references only), so a game you do care
+about still needs a full fetch. It needs a permanently public URL answering in
+under 15 seconds, and after 5 failed deliveries IGDB deactivates the webhook
+silently - failure looks identical to "nothing changed".
 
 The `search` action accepts an optional `type` parameter to filter results by game_type (e.g. `{"query":"Elden Ring","type":0}` returns only main games).
 

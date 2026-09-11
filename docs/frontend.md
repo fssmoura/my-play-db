@@ -6,8 +6,8 @@ anything under `public/`.
 `public/` is a vanilla ES-module SPA. No bundler, no framework, no build step -
 the browser loads the files as written, so editing them is immediate.
 
-Three tabs behind a Google login gate: **Connections**, **API console**,
-**Search**.
+Four tabs behind a Google login gate: **Connections**, **API console**,
+**Search**, **Game**.
 
 - **Connections** - one row per platform: status dot, account name, expiry
   state, and buttons for connect / refresh / edit / delete. `edit` expands the
@@ -89,6 +89,41 @@ Three tabs behind a Google login gate: **Connections**, **API console**,
   - **Cache behaviour lives in [database.md](database.md#games-as-a-search-cache)**
     - what a search writes, and why it cannot thin out a fully synced row.
 
+- **Game** - one game, at `?game=<igdb id>`. Shows the whole `games` row column
+  by column, **including the empty ones**, so you can see exactly what we hold
+  and what we don't. There is no search box and no id input: the URL is the
+  interface. Related-game columns (`dlcs`, `similar_games`, `parent_game`, …)
+  render as links to those games' pages, so the id arrays are navigable rather
+  than decorative.
+
+  **How fresh it is, and why it's a plain timer.** A row synced within the last
+  24 hours renders straight from the database with no IGDB call. Older than
+  that, or never fully synced, and it pulls first - so the page is never drawn
+  half-empty. There is no "has this changed?" check because IGDB doesn't offer
+  one that works: `updated_at` moves on ~76% of games daily while the content
+  is provably unchanged, and `checksum` moves with it. Both measured - see
+  [api.md](api.md#updated_at-and-checksum-are-not-change-signals). That is also
+  why there is no cron job and no webhook.
+
+  Mashing refresh costs nothing: `api/igdb.js` caches game records in memory for
+  12 hours, and `game.js` holds a 60-second session cache on top.
+
+  The split across files mirrors search:
+
+  - `game.js` - the freshness decision and the fetch. No DOM.
+  - `views/game.js` - all the drawing, from a fixed field table so the layout
+    can't reshuffle and a blank column is visibly blank.
+  - `games-cache.js` - `loadGame()`, `toDetailRow()`, `saveGameDetails()`
+    alongside the search-cache functions, since it is the `games` table module.
+
+  **Search and the game page never read each other's clock.** Search stamps
+  `synced_at`; the game page stamps `fully_synced_at`. That separation is the
+  whole point - without it, searching for a game would convince its detail page
+  it was up to date. The one place they meet is `cache_game_details()`, which
+  also refreshes the columns search ranks on. That is safe only because the
+  `game` action returns them; see
+  [database.md](database.md#cache_game_details).
+
 ### Built to be replaced
 
 This UI is scaffolding. The real design will be produced separately and
@@ -99,13 +134,13 @@ point of the whole structure - keep it intact.
 untouched:
 
 `api.js` `vault.js` `session.js` `platforms.js` `credentials.js` `connect.js`
-`refresh.js` `schemas.js` `search.js` `games-cache.js` `ranking.js` `config.js`
-`supabase.js`
+`refresh.js` `schemas.js` `search.js` `game.js` `games-cache.js` `ranking.js`
+`navigate.js` `config.js` `supabase.js`
 
 **Presentation** - throwaway, rewrite freely:
 
 `app.js` `views/connections.js` `views/console.js` `views/search.js`
-`index.html` `app.css`
+`views/game.js` `index.html` `app.css`
 
 A different UI should be able to import the first group unchanged and get every
 behaviour - connecting a platform, storing and refreshing tokens, calling any
@@ -116,13 +151,22 @@ the views.
 `index.html`, a `<section id="view-x">` beside it, and an `x` entry in the
 `VIEWS` map in `app.js`. Tab routing and mounting are driven off that map.
 
+**Views never import each other.** A search result opening a game page goes
+through `navigate.js`: the caller asks for a view id plus query params, that
+module writes the URL and notifies subscribers. `app.js` subscribes to bring
+the tab forward, the target view subscribes to redraw itself. This exists
+because `history.pushState` does not fire `popstate`, so a view that restores
+from the URL would otherwise never hear about a programmatic move - and
+because coupling two throwaway presentation modules to each other would defeat
+the point of keeping them separately rewritable.
+
 (`connect.js` and `refresh.js` do attach `window` listeners for `message` and
 `focus`. That is inherent to popup and background-refresh handling; neither
 renders or queries the DOM.)
 
 ### Styling rules (deliberate, keep them)
 
-All CSS lives in `public/css/app.css`, numbered into eleven sections with a guide
+All CSS lives in `public/css/app.css`, numbered into twelve sections with a guide
 at the top. Two rules make it safe to restyle later without touching logic:
 
 1. **No inline styles anywhere.** JavaScript writes class names only, never
