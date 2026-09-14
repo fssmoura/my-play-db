@@ -186,7 +186,7 @@ That matters more than it sounds, because **read-only blocks `DELETE` as well as
 `INSERT`**. Cleaning up has to happen well before the limit; it cannot be the
 response to hitting it.
 
-`prune_games_cache(max_age interval default '90 days')` runs nightly from
+`prune_games_cache(max_age interval default '30 days')` runs nightly from
 `api/cron-refresh.js` and deletes rows that are both:
 
 - **stale** - `synced_at` is older than `max_age`. Every committed search
