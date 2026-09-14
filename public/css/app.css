@@ -38,6 +38,7 @@
   --panel: #1e1e1e;
   --line: #333333;
   --line-strong: #5c5c5c;
+  --hover: #2a2a2a;
   --text: #ededed;
   --muted: #a3a3a3;
   --mono: ui-monospace, "SFMono-Regular", "Consolas", monospace;
@@ -88,6 +89,7 @@ nav.tabs {
   gap: 0;
   border-bottom: 1px solid var(--line);
   padding: 0 20px;
+  overflow-x: auto;
 }
 
 nav.tabs button {
@@ -98,6 +100,10 @@ nav.tabs button {
   font: inherit;
   color: var(--muted);
   cursor: pointer;
+  /* Five labels never fit a phone side by side. Let the bar scroll instead of
+     clipping the first tab off screen. */
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 nav.tabs button[aria-selected="true"] {
@@ -106,9 +112,10 @@ nav.tabs button[aria-selected="true"] {
   font-weight: 600;
 }
 
+/* No width cap: long prose already limits itself to 70ch where it matters,
+   and grids (search results, the media picker) want the whole window. */
 main {
   padding: 20px;
-  max-width: 900px;
 }
 
 /* ---------- 3. login gate ---------- */
@@ -137,7 +144,7 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: #2a2a2a;
+  background: var(--hover);
 }
 
 button:disabled {
@@ -187,9 +194,10 @@ label {
 
 /* ---------- 6. text + status dots ---------- */
 
-/* Secondary/explanatory text. */
+/* Secondary/explanatory text. 14px is the floor - anything smaller falls below
+   the platform minimum text size. */
 .meta {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   word-break: break-word;
 }
@@ -451,11 +459,16 @@ pre.output {
 
 .suggest-item:hover,
 .suggest-item.active {
-  background: #2a2a2a;
+  background: var(--hover);
 }
 
 .suggest-name {
   font-weight: 600;
+  /* A very long title must not squeeze the year/type off the row. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .suggest-empty {
@@ -1020,6 +1033,13 @@ a.game-art-frame:focus-visible {
     align-items: stretch;
   }
 
+  /* Buttons stretch with the column by default; a full-width Run button looks
+     lost. It stays thumb-sized instead. */
+  .search-controls button,
+  .console-controls button {
+    max-width: 200px;
+  }
+
   .search-type,
   .search-filter {
     width: 100%;
@@ -1041,6 +1061,13 @@ a.game-art-frame:focus-visible {
     display: block;
     padding: 0.35rem 0;
     border-bottom: 1px solid var(--line);
+  }
+
+  /* The header stacks: art on top, text below. Side by side, the fixed-width
+     art set leaves the text column nearly zero wide and every word wraps one
+     character per line. */
+  .game-head {
+    flex-direction: column;
   }
 
   /* The three identity images wrap rather than shrink on a phone. */
