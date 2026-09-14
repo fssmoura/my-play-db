@@ -11,7 +11,8 @@ import { EXTRACTORS } from "./credentials.js";
  *   PSN   -> ISO strings for both access and refresh
  *   Epic  -> expires_at / refresh_expires_at (ISO, snake_case)
  *   Xbox  -> expiresIn seconds only, so we compute the timestamp
- *   EA    -> nothing at all, so we assume ~4h
+ *   EA    -> expires_in seconds on the token; the renewing credential is a
+ *            cookie, and only that cookie carries a stated lifetime
  *   Steam -> never expires
  */
 
@@ -178,16 +179,15 @@ export const PLATFORMS = {
 
   ea: {
     label: "EA",
-    credentialLabel: "access_token",
-    authUrl:
-      // `prompt=none` is REQUIRED here. ORIGIN_JS_SDK is a JS-SDK client that is
-      // only allowed to mint a token from an EXISTING ea.com session; driving an
-      // interactive login through it fails with "Service limitations apply".
-      // So: sign in via loginUrl first, then this returns the token silently.
-      "https://accounts.ea.com/connect/auth?client_id=ORIGIN_JS_SDK&response_type=token&redirect_uri=nucleus:rest&prompt=none",
-    loginUrl: "https://www.ea.com/login",
-    loginLabel: "Sign in to EA",
-    canRefresh: false,
+    credentialLabel: "EA cookies",
+    // Deliberately NO loginUrl or authUrl. Opening an EA page mid-connect can
+    // make EA re-issue the very cookies just copied, killing them before they
+    // are pasted - which is exactly how the first attempt at this failed.
+    cookieHint: {
+      domain: "accounts.ea.com",
+      cookieNames: ["sid", "remid", "_nx_mpcid"],
+    },
+    canRefresh: true,
     connectMode: "clipboard",
     extract: EXTRACTORS.ea,
     actions: ["library", "achievements"],
@@ -196,22 +196,58 @@ export const PLATFORMS = {
       personaId: r.credentials.personaId,
     }),
 
-    async connect(accessToken) {
-      const t = await call("ea", "auth", { accessToken: accessToken.trim() });
+    async connect(cookies) {
+      // Cookies first, then identity - `auth` needs a live access token, and
+      // minting one is the whole point of storing the cookies.
+      const t = await call("ea", "refresh", { cookies: cookies.trim() });
+      const me = await call("ea", "auth", { accessToken: t.accessToken });
       return {
         credentials: {
           accessToken: t.accessToken,
-          personaId: t.personaId,
-          pidId: t.pidId,
+          // Storing what came back, not what was sent: EA rotates `sid` on
+          // nearly every call and the replacement is the only one that works.
+          cookies: t.cookies,
+          personaId: me.personaId,
+          pidId: me.pidId,
         },
-        identity: { name: t.displayName, accountId: t.pidId },
-        // EA reports no expiry whatsoever; 4h is the observed lifetime.
-        expiresAt: hoursFromNow(4),
-        refreshExpiresAt: null,
+        identity: { name: me.displayName, accountId: me.pidId },
+        expiresAt: t.expiresAt,
+        refreshExpiresAt: t.refreshExpiresAt,
+      };
+    },
+
+    async refresh(record) {
+      const { cookies, personaId, pidId } = record.credentials ?? {};
+      const t = await call("ea", "refresh", { cookies });
+      return {
+        credentials: {
+          accessToken: t.accessToken,
+          cookies: t.cookies,
+          // Carried through - these come from connect and EA never resends them.
+          personaId: personaId ?? null,
+          pidId: pidId ?? null,
+        },
+        expiresAt: t.expiresAt,
+        refreshExpiresAt: t.refreshExpiresAt,
       };
     },
   },
 };
+
+/**
+ * Whether a stored record actually holds what its platform renews from.
+ *
+ * Most platforms renew from a refresh token. EA renews from session cookies, so
+ * "is there a refreshToken?" is the wrong question to ask it. Kept here, beside
+ * the definitions, so the browser scheduler and the connections view agree -
+ * `api/_platform-refresh.js` makes the same decision server-side.
+ */
+export function hasRefreshMaterial(def, record) {
+  if (!def?.canRefresh || !record) return false;
+  const c = record.credentials ?? {};
+  if (def.cookieHint) return Boolean(c.cookies || c.remid || c.sid);
+  return Boolean(c.refreshToken);
+}
 
 function normalizeEpic(t) {
   return {

@@ -1,7 +1,4 @@
-const {
-  refreshPlatform,
-  REFRESHABLE_PLATFORMS,
-} = require("./_platform-refresh");
+const { refreshPlatform, hasRefreshMaterial } = require("./_platform-refresh");
 
 // How long a cached game survives without being seen in a search.
 const CACHE_MAX_AGE = "90 days";
@@ -9,6 +6,12 @@ const CACHE_MAX_AGE = "90 days";
 // Scheduled maintenance. Runs daily via Vercel Cron so platform refresh tokens
 // are rolled forward even when nobody opens the app, and so the search cache
 // cannot grow without limit.
+//
+// It has a third job nobody asked for: **keeping the Supabase project awake**.
+// Free-plan projects are paused after ~7 days of low database activity, and a
+// paused project would stop this job reading credentials, which would in turn
+// let the tokens lapse - the failure feeds itself. Every run therefore touches
+// the database at least once even when there is nothing to refresh.
 // Never logs or returns token values - platform names and messages only.
 module.exports = async function handler(req, res) {
   const cronSecret = process.env.CRON_SECRET;
@@ -55,10 +58,9 @@ module.exports = async function handler(req, res) {
     const platform = row.platform;
     const credentials = row.credentials || {};
 
-    if (
-      !REFRESHABLE_PLATFORMS.includes(platform) ||
-      !credentials.refreshToken
-    ) {
+    // Not every platform renews from a refresh token - EA uses session cookies -
+    // so what counts as refreshable is decided per platform.
+    if (!hasRefreshMaterial(platform, credentials)) {
       skipped.push(platform);
       continue;
     }

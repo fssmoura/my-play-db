@@ -205,6 +205,10 @@ export const SCHEMAS = {
   },
 
   ea: {
+    // `refresh` is deliberately absent. It exists on the handler, but running it
+    // by hand spends EA's rotating cookie outside the vault, so whatever comes
+    // back would be thrown away and the stored chain left dead. Use the row's
+    // refresh button on the Connections tab, which persists the result.
     library: NONE,
     achievements: [
       {

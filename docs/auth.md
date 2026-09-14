@@ -130,18 +130,57 @@ keep waiting instead of connecting with garbage.
 platform is refreshed when under **10 minutes** remain, checked on app boot,
 every 4 minutes, on tab focus, and lazily before any API console call.
 
-| Platform | Auto-refresh | Reconnect needed when                      |
-| -------- | ------------ | ------------------------------------------ |
-| PSN      | yes          | refresh token expires (~10 days idle)      |
-| Epic     | yes          | refresh token expires (~1 year)            |
-| Xbox     | yes          | MSA refresh token expires                  |
-| Steam    | n/a          | never                                      |
-| EA       | **no**       | every ~4h - `ORIGIN_JS_SDK` has no refresh |
+| Platform | Auto-refresh | Reconnect needed when                        |
+| -------- | ------------ | -------------------------------------------- |
+| PSN      | yes          | refresh token expires (~10 days idle)        |
+| Epic     | yes          | refresh token expires (~1 year)              |
+| Xbox     | yes          | MSA refresh token expires                    |
+| Steam    | n/a          | never                                        |
+| EA       | yes          | the stored `accounts.ea.com` cookie set dies |
 
 A failed refresh is memoized in a `failed` set so a dead refresh token isn't
 retried every tick; `clearFailure(id)` is called after a manual reconnect.
 
+`startAutoRefresh` reports **failures as well as successes** to its caller. That
+is not cosmetic: reporting only successes meant a platform whose refresh had
+just started failing kept a stale green status on screen until the page was
+reloaded by hand - the one moment the screen most needed to change was the one
+it stayed still for.
+
 This only runs while a tab is open. A server-side sync job needs its own refresh pass.
+
+### Keeping the connections screen honest
+
+The statuses shown on the connections tab are derived from stored timestamps, so
+they go stale just by sitting there. `views/connections.js` keeps them current
+with two deliberately cheap mechanisms:
+
+- **a 30-second repaint** of the dots and the "40d left" text, computed from the
+  records already in memory - no network at all;
+- **a vault re-read on tab focus**, so a change made overnight by the cron, or on
+  another device, appears when you come back.
+
+Both are skipped while the JSON editor is open or a connect dialog is up, since
+a repaint would discard what you were typing. The repaint updates the dot and
+status text **in place** rather than calling `render()`, for the same reason.
+
+Neither mechanism calls a platform API, and the focus re-read is a single
+Supabase select - this is about not lying on screen, not about polling.
+
+**Deliberately not built: Supabase realtime on `platform_credentials`.** It
+would make the tab genuinely live, but for a single-user app the focus re-read
+covers the same ground for a fraction of the machinery.
+
+**Also not detected: a revoked token.** Staleness here is measured purely from
+expiry timestamps. A token killed at the platform's end - password change, app
+revoked - still looks healthy until something actually tries to use it. Catching
+that needs a real per-platform health check, which does not exist.
+
+**EA renews from session cookies, not a refresh token.** This is the one place
+where "does the record have a `refreshToken`?" is the wrong question, so both
+`public/js/platforms.js` (`hasRefreshMaterial`) and
+`api/_platform-refresh.js` (`hasRefreshMaterial`) decide it per platform. The
+full story is below.
 
 **EA auth URL MUST include `prompt=none`, and EA is a two-step connect.**
 `ORIGIN_JS_SDK` is a JS-SDK client that is only permitted to mint a token from
@@ -149,6 +188,69 @@ an _existing_ ea.com session. Driving an interactive login through it fails with
 "Your request cannot be completed. Service limitations apply." So the flow is:
 sign in at `www.ea.com/login` first (`loginUrl`), then hit the authorize URL with
 `prompt=none`, which returns the token silently. Removing `prompt=none` breaks it.
+
+### EA: renewing from session cookies
+
+EA issues no refresh token, and the access token lasts **4 hours** (`expires_in`
+is 14399). What it does issue, to a signed-in browser, is a set of cookies on
+`accounts.ea.com`. Trading those for a fresh token is the same request the EA
+website makes to keep itself signed in.
+
+**The minimum EA accepts is `sid` + `_nx_mpcid` together.** Measured by
+replaying a captured browser request and removing one cookie at a time:
+
+| Cookies sent                  | Result           |
+| ----------------------------- | ---------------- |
+| `sid` + `_nx_mpcid`           | works            |
+| `remid` + `sid` + `_nx_mpcid` | works            |
+| `remid` + `_nx_mpcid`         | `login_required` |
+| `sid` alone                   | `login_required` |
+| `remid` alone                 | `login_required` |
+| `_nx_mpcid` alone             | `login_required` |
+
+`_nx_mpcid` is the surprise, and missing it is what made the first attempt at
+this fail: everything looked right, and EA answered `login_required` anyway. The
+remaining cookies EA sets (`ealocale`, `PIM-SESSION-ID`, the `notice_*` and
+`cmapi_*` consent pairs) made no difference when removed.
+
+`remid` is the long-lived "remember me" value and is expected to outlive `sid`,
+but it is not sufficient on its own. EA may hand back a replacement `sid` - and
+sometimes `remid` - in `set-cookie`, so **the whole set is stored and replayed
+together, and anything returned overwrites what was sent**. Miss a rotation and
+the chain is dead, and only a manual reconnect fixes it. Verified by renewing
+three times in a row from nothing but the previously stored cookies.
+
+`login_required` means the stored set is dead. It is translated into a plain
+"reconnect EA" message rather than surfaced as a raw error code; a set that is
+merely missing `sid` or `_nx_mpcid` says so specifically instead.
+
+**Connecting EA needs the cookies copied out of the browser by hand.** There is
+no EA endpoint that hands a long-lived credential to the user, and a page cannot
+read another origin's cookies - that protection is doing its job. The connect
+dialog asks for Chrome's **Copy as cURL** output and keeps only the three
+cookies it needs; pasting that is one action instead of hunting three values.
+Expect to redo it every few months.
+
+**The connect dialog deliberately opens nothing.** Every other platform pops up
+a login window, and EA originally did too - which broke it, because loading an
+EA page makes EA re-issue the very cookies being copied. They were dead before
+they could be pasted. `cookieHint` on the platform definition is what suppresses
+the popup; do not "helpfully" add one back.
+
+**Two dead ends, so nobody re-investigates them:**
+
+- _EA Desktop's client_ (`JUNO_PC_CLIENT`, redirect
+  `qrc:///html/login_successful.html`) supports `response_type=code`, but then
+  demands a `pc_sign` machine signature produced by EA's own desktop software.
+  Faking it means reverse-engineering that client.
+- _The ea.com web client_ (`EADOTCOM-WEB-SERVER`) accepts the code flow with any
+  `https://www.ea.com/*` redirect and needs no `pc_sign` - but exchanging the
+  code at `/connect/token` requires a client secret only EA holds. Every
+  `client_id` tested returns `invalid_client: unknown client` without it.
+
+**Do not expose `refresh` in the API console.** Running it by hand spends the
+rotating cookies outside the vault, so the replacements are discarded and the
+stored chain is left dead. `public/js/schemas.js` omits it deliberately.
 
 ### Scheduled refresh (the thing that survives the app being closed)
 

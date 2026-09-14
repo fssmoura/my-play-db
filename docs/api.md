@@ -147,6 +147,7 @@ Returns `{ access_token, token_type, expires_in }`. Pass the `access_token` valu
 
 | Action         | What it needs                                                    | Returns                                                                                                                                                                                                   |
 | -------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `refresh`      | cookies (a `name=value; ...` line)                               | accessToken + expiresAt + the cookie line after EA's rotations + refreshExpiresAt. Tokens only - never identity                                                                                           |
 | `auth`         | accessToken                                                      | accessToken + pidId + personaId + displayName                                                                                                                                                             |
 | `library`      | accessToken                                                      | Owned games with metadata merged. Each record: `originOfferId`, `productId`, `name`, `gameSlug`, `contentId`, `displayType`, `achievementSetOverride`, `playtimeSeconds`, `lastPlayedDate`                |
 | `achievements` | accessToken + personaId + achievementSetOverride [+ sandboxName] | Full achievement list with `name`, `description`, `howTo`, `xp`, `hidden`, `rarity`, `iconUrl`, `unlocked`, `unlockDate`. Uses legacy REST API (icons+descriptions) when available, falls back to GraphQL |
@@ -171,7 +172,18 @@ achievements({ personaId, achievementSetOverride: "50072_194927_50844" })  full 
 
 ### Auth note
 
-EA access tokens from `ORIGIN_JS_SDK` client ID expire after ~4 hours. There's no refresh flow for this client - user revisits the auth URL for a new token.
+EA access tokens from the `ORIGIN_JS_SDK` client expire after ~4 hours and there
+is no refresh token. The `refresh` action closes that gap by trading the stored
+`accounts.ea.com` session cookies for a new token - the same request the ea.com
+site makes to stay signed in.
+
+The measured minimum is **`sid` + `_nx_mpcid` together**; any one of them alone
+is refused with `login_required`, and `remid` is the long-lived extra. EA may
+return replacements in `set-cookie`, so the caller must persist the cookie line
+that comes back rather than the one it sent.
+
+Full reasoning, the measured cookie behaviour, and the two routes that turned out
+to be dead ends are in [auth.md](auth.md).
 
 ## API (api/igdb.js)
 
