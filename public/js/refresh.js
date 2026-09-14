@@ -1,4 +1,4 @@
-import { PLATFORMS } from "./platforms.js";
+import { PLATFORMS, hasRefreshMaterial } from "./platforms.js";
 import * as vault from "./vault.js";
 
 /**
@@ -11,8 +11,9 @@ import * as vault from "./vault.js";
  *   PSN   -> refreshable (short access token, long refresh token)
  *   Epic  -> refreshable (refresh token lasts ~a year)
  *   Xbox  -> refreshable (re-runs the whole MSA -> User -> XSTS chain)
- *   EA    -> NOT refreshable. ORIGIN_JS_SDK has no refresh flow, so EA must be
- *            reconnected by hand roughly every 4 hours. Nothing to be done.
+ *   EA    -> refreshable, but not from a refresh token: it trades the stored
+ *            `remid`/`sid` session cookies for a fresh 4h token. EA rotates
+ *            those cookies, so every renewal MUST persist what came back.
  *   Steam -> never expires.
  *
  * This only runs while the app is open in a tab. A server-side sync job would
@@ -26,9 +27,9 @@ const INTERVAL_MS = 4 * 60 * 1000; // re-check every 4 minutes
 const failed = new Set();
 
 export function isRefreshable(def, record) {
-  if (!def?.canRefresh || !record) return false;
-  if (def.neverExpires) return false;
-  return Boolean(record.credentials?.refreshToken);
+  if (!record) return false;
+  if (def?.neverExpires) return false;
+  return hasRefreshMaterial(def, record);
 }
 
 export function isStale(def, record) {
@@ -106,13 +107,20 @@ export async function ensureFresh(id) {
   }
 }
 
-/** Starts the background timer. Returns a stop function. */
-export function startAutoRefresh(getRecords, onRefreshed) {
+/**
+ * Starts the background timer. Returns a stop function.
+ *
+ * `onResult` fires for failures as well as successes. That matters: a refresh
+ * failing is the moment the connections screen most needs repainting, and
+ * reporting only successes left a dead platform looking healthy until the page
+ * was reloaded by hand.
+ */
+export function startAutoRefresh(getRecords, onResult) {
   const tick = async () => {
     const records = getRecords();
     if (!records || !Object.keys(records).length) return;
     const result = await refreshStale(records);
-    if (result.refreshed.length) onRefreshed(result);
+    if (result.refreshed.length || result.errors.length) onResult(result);
   };
 
   const timer = setInterval(tick, INTERVAL_MS);

@@ -12,7 +12,12 @@ Four tabs behind a Google login gate: **Connections**, **API console**,
 - **Connections** - one row per platform: status dot, account name, expiry
   state, and buttons for connect / refresh / edit / delete. `edit` expands the
   stored record as editable JSON, so credentials can be inspected or corrected
-  by hand.
+  by hand. The dot and expiry text repaint every 30 seconds and the vault is
+  re-read on tab focus, so the row doesn't sit frozen at whatever it said when
+  the page loaded - see [auth.md](auth.md) for why, and for what that still
+  doesn't catch. Note the button reads `reconnect` whenever a record exists; it
+  reverts to `connect` only after a delete, so the wording tracks whether
+  anything is stored, not whether it works.
 - **Search** - IGDB game search. Typing shows the top 5 matches in a dropdown;
   Enter or the Search button shows the full list, 20 per page. A type dropdown
   beside the input filters **server-side**; a second dropdown above the results
@@ -162,7 +167,8 @@ the point of keeping them separately rewritable.
 
 (`connect.js` and `refresh.js` do attach `window` listeners for `message` and
 `focus`. That is inherent to popup and background-refresh handling; neither
-renders or queries the DOM.)
+renders or queries the DOM. `views/connections.js` adds its own `focus`
+listener for the vault re-read - that one is a view, so it is allowed to.)
 
 ### Styling rules (deliberate, keep them)
 
