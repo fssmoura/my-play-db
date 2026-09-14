@@ -15,6 +15,23 @@ follow mechanically. If following one would make the work worse, don't.
 clarify what you can reasonably infer, and don't pad answers with things nobody
 asked about. Ask when there's a real fork in the road or a genuine blocker.
 
+**How to answer. This one is not optional.**
+
+The owner is not a programmer and has said, more than once, that the replies
+here are overwhelming. A softer version of this rule was buried in the list of
+suggestions below and got walked past anyway, so it lives up here now.
+
+- Plain English. Explain the idea simply rather than avoiding it.
+- Lead with the answer, in a sentence or two. Stop there unless more is asked
+  for.
+- No code, file paths, line numbers or error text in an explanation unless the
+  question was about code, or you're asked for the detail.
+- Describe proposed changes in plain English too - what will be different for
+  the owner, not which functions move.
+- Don't list every option you found. Recommend one and say why, briefly.
+- Don't narrate the investigation. Give what it concluded.
+- If it needs to be long, it belongs in `docs/`, not in a reply.
+
 **Worth being firm about:**
 
 - Don't commit, push or open a PR unless asked. Building something isn't
@@ -27,9 +44,6 @@ asked about. Ask when there's a real fork in the road or a genuine blocker.
 
 **Things that have worked well:**
 
-- Plain English; the owner isn't a programmer. Explain the idea simply rather
-  than avoiding it.
-- Lead with the answer.
 - Say plainly when something is impossible instead of half-building it.
 - If earlier advice turns out wrong, say so and move on.
 - Stop grinding. Two failed attempts at the same thing means step back and say
@@ -202,10 +216,18 @@ the linked doc - this list exists so they cannot be missed.
 - **EA needs `prompt=none` AND a two-step login.** `ORIGIN_JS_SDK` can only
   mint a token from an existing ea.com session; an interactive login through it
   fails with "Service limitations apply".
+- **EA renews from a rotating cookie SET, not a refresh token.** The measured
+  minimum EA accepts is **`sid` + `_nx_mpcid` together** - `remid` alone, `sid`
+  alone, or `remid` + `_nx_mpcid` all return `login_required`. Missing
+  `_nx_mpcid` is what broke the first build of this. EA may return replacement
+  cookies, and whatever comes back must be persisted or EA locks itself out
+  until reconnected by hand. **The EA connect dialog must not open any EA page**
+  - loading one makes EA re-issue the cookies mid-copy. Never run EA's `refresh`
+    action from the API console for the same reason. See docs/auth.md.
 - **`identity` is never rewritten by a refresh.** The credential vault is about
   access only; profile data belongs in a future `platform_profiles` table.
 - `api/_platform-refresh.js` duplicates the token mapping from
-  `psn.js`/`epic.js`/`xbox.js`. Change one, change the other.
+  `psn.js`/`epic.js`/`xbox.js`/`ea.js`. Change one, change the other.
 
 **Database**
 
@@ -214,7 +236,11 @@ the linked doc - this list exists so they cannot be missed.
   so policies alone produce `42501 permission denied`. Functions need
   `grant execute` for the same reason, and **`service_role` has no table
   privileges either** - anything the nightly cron touches needs granting, or a
-  `security definer` function to go through.
+  `security definer` function to go through. This has already shipped broken
+  once: the cron ran for weeks returning 500 on its first read because
+  `service_role` lacked `select` on `platform_credentials`, and nobody noticed
+  because the in-tab refresh scheduler was covering for it. **Changing what the
+  cron touches means checking its grants.**
 - **`games` is a cache of IGDB records, not a list of games owned.** Ownership
   is `player_games`. A search write touches only search-grade columns, which is
   what stops it thinning out a fully synced row - there is no completeness flag
@@ -232,7 +258,7 @@ the linked doc - this list exists so they cannot be missed.
   this.** Measured: ~76% of cached games have `updated_at` move within 24 hours
   while the content is byte-identical, and `checksum` moves with it. Hence a
   plain 24-hour timer, no cron sweep, no webhook. See docs/api.md.
-- **`games` self-prunes after 90 days.** `prune_games_cache()` runs from the
+- **`games` self-prunes after 30 days.** `prune_games_cache()` runs from the
   nightly cron and deletes cached rows nothing has searched lately. A
   `player_games` row is the _only_ thing that makes a `games` row permanent -
   being fully detail-synced does not protect it.
