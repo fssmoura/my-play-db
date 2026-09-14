@@ -1,7 +1,7 @@
 const { refreshPlatform, hasRefreshMaterial } = require("./_platform-refresh");
 
 // How long a cached game survives without being seen in a search.
-const CACHE_MAX_AGE = "90 days";
+const CACHE_MAX_AGE = "30 days";
 
 // Scheduled maintenance. Runs daily via Vercel Cron so platform refresh tokens
 // are rolled forward even when nobody opens the app, and so the search cache
