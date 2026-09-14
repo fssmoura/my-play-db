@@ -21,9 +21,13 @@ function httpsRequest(url, options, body) {
       res.on("end", () => {
         const data = Buffer.concat(chunks).toString();
         try {
-          resolve({ status: res.statusCode, data: JSON.parse(data) });
+          resolve({
+            status: res.statusCode,
+            headers: res.headers,
+            data: JSON.parse(data),
+          });
         } catch {
-          resolve({ status: res.statusCode, data });
+          resolve({ status: res.statusCode, headers: res.headers, data });
         }
       });
     });
@@ -224,10 +228,121 @@ async function refreshXbox(credentials) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// EA - mirrors mintFromCookies() in api/ea.js. EA has no refresh token; what it
+// has is a set of session cookies, and trading them for a token is the whole
+// mechanism. `sid` + `_nx_mpcid` are the measured minimum - any one of them
+// alone is refused - and EA rotates `sid` on nearly every call, so whatever
+// comes back MUST be written back. See docs/auth.md.
+// ---------------------------------------------------------------------------
+const EA_AUTH_URL =
+  "https://accounts.ea.com/connect/auth" +
+  "?client_id=ORIGIN_JS_SDK&response_type=token&redirect_uri=nucleus:rest&prompt=none";
+
+const EA_COOKIE_NAMES = ["remid", "sid", "_nx_mpcid"];
+
+const EA_BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36";
+
+function parseCookieLine(line) {
+  const jar = {};
+  for (const part of String(line ?? "").split(";")) {
+    const i = part.indexOf("=");
+    if (i < 1) continue;
+    const name = part.slice(0, i).trim();
+    const value = part.slice(i + 1).trim();
+    if (EA_COOKIE_NAMES.includes(name) && value) jar[name] = value;
+  }
+  return jar;
+}
+
+function formatCookieLine(jar) {
+  return EA_COOKIE_NAMES.filter((n) => jar[n])
+    .map((n) => `${n}=${jar[n]}`)
+    .join("; ");
+}
+
+function applyRotations(jar, setCookie) {
+  const next = { ...jar };
+  for (const line of setCookie ?? []) {
+    const eq = line.indexOf("=");
+    if (eq < 1) continue;
+    const name = line.slice(0, eq).trim();
+    if (!EA_COOKIE_NAMES.includes(name)) continue;
+    const value = line
+      .slice(eq + 1)
+      .split(";")[0]
+      .trim();
+    if (value && value !== "deleted") next[name] = value;
+  }
+  return next;
+}
+
+function cookieExpiry(setCookie, name) {
+  for (const line of setCookie ?? []) {
+    if (!line.startsWith(`${name}=`)) continue;
+    const raw = line.match(/expires=([^;]+)/i)?.[1];
+    const parsed = raw ? new Date(raw) : null;
+    if (parsed && !Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+  return null;
+}
+
+async function refreshEa(credentials) {
+  const { cookies, remid, sid, personaId, pidId } = credentials ?? {};
+  const jar = {
+    ...parseCookieLine(cookies),
+    ...(remid ? { remid } : {}),
+    ...(sid ? { sid } : {}),
+  };
+
+  if (!jar.sid || !jar._nx_mpcid) {
+    throw new Error("ea cookies are missing or incomplete - reconnect EA");
+  }
+
+  const { status, headers, data } = await httpsRequest(EA_AUTH_URL, {
+    headers: {
+      Cookie: formatCookieLine(jar),
+      "User-Agent": EA_BROWSER_UA,
+      Accept: "application/json, text/plain, */*",
+    },
+  });
+
+  if (!data || !data.access_token) {
+    const code = data?.error || data?.error_code || status;
+    if (code === "login_required") {
+      throw new Error(
+        "EA session has expired - reconnect EA to store a fresh cookie",
+      );
+    }
+    throw new Error(
+      `EA auth error: ${status} ${data?.error_description || code}`,
+    );
+  }
+
+  const rotated = applyRotations(jar, headers["set-cookie"]);
+
+  return {
+    credentials: {
+      accessToken: data.access_token,
+      cookies: formatCookieLine(rotated),
+      // Carried through untouched - losing these would break library calls.
+      personaId: personaId ?? null,
+      pidId: pidId ?? null,
+    },
+    expiresAt: new Date(
+      Date.now() + Number(data.expires_in ?? 14400) * 1000,
+    ).toISOString(),
+    refreshExpiresAt: cookieExpiry(headers["set-cookie"], "remid"),
+  };
+}
+
 const REFRESHERS = {
   psn: refreshPsn,
   epic: refreshEpic,
   xbox: refreshXbox,
+  ea: refreshEa,
 };
 
 async function refreshPlatform(platform, credentials) {
@@ -236,7 +351,22 @@ async function refreshPlatform(platform, credentials) {
   return refresher(credentials);
 }
 
+/**
+ * Whether a stored row actually has something to refresh with.
+ *
+ * Not simply "has a refreshToken": EA renews from session cookies instead, so
+ * the test is per platform. The nightly cron uses this to decide what to skip.
+ */
+function hasRefreshMaterial(platform, credentials = {}) {
+  if (!REFRESHERS[platform]) return false;
+  if (platform === "ea") {
+    return Boolean(credentials.cookies || credentials.remid || credentials.sid);
+  }
+  return Boolean(credentials.refreshToken);
+}
+
 module.exports = {
   refreshPlatform,
+  hasRefreshMaterial,
   REFRESHABLE_PLATFORMS: Object.keys(REFRESHERS),
 };

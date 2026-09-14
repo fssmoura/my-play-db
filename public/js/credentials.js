@@ -46,7 +46,23 @@ export const EXTRACTORS = {
   xbox: (text) =>
     fromUrlParam(text, "code") ?? bare(text, /^M\.[A-Za-z0-9._-]{20,}$/),
 
-  // {"access_token":"...","token_type":"Bearer","expires_in":14399}
-  ea: (text) =>
-    fromJsonKey(text, "access_token") ?? bare(text, /^[A-Za-z0-9._-]{40,}$/),
+  // EA needs a SET of cookies, not one value - measured: `sid` and `_nx_mpcid`
+  // together are the minimum EA accepts, and `remid` is the long-lived one that
+  // should outlive `sid`. Any of them alone is rejected with `login_required`.
+  //
+  // The input is whatever the user pasted: a "Copy as cURL" blob, a raw cookie
+  // header, or a couple of `name=value` lines. All that matters is finding the
+  // three names anywhere in it.
+  ea: (text) => {
+    const wanted = ["remid", "sid", "_nx_mpcid"];
+    const found = [];
+    for (const name of wanted) {
+      // `\b` is no good here - `_nx_mpcid` starts with an underscore, and `sid`
+      // would otherwise match inside `PIM-SESSION-ID`. Require a delimiter.
+      const m = text.match(new RegExp(`(?:^|[;,\\s'"])${name}=([^;,\\s'"]+)`));
+      if (m) found.push(`${name}=${m[1]}`);
+    }
+    // `sid` is non-negotiable; without it EA rejects the lot.
+    return found.some((f) => f.startsWith("sid=")) ? found.join("; ") : null;
+  },
 };
