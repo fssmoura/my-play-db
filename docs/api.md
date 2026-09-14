@@ -335,16 +335,36 @@ Uses SteamGridDB v2 API (community-driven game artwork: grids, heroes, logos). A
 
 Asset actions default to including everything (nsfw/humor/epilepsy/animated). Override via optional filters: `styles`, `dimensions`, `mimes`, `types` (static/animated), `nsfw` (yes/no/any), `humor` (yes/no/any), `epilepsy` (yes/no/any), `limit`, `page`. Styles/dimensions values differ per asset type (see SGDB docs for valid values).
 
+**`types` must be sent explicitly.** SteamGridDB's own default is static images only, so omitting it silently hides every animated asset - Bloodborne goes from 186 covers to 171 and from 38 heroes to 35. `DEFAULT_FILTERS` in the handler sends `static,animated` for this reason. Animated assets come back with `url` as an animated `.webp` but `thumb` as a `.webm` **video**, which no `<img>` tag can display; the media picker checks for that and uses a `<video>` element.
+
 Each action accepts either an SGDB `gameId` or a `{ platform, platformId }` pair for direct platform ID lookups. Platform enum: `steam`, `origin`, `egs`, `bnet`, `uplay`, `flashpoint`, `eshop`.
 
-| Action   | Params                                        | Returns                                                                              |
-| -------- | --------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `search` | name                                          | [{ id, name, release_date }]                                                         |
-| `game`   | sgdbId or { platform, platformId }            | { id, name, release_date }                                                           |
-| `grids`  | sgdbId or { platform, platformId } [+filters] | { page, total, limit, data: [{ id, width, height, nsfw, humor, mime, url, thumb }] } |
-| `heroes` | sgdbId or { platform, platformId } [+filters] | Same shape as grids                                                                  |
-| `logos`  | sgdbId or { platform, platformId } [+filters] | Same shape as grids (logos have no `dimensions` filter)                              |
+`game` also takes `platformdata` - a comma-separated list of stores whose own IDs should be returned back, as `external_platform_data`. That is how a match found by name can be confirmed against an ID we already hold.
 
-For platforms without a direct SGDB bridge (PSN, Xbox, EA), use IGDB as intermediary: `game(igdbId).external_games` find steam entry SGDB steam bridge. Name search is final fallback.
+| Action   | Params                                             | Returns                                                                                                                                            |
+| -------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search` | name                                               | [{ id, name, release_date, types, verified }]                                                                                                      |
+| `game`   | sgdbId or { platform, platformId } [+platformdata] | { id, name, release_date, types, verified [, external_platform_data] }                                                                             |
+| `grids`  | sgdbId or { platform, platformId } [+filters]      | { page, total, limit, data: [{ id, score, style, width, height, nsfw, humor, epilepsy, mime, language, url, thumb, upvotes, downvotes, author }] } |
+| `heroes` | sgdbId or { platform, platformId } [+filters]      | Same shape as grids                                                                                                                                |
+| `logos`  | sgdbId or { platform, platformId } [+filters]      | Same shape as grids (logos have no `dimensions` filter)                                                                                            |
+
+`types` is the list of store bridges an entry has, and it is the single most useful field here. An empty `types` means the entry is reachable by name only - no ID lookup will ever find it, which is the case for most console releases.
+
+`url` is the full-size image and `thumb` is a small JPEG of it. The media picker draws thumbnails and saves `url`: a grid of several hundred full-size images is unusable. `author` is the artist who uploaded it.
+
+Paging is zero-based, `limit` maxes out at 50, and `total` is the real count - Bloodborne has 177 covers across four pages.
+
+### Matching IGDB games to SGDB entries
+
+The handler stays 1:1 with SGDB. The matching lives in `public/js/sgdb-match.js` (pure) and `public/js/sgdb.js` (fetching). The rule is one IGDB game to one SGDB entry, or nothing:
+
+- **Store ID first.** IGDB's `external_games` gives Steam and Epic IDs; SGDB accepts those directly as `{ platform: "steam" | "egs", platformId }`. Provably exact, and it has not misfired in testing. IGDB often lists several Steam IDs for one game (base game, a separate multiplayer app, a playtest) and each resolves to a different SGDB entry, so they are tried best-first by the store's own title.
+- **Name second.** Real title, then IGDB's alternative names. Nothing is trimmed or broadened.
+- **Nothing third**, and often. A DLC never falls back to its base game, and an edition never falls back to the base game - Horizon Zero Dawn, its Complete Edition and its Remaster are three separate SGDB entries, and Marvel's Spider-Man's DLC is not in SGDB at all.
+
+Only Steam and Epic bridge. SGDB also accepts origin, uplay, bnet, flashpoint and eshop, but IGDB publishes no IDs for any of them.
+
+**The year is a much stronger signal than it looks.** Measured across 187 games matched by Steam ID, so the match was certain: the year agreed exactly in 97.3% of cases, was one out in 2.1%, and the worst case in the whole sample was three. It never reached four. That is why a large year gap is treated as evidence of a different game rather than as noise.
 
 > Detailed API responses, field observations, data flows, and sync patterns for all handlers are in [`api-responses.md`](api-responses.md).

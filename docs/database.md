@@ -22,51 +22,59 @@ Supabase (Postgres). Three tables: `games`, `player_games`, `achievements`.
 
 ### `games` columns
 
-| Column                  | Type        | Source               | Notes                                                                                   |
-| ----------------------- | ----------- | -------------------- | --------------------------------------------------------------------------------------- |
-| `id`                    | integer PK  | IGDB                 | IGDB game ID - canonical identity                                                       |
-| `name`                  | text        | IGDB                 |                                                                                         |
-| `slug`                  | text        | IGDB                 |                                                                                         |
-| `summary`               | text        | IGDB                 |                                                                                         |
-| `storyline`             | text        | IGDB                 |                                                                                         |
-| `genres`                | text[]      | IGDB                 | Array of genre name strings                                                             |
-| `cover`                 | text[]      | PSN first, then IGDB | PSN: `PORTRAIT_BANNER`. IGDB: `cover.url`. Arrays so multiple platforms can contribute  |
-| `banner`                | text[]      | PSN only             | `GAMEHUB_COVER_ART` first, `BACKGROUND_LAYER_ART` appended. No IGDB artworks here       |
-| `logo`                  | text[]      | PSN only             | `LOGO` image type from PSN concept media                                                |
-| `screenshots`           | text[]      | PSN first, then IGDB | PSN: `SCREENSHOT` type. IGDB: `screenshots[]`                                           |
-| `artworks`              | text[]      | IGDB only            | IGDB `artworks[]` - promotional wide images                                             |
-| `developer`             | text[]      | IGDB                 | `involved_companies[].company.name` where `developer = true`                            |
-| `publisher`             | text[]      | IGDB                 | `involved_companies[].company.name` where `publisher = true`                            |
-| `game_type`             | integer     | IGDB                 | 0=main_game, 1=dlc, 2=expansion, 3=bundle, etc. See game type enum                      |
-| `release_dates`         | jsonb       | IGDB                 | `[{date (unix), platform (IGDB platform id)}]` - human/region stripped                  |
-| `platforms`             | jsonb       | IGDB                 | `[{id, name, abbreviation}]` - IGDB platform objects                                    |
-| `rating`                | numeric     | IGDB                 | `total_rating` 0-100                                                                    |
-| `rating_count`          | integer     | IGDB                 | `total_rating_count`                                                                    |
-| `videos`                | jsonb       | IGDB                 | `[{name, url}]` - YouTube URLs                                                          |
-| `websites`              | jsonb       | IGDB                 | `[{url, type}]` - type enriched to human name (official/steam/epic/etc.)                |
-| `collections`           | jsonb       | IGDB                 | `[{id, name}]`                                                                          |
-| `franchises`            | jsonb       | IGDB                 | `[{id, name}]`                                                                          |
-| `dlcs`                  | integer[]   | IGDB                 | IGDB IDs of DLCs                                                                        |
-| `bundles`               | integer[]   | IGDB                 | IGDB IDs of bundles this game belongs to                                                |
-| `standalone_expansions` | integer[]   | IGDB                 |                                                                                         |
-| `remasters`             | integer[]   | IGDB                 |                                                                                         |
-| `remakes`               | integer[]   | IGDB                 |                                                                                         |
-| `expansions`            | integer[]   | IGDB                 |                                                                                         |
-| `expanded_games`        | integer[]   | IGDB                 |                                                                                         |
-| `similar_games`         | integer[]   | IGDB                 |                                                                                         |
-| `parent_game`           | integer     | IGDB                 | For DLCs/expansions - points to parent                                                  |
-| `version_title`         | text        | IGDB                 | e.g. "Game of the Year Edition"                                                         |
-| `version_parent`        | integer     | IGDB                 | For editions - points to base game                                                      |
-| `external_ids`          | jsonb       | IGDB                 | `{"steam": ["252950"], "psn": ["203715"]}` - source array of UIDs                       |
-| `alternative_names`     | jsonb       | IGDB                 | `[{name}]` - ranking only, see below                                                    |
-| `popularity`            | jsonb       | IGDB                 | `{visits, want_to_play}` from `popularity_primitives` - ranking only                    |
-| `hypes`                 | integer     | IGDB                 | Ranking only. Meaningful for unreleased games                                           |
-| `first_release_date`    | integer     | IGDB                 | Unix seconds. Duplicates the earliest `release_dates` entry; search returns it directly |
-| `name_normalized`       | text        | derived              | `normalizeName(name)` - lookup key for search, see below                                |
-| `synced_at`             | timestamptz | system               | Last time this row was written **by anything**                                          |
-| `fully_synced_at`       | timestamptz | system               | Last time the **complete** IGDB record was pulled. `null` = never, see below            |
+| Column                  | Type        | Source               | Notes                                                                                                       |
+| ----------------------- | ----------- | -------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `id`                    | integer PK  | IGDB                 | IGDB game ID - canonical identity                                                                           |
+| `name`                  | text        | IGDB                 |                                                                                                             |
+| `slug`                  | text        | IGDB                 |                                                                                                             |
+| `summary`               | text        | IGDB                 |                                                                                                             |
+| `storyline`             | text        | IGDB                 |                                                                                                             |
+| `genres`                | text[]      | IGDB                 | Array of genre name strings                                                                                 |
+| `cover`                 | text[]      | IGDB, PSN, SGDB      | IGDB `cover.url`, PSN `PORTRAIT_BANNER`, or a pick from SteamGridDB. **First entry is the one shown**       |
+| `banner`                | text[]      | PSN, SGDB            | PSN `GAMEHUB_COVER_ART` then `BACKGROUND_LAYER_ART`; SteamGridDB "heroes". **First entry is the one shown** |
+| `logo`                  | text[]      | PSN, SGDB            | PSN `LOGO`; SteamGridDB logos. **First entry is the one shown**                                             |
+| `screenshots`           | text[]      | PSN first, then IGDB | PSN: `SCREENSHOT` type. IGDB: `screenshots[]`                                                               |
+| `artworks`              | text[]      | IGDB only            | IGDB `artworks[]` - promotional wide images                                                                 |
+| `developer`             | text[]      | IGDB                 | `involved_companies[].company.name` where `developer = true`                                                |
+| `publisher`             | text[]      | IGDB                 | `involved_companies[].company.name` where `publisher = true`                                                |
+| `game_type`             | integer     | IGDB                 | 0=main_game, 1=dlc, 2=expansion, 3=bundle, etc. See game type enum                                          |
+| `release_dates`         | jsonb       | IGDB                 | `[{date (unix), platform (IGDB platform id)}]` - human/region stripped                                      |
+| `platforms`             | jsonb       | IGDB                 | `[{id, name, abbreviation}]` - IGDB platform objects                                                        |
+| `rating`                | numeric     | IGDB                 | `total_rating` 0-100                                                                                        |
+| `rating_count`          | integer     | IGDB                 | `total_rating_count`                                                                                        |
+| `videos`                | jsonb       | IGDB                 | `[{name, url}]` - YouTube URLs                                                                              |
+| `websites`              | jsonb       | IGDB                 | `[{url, type}]` - type enriched to human name (official/steam/epic/etc.)                                    |
+| `collections`           | jsonb       | IGDB                 | `[{id, name}]`                                                                                              |
+| `franchises`            | jsonb       | IGDB                 | `[{id, name}]`                                                                                              |
+| `dlcs`                  | integer[]   | IGDB                 | IGDB IDs of DLCs                                                                                            |
+| `bundles`               | integer[]   | IGDB                 | IGDB IDs of bundles this game belongs to                                                                    |
+| `standalone_expansions` | integer[]   | IGDB                 |                                                                                                             |
+| `remasters`             | integer[]   | IGDB                 |                                                                                                             |
+| `remakes`               | integer[]   | IGDB                 |                                                                                                             |
+| `expansions`            | integer[]   | IGDB                 |                                                                                                             |
+| `expanded_games`        | integer[]   | IGDB                 |                                                                                                             |
+| `similar_games`         | integer[]   | IGDB                 |                                                                                                             |
+| `parent_game`           | integer     | IGDB                 | For DLCs/expansions - points to parent                                                                      |
+| `version_title`         | text        | IGDB                 | e.g. "Game of the Year Edition"                                                                             |
+| `version_parent`        | integer     | IGDB                 | For editions - points to base game                                                                          |
+| `external_ids`          | jsonb       | IGDB                 | `{"steam": ["252950"], "psn": ["203715"]}` - source array of UIDs                                           |
+| `alternative_names`     | jsonb       | IGDB                 | `[{name}]` - ranking only, see below                                                                        |
+| `popularity`            | jsonb       | IGDB                 | `{visits, want_to_play}` from `popularity_primitives` - ranking only                                        |
+| `hypes`                 | integer     | IGDB                 | Ranking only. Meaningful for unreleased games                                                               |
+| `first_release_date`    | integer     | IGDB                 | Unix seconds. Duplicates the earliest `release_dates` entry; search returns it directly                     |
+| `name_normalized`       | text        | derived              | `normalizeName(name)` - lookup key for search, see below                                                    |
+| `sgdb_id`               | integer     | matcher or by hand   | SteamGridDB entry this game maps to. `null` = unmatched. See below                                          |
+| `synced_at`             | timestamptz | system               | Last time this row was written **by anything**                                                              |
+| `fully_synced_at`       | timestamptz | system               | Last time the **complete** IGDB record was pulled. `null` = never, see below                                |
 
-**Image array strategy**: PSN images always go first. IGDB images appended after. When a game is later synced from Steam/Epic/etc., images are extended not replaced - existing PSN images stay at the front.
+**Image array strategy**: nothing is ever deleted from `cover`, `banner`, `logo` or `screenshots` - sources accumulate. `merge_image_array()` keeps the order it finds and appends only URLs it has not seen.
+
+**The first entry is the chosen one.** That is the whole mechanism behind the media picker: choosing an image moves its URL to the front of the array, and because the merge preserves order, it stays at the front through every future sync. There is no flag and no second column. Two consequences that matter:
+
+- **A future sync must merge, never rebuild.** Anything that replaces one of these arrays wholesale silently throws away the user's choice.
+- **Provenance is not stored, because it does not need to be.** Every URL says where it came from: `images.igdb.com`, `image.api.playstation.com`, `cdn2.steamgriddb.com`.
+
+**`sgdb_id`** is filled in the first time the media picker is opened for a game, and is trusted from then on - it is never re-checked, because it may have been set by hand. Setting it by hand is how a release SteamGridDB has no entry for (a console edition, say) can be pointed at the artwork of the release it shares its art with. `null` means unmatched, and does not distinguish "never looked" from "looked and found nothing"; re-checking costs a handful of API calls and only happens on demand.
 
 ### `games` as a search cache
 

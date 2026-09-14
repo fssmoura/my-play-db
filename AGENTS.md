@@ -175,6 +175,8 @@ my-play-db/
       refresh.js             # in-tab auto-refresh scheduler
       schemas.js             # per-action parameter definitions for the console
       ranking.js             # pure search ranking/merging/paging logic
+      sgdb-match.js          # pure IGDB->SteamGridDB matching rules
+      sgdb.js                # SteamGridDB lookup orchestration (not wired to a view)
       games-cache.js         # `games` table: search cache + single-game read/write
       search.js              # search orchestration: DB head start + IGDB, cached
       game.js                # one game: daily freshness rule + IGDB pull
@@ -184,6 +186,7 @@ my-play-db/
         console.js           # generic action runner
         search.js            # IGDB search tab (typeahead + full results)
         game.js              # game detail tab (?game=<igdb id>)
+        media.js             # artwork picker tab (?media=<igdb id>)
   .env.local               # local env (managed by `vercel env pull`)
   package.json
   vercel.json              # outputDirectory + cron schedule
@@ -262,6 +265,13 @@ the linked doc - this list exists so they cannot be missed.
   nightly cron and deletes cached rows nothing has searched lately. A
   `player_games` row is the _only_ thing that makes a `games` row permanent -
   being fully detail-synced does not protect it.
+- **The first entry of `cover`, `logo` and `banner` is the user's chosen
+  image.** There is no flag and no second column - position is the choice, and
+  it survives because `merge_image_array()` preserves order and only appends.
+  **Anything that rebuilds one of those arrays instead of merging into it
+  silently throws the choice away.** Where a URL came from is readable from its
+  host (`images.igdb.com`, `image.api.playstation.com`,
+  `cdn2.steamgriddb.com`), so provenance never needs storing either.
 - **Cached games store `alternative_names`, `popularity`, `hypes` and
   `first_release_date` purely so they score identically to the same game from
   IGDB.** Search paints the cache first and merges IGDB over it; equal scores
@@ -275,6 +285,11 @@ the linked doc - this list exists so they cannot be missed.
   `public/css/app.css`.
 - **`public/js/schemas.js` must be kept in step with the handlers.** A new
   action or option that isn't there is unreachable from the API console.
+- **SteamGridDB matching may return nothing, and that is correct.** One IGDB
+  game maps to one SteamGridDB entry or to none. A DLC must never inherit its
+  base game's artwork and an edition must never inherit the base game's -
+  they are separate entries with separate art. Loosening the matching to raise
+  the hit rate is how the wrong cover ends up on a page.
 
 ## Reference docs
 

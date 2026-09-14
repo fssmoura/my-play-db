@@ -326,6 +326,12 @@ export const SCHEMAS = {
         hint: "The store id, used with platform.",
         placeholder: "252950",
       },
+      {
+        name: "platformdata",
+        type: "string",
+        hint: "Comma-separated stores whose ids should be returned back.",
+        placeholder: "steam,egs",
+      },
     ],
     grids: ASSET_FIELDS(),
     heroes: ASSET_FIELDS(),
