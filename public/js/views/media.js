@@ -322,6 +322,9 @@ function pickMark(key) {
 function renderPanel() {
   const panel = node().querySelector("#m-panel");
 
+  // The old grid is gone; stop watching its tiles so their videos stop too.
+  mediaObserver?.disconnect();
+
   if (state.tab === REVIEW) {
     panel.innerHTML = renderReview();
     panel.querySelector("#m-save")?.addEventListener("click", save);
@@ -396,6 +399,48 @@ function paint(key) {
       render();
     }),
   );
+
+  observeTiles(grid);
+}
+
+/**
+ * Loads each tile's media only as it scrolls near the viewport, and pauses
+ * video the moment it scrolls away again.
+ *
+ * Without this, opening one popular game fires off every image at once. Static
+ * thumbnails are ~55KB each and there can be hundreds of them; animated
+ * previews run to several megabytes apiece. That flood fills the browser's per
+ * host connection pool, and while it drains, images on every other tab stall
+ * with it.
+ */
+let mediaObserver = null;
+
+function observeTiles(grid) {
+  mediaObserver ??= new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const media = entry.target;
+        if (entry.isIntersecting) {
+          if (media.tagName === "VIDEO") {
+            if (!media.getAttribute("src")) {
+              media.src = media.dataset.src;
+            }
+            media.play().catch(() => {});
+          } else if (!media.getAttribute("src")) {
+            media.src = media.dataset.src;
+          }
+        } else if (media.tagName === "VIDEO") {
+          media.pause();
+        }
+      }
+    },
+    // Start loading a little before the tile is actually visible, so scrolling
+    // never shows a blank frame it has to wait on.
+    { rootMargin: "400px" },
+  );
+  grid.querySelectorAll("[data-src]").forEach((media) => {
+    mediaObserver.observe(media);
+  });
 }
 
 /**
@@ -409,13 +454,19 @@ function paint(key) {
  * thumbnails as `.webm`, which is a video and not something an `<img>` can
  * show, so those tiles get a muted looping `<video>` instead. The saved URL is
  * still the full-size image either way.
+ *
+ * Nothing here has a `src` up front. Tile media is loaded by `observeTiles()`
+ * below, only as it scrolls near - a popular game holds several hundred
+ * images, and firing them all off at once (some animated previews are several
+ * megabytes) saturates the connection pool and slows down images everywhere
+ * else in the app too.
  */
 function renderTile(key, item) {
   const chosen = state.picks[key] === item.url;
   const animated = /\.webm($|\?)/i.test(item.thumb ?? "");
   const media = animated
-    ? `<video src="${escapeHtml(item.thumb)}" autoplay loop muted playsinline></video>`
-    : `<img src="${escapeHtml(item.thumb ?? item.url)}" alt="" loading="lazy" />`;
+    ? `<video data-src="${escapeHtml(item.thumb)}" preload="none" loop muted playsinline></video>`
+    : `<img data-src="${escapeHtml(item.thumb ?? item.url)}" alt="" loading="lazy" decoding="async" />`;
 
   return `
     <button
