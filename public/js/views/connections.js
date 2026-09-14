@@ -1,4 +1,4 @@
-import { PLATFORMS } from "../platforms.js";
+import { PLATFORMS, hasRefreshMaterial } from "../platforms.js";
 import * as vault from "../vault.js";
 import { call } from "../api.js";
 import {
@@ -16,7 +16,17 @@ import { refreshStale, startAutoRefresh, clearFailure } from "../refresh.js";
 let records = {};
 let root;
 let stopAutoRefresh = null;
+let stopLiveStatus = null;
 const expanded = new Set();
+
+// Survives a repaint. `render()` rebuilds the whole list, so the last message
+// has to be held here or it would vanish on the next tick.
+let statusMsg = { text: "", isError: false };
+
+// How often the "40d left" countdowns are repainted. Purely local - reads the
+// records already in memory and touches no network - so this is about keeping
+// the screen honest, not about polling anything.
+const TICK_MS = 30 * 1000;
 
 export async function mount(el) {
   root = el;
@@ -31,8 +41,51 @@ export async function mount(el) {
   stopAutoRefresh?.();
   stopAutoRefresh = startAutoRefresh(
     () => records,
-    async () => await reload(),
+    async (result) => await applyRefreshResult(result),
   );
+
+  stopLiveStatus?.();
+  stopLiveStatus = startLiveStatus();
+}
+
+/**
+ * Keeps the screen truthful while the tab sits open.
+ *
+ * Two cheap things, neither of which calls a platform API:
+ *  - repaint the countdowns on a timer, so they don't freeze at whatever they
+ *    said when the page loaded;
+ *  - re-read the vault when the tab regains focus, so changes made overnight by
+ *    the cron, or on another device, show up.
+ */
+function startLiveStatus() {
+  const timer = setInterval(() => {
+    if (isBusy()) return;
+    paintStatuses();
+  }, TICK_MS);
+
+  const onFocus = async () => {
+    if (isBusy()) return;
+    try {
+      records = await vault.loadAll();
+      paintStatuses();
+    } catch {
+      /* a background re-read failing must not blank the screen */
+    }
+  };
+  window.addEventListener("focus", onFocus);
+
+  return () => {
+    clearInterval(timer);
+    window.removeEventListener("focus", onFocus);
+  };
+}
+
+/**
+ * True while the user is part-way through something a repaint would destroy -
+ * an open JSON editor or a connect dialog.
+ */
+function isBusy() {
+  return expanded.size > 0 || document.querySelector(".overlay") !== null;
 }
 
 async function reload() {
@@ -46,10 +99,23 @@ async function reload() {
 }
 
 async function runAutoRefresh() {
-  const { refreshed, errors } = await refreshStale(records);
-  if (refreshed.length) await reload();
+  await applyRefreshResult(await refreshStale(records));
+}
+
+/**
+ * Reflects a background refresh pass on screen.
+ *
+ * Failures matter as much as successes here: a platform whose refresh just
+ * started failing is exactly the case that used to leave a stale green status
+ * sitting there until the page was reloaded by hand.
+ */
+async function applyRefreshResult({ refreshed = [], errors = [] } = {}) {
+  if (refreshed.length || errors.length) await reload();
   if (errors.length) {
     setStatus(errors.map((e) => `${e.id}: ${e.message}`).join("  "), true);
+  } else if (refreshed.length) {
+    // A clean pass clears whatever the last failure left on screen.
+    setStatus("");
   }
 }
 
@@ -90,9 +156,9 @@ function status(def, record) {
   const access = left(record.expires_at);
   const refresh = left(record.refresh_expires_at);
 
-  // Only the refresh token lapsing forces a manual reconnect; the access
+  // Only the renewing credential lapsing forces a manual reconnect; the access
   // token is minted again automatically.
-  if (def.canRefresh && record.credentials?.refreshToken) {
+  if (hasRefreshMaterial(def, record)) {
     if (refresh !== null && refresh <= 0)
       return { cls: "bad", text: "expired - reconnect" };
     return {
@@ -124,6 +190,8 @@ function render() {
     <p class="status-line" id="conn-status"></p>
   `;
 
+  setStatus(statusMsg.text, statusMsg.isError);
+
   root.querySelectorAll("[data-act]").forEach((btn) => {
     btn.addEventListener("click", () =>
       handle(btn.dataset.act, btn.dataset.id),
@@ -132,6 +200,24 @@ function render() {
   root.querySelectorAll("[data-save]").forEach((btn) => {
     btn.addEventListener("click", () => saveEdit(btn.dataset.save));
   });
+}
+
+/**
+ * Updates the dot and the status text in place.
+ *
+ * Deliberately not a `render()` - rebuilding the list would wipe an open JSON
+ * editor, drop the status line and steal focus. This only rewrites the two
+ * things that actually change as time passes.
+ */
+function paintStatuses() {
+  if (!root) return;
+  for (const [id, def] of Object.entries(PLATFORMS)) {
+    const st = status(def, records[id]);
+    const dot = root.querySelector(`[data-dot="${id}"]`);
+    if (dot) dot.className = `dot ${st.cls}`;
+    const text = root.querySelector(`[data-status="${id}"]`);
+    if (text) text.textContent = st.text;
+  }
 }
 
 function row(id, def) {
@@ -143,10 +229,10 @@ function row(id, def) {
   return `
     <div class="prow">
       <div class="prow-head">
-        <span class="dot ${st.cls}"></span>
+        <span class="dot ${st.cls}" data-dot="${id}"></span>
         <span class="prow-name">${esc(def.label)}</span>
         <span class="meta">${esc(name)}</span>
-        <span class="meta prow-status">${esc(st.text)}</span>
+        <span class="meta prow-status" data-status="${id}">${esc(st.text)}</span>
         <span class="prow-btns">
           <button data-act="connect" data-id="${id}">${record ? "reconnect" : "connect"}</button>
           ${def.canRefresh && record ? `<button data-act="refresh" data-id="${id}">refresh</button>` : ""}
@@ -212,10 +298,11 @@ async function saveEdit(id) {
 }
 
 function setStatus(msg, isError = false) {
-  const el = root.querySelector("#conn-status");
+  statusMsg = { text: msg ?? "", isError };
+  const el = root?.querySelector("#conn-status");
   if (!el) return;
-  el.textContent = msg;
-  el.classList.toggle("error", isError);
+  el.textContent = statusMsg.text;
+  el.classList.toggle("error", statusMsg.isError);
 }
 
 /* --------------------------------------------------------------- actions -- */
@@ -266,13 +353,15 @@ async function beginConnect(id) {
     return beginSteamRedirect();
   }
 
-  // window.open must be synchronous inside the click handler.
-  const popup =
-    def.connectMode === "openid"
+  // Cookie platforms open nothing. Loading an EA page here would make EA
+  // re-issue the cookies the user is in the middle of copying.
+  const popup = def.cookieHint
+    ? null
+    : def.connectMode === "openid"
       ? openPopup(steamOpenIdUrl())
       : openPopup(def.loginUrl ?? def.authUrl);
 
-  if (!popup)
+  if (!popup && !def.cookieHint)
     return setStatus("Popup blocked - allow popups for this site.", true);
 
   try {
@@ -316,8 +405,16 @@ function viaClipboard(def, popup) {
 
     const modal = openModal(def, popup, {
       onSubmit: (text) => {
-        const value = def.extract(text) ?? text.trim();
-        if (!value) return "Doesn't look like a valid credential.";
+        // Cookie platforms must parse cleanly. Falling back to the raw text
+        // would post a whole cURL command to EA and fail confusingly.
+        const value = def.cookieHint
+          ? def.extract(text)
+          : (def.extract(text) ?? text.trim());
+        if (!value) {
+          return def.cookieHint
+            ? `Couldn't find the ${def.cookieHint.cookieNames[0]} cookie in that. Paste the whole "Copy as cURL" text.`
+            : "Doesn't look like a valid credential.";
+        }
         done();
         closePopup(popup);
         resolve(value);
@@ -345,28 +442,60 @@ function viaClipboard(def, popup) {
 /**
  * Two-step platforms (PSN, EA) need the user signed in on the platform first;
  * their credential endpoint only works against an existing session.
+ *
+ * EA is a third shape again: there is no endpoint that hands over a long-lived
+ * credential, so the value has to be copied out of the browser's own cookie
+ * store. `cookieHint` swaps the "get credential" button for those instructions.
  */
 function openModal(def, popup, { onSubmit, onCancel }) {
   const twoStep = Boolean(def.loginUrl);
+  const hint = def.cookieHint;
   const overlay = document.createElement("div");
   overlay.className = "overlay";
+
+  let guidance;
+  if (hint) {
+    guidance = `
+      <p class="meta">Make sure you're signed in to EA in this browser, then
+        leave EA alone - reloading it can replace the cookies you're about to
+        copy.</p>
+      <ol class="meta">
+        <li>Open <strong>https://${esc(hint.domain)}</strong> in a new tab.</li>
+        <li>Press <strong>F12</strong>, open the <strong>Network</strong> tab,
+            then reload the page.</li>
+        <li>Right-click the first request in the list and choose
+            <strong>Copy &rarr; Copy as cURL</strong>.</li>
+        <li>Paste it below. Only the ${hint.cookieNames
+          .map((n) => `<strong>${esc(n)}</strong>`)
+          .join(", ")} values are kept.</li>
+      </ol>
+      <p class="meta">This is the long-lived sign-in, so it only needs doing
+        every few months.</p>`;
+  } else if (twoStep) {
+    guidance = `
+      <p class="meta">1. Sign in on the window that opened.
+        2. Press <strong>get credential</strong>. 3. Copy the value -
+        it's picked up automatically, or paste it below.</p>
+      <div class="button-row">
+        <button data-role="login" type="button">sign in</button>
+        <button data-role="fetch" type="button">get credential</button>
+      </div>`;
+  } else {
+    guidance = `
+      <p class="meta">Copy the value from the window that opened -
+        it's picked up automatically, or paste it below.</p>`;
+  }
+
   overlay.innerHTML = `
     <div class="modal">
       <h3>${esc(def.label)}</h3>
-      ${
-        twoStep
-          ? `<p class="meta">1. Sign in on the window that opened.
-               2. Press <strong>get credential</strong>. 3. Copy the value -
-               it's picked up automatically, or paste it below.</p>
-             <div class="button-row">
-               <button data-role="login" type="button">sign in</button>
-               <button data-role="fetch" type="button">get credential</button>
-             </div>`
-          : `<p class="meta">Copy the value from the window that opened -
-               it's picked up automatically, or paste it below.</p>`
-      }
+      ${guidance}
       <label>${esc(def.credentialLabel)}</label>
-      <input type="text" data-role="manual" autocomplete="off" />
+      ${
+        hint
+          ? `<textarea data-role="manual" rows="4" spellcheck="false"></textarea>`
+          : `<input type="text" data-role="manual" autocomplete="off" />`
+      }
       <p class="status-line error" data-role="err"></p>
       <div class="modal-actions">
         <button data-role="cancel">cancel</button>
