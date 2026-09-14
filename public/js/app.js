@@ -8,6 +8,7 @@ import {
 import * as connections from "./views/connections.js";
 import * as search from "./views/search.js";
 import * as game from "./views/game.js";
+import * as media from "./views/media.js";
 import * as apiConsole from "./views/console.js";
 import { onNavigate } from "./navigate.js";
 
@@ -18,6 +19,7 @@ const VIEWS = {
   console: apiConsole,
   search,
   game,
+  media,
 };
 
 const el = {
@@ -52,9 +54,10 @@ async function applySession(session) {
     // Landing on a shared or refreshed URL should show the tab it describes.
     // Selected *before* mounting, because those views restore themselves with
     // a network round trip and the wrong tab must not be visible meanwhile.
-    // `game` wins over `q`: it is the more specific request.
+    // Most specific request wins.
     const params = new URLSearchParams(location.search);
-    if (params.has("game")) selectTab("game");
+    if (params.has("media")) selectTab("media");
+    else if (params.has("game")) selectTab("game");
     else if (params.has("q")) selectTab("search");
 
     for (const [id, view] of Object.entries(VIEWS)) {
@@ -64,11 +67,19 @@ async function applySession(session) {
 }
 
 function selectTab(view) {
-  document.querySelector(`nav.tabs button[data-view="${view}"]`)?.click();
+  const button = document.querySelector(`nav.tabs button[data-view="${view}"]`);
+  if (!button) return;
+  // Media has no tab of its own until a game sends you there. Once it has, it
+  // stays visible so you can step back into it.
+  button.classList.remove("hidden");
+  button.click();
 }
 
 function wireTabs() {
   const buttons = document.querySelectorAll("nav.tabs button");
+  const mediaButton = document.querySelector(
+    'nav.tabs button[data-view="media"]',
+  );
   buttons.forEach((btn) => {
     btn.addEventListener("click", () => {
       buttons.forEach((b) =>
@@ -79,6 +90,9 @@ function wireTabs() {
           .getElementById(`view-${id}`)
           .classList.toggle("hidden", btn.dataset.view !== id);
       }
+      // The media picker is a detour, not a destination: the moment you step
+      // anywhere else, its tab closes behind you.
+      if (btn.dataset.view !== "media") mediaButton?.classList.add("hidden");
     });
   });
 }

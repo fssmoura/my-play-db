@@ -227,7 +227,9 @@ const GAME_FIELDS = [
   "involved_companies.developer,involved_companies.publisher",
   "collections.id,collections.name,franchises.id,franchises.name",
   "websites.url,websites.type",
-  "external_games.uid,external_games.external_game_source",
+  // `name` is the store's own title, which is how a game with several Steam
+  // ids (base game, "- Multiplayer", a playtest) can be told apart.
+  "external_games.uid,external_games.name,external_games.external_game_source",
   "bundles,dlcs,expanded_games,expansions,remakes,remasters",
   "standalone_expansions,similar_games",
   "parent_game.name,parent_game.slug,parent_game.game_type",

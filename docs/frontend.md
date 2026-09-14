@@ -129,6 +129,56 @@ Four tabs behind a Google login gate: **Connections**, **API console**,
   `game` action returns them; see
   [database.md](database.md#cache_game_details).
 
+### Artwork matching
+
+`sgdb-match.js` and `sgdb.js` answer one question: which SteamGridDB entry is
+this IGDB game? `sgdb-match.js` is pure and holds all the judgement;
+`sgdb.js` does the fetching.
+
+The rule is one game to one entry, or nothing. A DLC must not fall back to the
+game it belongs to, and an edition must not fall back to the base game, because
+each has its own artwork. "No match" is a normal answer - SteamGridDB is a
+community art library, not a catalogue. The reasoning behind every threshold is
+in the file's own comments; the API side is in
+[api.md](api.md#matching-igdb-games-to-sgdb-entries).
+
+### The media picker (`views/media.js`)
+
+A tab with no tab. `#view-media` and its button exist in the HTML, but the
+button is hidden until a game page sends you there, so the only way in is the
+"Select media" button. `selectTab()` in `app.js` unhides it on arrival.
+
+It is reached as `?media=<igdb id>`, which is also why `app.js` checks for
+`media` before `game` when restoring a URL.
+
+What it does:
+
+- Resolves the SteamGridDB match once and stores it in `games.sgdb_id`. A
+  stored id is never re-checked.
+- Always offers a **SteamGridDB id field**. That is both the escape hatch when
+  matching finds nothing and the deliberate way to link a release to artwork
+  that belongs to a different entry - a console edition borrowing the base
+  release's art, say.
+- Four subtabs: Cover, Logo, Banner, Review. Each of the first three shows
+  **everything** SteamGridDB holds for that type, unfiltered. No size, style or
+  content filter, on purpose.
+- Fetches page by page and draws each page as it lands, with placeholder tiles
+  underneath while more is coming. A popular game has several hundred images
+  and waiting for the last one before showing the first would look broken.
+- Draws thumbnails, saves full-size URLs.
+- The grid-size slider changes how many images fit across, not the size of any
+  image. It swaps between five size classes rather than setting a width,
+  because JavaScript here never writes styles.
+
+Saving calls `saveChosenArt()`, which moves each chosen URL to the front of its
+column and leaves everything already there behind it. See
+[database.md](database.md#games-columns) for why the front of the array is the
+choice.
+
+The picker is a detour, not a destination. Saving returns to the game page,
+"Back to game" cancels, and stepping to any other tab closes the Media tab
+behind you - reopening it always starts from the game page's button.
+
 ### Built to be replaced
 
 This UI is scaffolding. The real design will be produced separately and
@@ -140,12 +190,12 @@ untouched:
 
 `api.js` `vault.js` `session.js` `platforms.js` `credentials.js` `connect.js`
 `refresh.js` `schemas.js` `search.js` `game.js` `games-cache.js` `ranking.js`
-`navigate.js` `config.js` `supabase.js`
+`sgdb.js` `sgdb-match.js` `navigate.js` `config.js` `supabase.js`
 
 **Presentation** - throwaway, rewrite freely:
 
 `app.js` `views/connections.js` `views/console.js` `views/search.js`
-`views/game.js` `index.html` `app.css`
+`views/game.js` `views/media.js` `index.html` `app.css`
 
 A different UI should be able to import the first group unchanged and get every
 behaviour - connecting a platform, storing and refreshing tokens, calling any

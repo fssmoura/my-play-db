@@ -38,6 +38,11 @@
         <button data-view="console" aria-selected="false">API console</button>
         <button data-view="search" aria-selected="false">Search</button>
         <button data-view="game" aria-selected="false">Game</button>
+        <!-- Only reachable from a game page's "Select media" button, so it
+             stays hidden until you have been there. -->
+        <button data-view="media" aria-selected="false" class="hidden">
+          Media
+        </button>
       </nav>
 
       <main>
@@ -45,6 +50,7 @@
         <section id="view-console" class="hidden"></section>
         <section id="view-search" class="hidden"></section>
         <section id="view-game" class="hidden"></section>
+        <section id="view-media" class="hidden"></section>
       </main>
     </div>
 

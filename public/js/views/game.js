@@ -80,9 +80,6 @@ const SECTIONS = [
   {
     title: "Media",
     fields: [
-      ["cover", "Cover", IMAGES],
-      ["banner", "Banner (PSN only)", IMAGES],
-      ["logo", "Logo (PSN only)", IMAGES],
       ["screenshots", "Screenshots", IMAGES],
       ["artworks", "Artworks", IMAGES],
       ["videos", "Videos", JSON_ROWS],
@@ -187,8 +184,35 @@ function renderMessage(text, isError = false) {
   el().innerHTML = `<p class="meta ${isError ? "error" : ""}">${escapeHtml(text)}</p>`;
 }
 
+/**
+ * The three images that make up a game's identity, as opposed to the
+ * screenshots and artworks that are part of its detail. Each shows the first
+ * entry of its column, which is by definition the chosen one.
+ */
+const ART = [
+  ["cover", "Cover"],
+  ["logo", "Logo"],
+  ["banner", "Banner"],
+];
+
+function renderArt(row) {
+  return ART.map(([column, label]) => {
+    const url = row[column]?.[0];
+    const frame = url
+      ? `<a class="game-art-frame" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">
+           <img src="${escapeHtml(url)}" alt="" loading="lazy" />
+         </a>`
+      : `<div class="game-art-frame"><span class="meta">none</span></div>`;
+
+    return `
+      <figure class="game-art is-${column}">
+        ${frame}
+        <figcaption class="meta">${label}</figcaption>
+      </figure>`;
+  }).join("");
+}
+
 function renderGame(row, source, stale) {
-  const cover = row.cover?.[0];
   const age = row.fully_synced_at
     ? describeAge(Date.now() - new Date(row.fully_synced_at).getTime())
     : null;
@@ -201,13 +225,7 @@ function renderGame(row, source, stale) {
 
   el().innerHTML = `
     <header class="game-head">
-      <div class="game-cover">
-        ${
-          cover
-            ? `<img src="${escapeHtml(cover)}" alt="" />`
-            : `<span class="meta">no art</span>`
-        }
-      </div>
+      <div class="game-artset">${renderArt(row)}</div>
       <div class="game-head-body">
         <h2>${escapeHtml(row.name ?? "(no name)")}</h2>
         <p class="meta">
@@ -215,7 +233,10 @@ function renderGame(row, source, stale) {
           ${row.first_release_date ? ` &middot; ${new Date(row.first_release_date * 1000).getFullYear()}` : ""}
         </p>
         <p class="meta ${stale ? "error" : ""}">${escapeHtml(status)}</p>
-        <button type="button" id="g-refresh">Force refresh</button>
+        <div class="button-row">
+          <button type="button" id="g-refresh">Force refresh</button>
+          <button type="button" id="g-media">Select media</button>
+        </div>
       </div>
     </header>
 
@@ -233,6 +254,10 @@ function renderGame(row, source, stale) {
         renderMessage(error.message, true);
       }
     });
+
+  el()
+    .querySelector("#g-media")
+    ?.addEventListener("click", () => go("media", { media: row.id }));
 
   el()
     .querySelectorAll("[data-game-id]")

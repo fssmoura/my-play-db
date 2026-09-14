@@ -15,7 +15,19 @@ async function sgdbFetch(path) {
   return res.json();
 }
 
-const DEFAULT_FILTERS = { nsfw: "any", humor: "any", epilepsy: "any" };
+/**
+ * Filters applied to every asset query unless overridden.
+ *
+ * `types` has to be spelled out: SteamGridDB's own default is static images
+ * only, so leaving it off silently hides every animated cover, logo and hero.
+ * Bloodborne alone has nine of them.
+ */
+const DEFAULT_FILTERS = {
+  types: "static,animated",
+  nsfw: "any",
+  humor: "any",
+  epilepsy: "any",
+};
 
 function buildQuery(filters) {
   if (!filters || typeof filters !== "object") return "";
@@ -33,14 +45,55 @@ function buildQuery(filters) {
 
 const IMAGE_FIELDS = ({
   id,
+  score,
+  style,
   width,
   height,
   nsfw,
   humor,
+  epilepsy,
   mime,
+  language,
   url,
   thumb,
-}) => ({ id, width, height, nsfw, humor, mime, url, thumb });
+  upvotes,
+  downvotes,
+  author,
+}) => ({
+  id,
+  score,
+  style,
+  width,
+  height,
+  nsfw,
+  humor,
+  epilepsy,
+  mime,
+  language,
+  url,
+  thumb,
+  upvotes,
+  downvotes,
+  author: author ? { name: author.name, avatar: author.avatar } : null,
+});
+
+/**
+ * Trims a SGDB game record.
+ *
+ * `types` and `verified` are kept because they are the only two signals SGDB
+ * gives for "is this the real entry": `types` lists which store bridges the
+ * entry has (an empty array means console-only, so no id lookup can ever reach
+ * it), and `verified` marks curated entries.
+ */
+const GAME_FIELDS = (game) => {
+  if (!game) return null;
+  const { id, name, release_date, types, verified, external_platform_data } =
+    game;
+  const out = { id, name, release_date, types, verified };
+  if (external_platform_data)
+    out.external_platform_data = external_platform_data;
+  return out;
+};
 
 const actions = {
   async search(options = {}) {
@@ -49,24 +102,27 @@ const actions = {
     const data = await sgdbFetch(
       `/search/autocomplete/${encodeURIComponent(name)}`,
     );
-    return data.data.map(({ id, name, release_date }) => ({
-      id,
-      name,
-      release_date,
-    }));
+    return (data.data ?? []).map(GAME_FIELDS);
   },
 
   async game(options = {}) {
-    const { sgdbId, platform, platformId } = options;
+    const { sgdbId, platform, platformId, platformdata } = options;
+    // `platformdata` makes SGDB return the entry's own store ids, which is how
+    // a name-based match can be confirmed against an id we already know.
+    const qs = platformdata
+      ? `?platformdata=${encodeURIComponent(
+          Array.isArray(platformdata) ? platformdata.join(",") : platformdata,
+        )}`
+      : "";
     if (sgdbId) {
-      const data = await sgdbFetch(`/games/id/${sgdbId}`);
-      return data.data;
+      const data = await sgdbFetch(`/games/id/${sgdbId}${qs}`);
+      return GAME_FIELDS(data.data);
     }
     if (platform && platformId) {
       const data = await sgdbFetch(
-        `/games/${platform}/${encodeURIComponent(platformId)}`,
+        `/games/${platform}/${encodeURIComponent(platformId)}${qs}`,
       );
-      return data.data;
+      return GAME_FIELDS(data.data);
     }
     throw new Error("sgdbId or { platform, platformId } is required");
   },

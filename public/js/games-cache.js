@@ -351,3 +351,69 @@ export async function saveGameDetails(game) {
   lookups.clear();
   return data ?? 0;
 }
+
+/* ------------------------------------------------------------------- art -- */
+
+/** The three image columns a game's identity is made of. */
+export const ART_COLUMNS = ["cover", "logo", "banner"];
+
+/** Records which SteamGridDB entry a game maps to. `null` clears it. */
+export async function saveSgdbId(id, sgdbId) {
+  const { error } = await supabase
+    .from("games")
+    .update({ sgdb_id: sgdbId == null ? null : Number(sgdbId) })
+    .eq("id", Number(id));
+  if (error) throw error;
+}
+
+/**
+ * Moves a chosen URL to the front of its column, keeping everything else.
+ *
+ * Front of the array *is* the choice. The page shows the first entry, and
+ * `merge_image_array()` - the database function behind every detail sync -
+ * preserves the order it finds and only appends URLs it has not seen. So a URL
+ * put first stays first through every future sync, with no flag to store and
+ * no column to add.
+ *
+ * Nothing is ever removed. The old images stay behind the chosen one, which is
+ * what makes the choice reversible and leaves the door open to a screen that
+ * picks between all of them. Where each URL came from is readable from its
+ * address - `images.igdb.com`, `image.api.playstation.com`,
+ * `cdn2.steamgriddb.com` - so provenance needs no storing either.
+ */
+export function promote(list, url) {
+  if (!url) return list ?? null;
+  const rest = (list ?? []).filter((item) => item !== url);
+  return [url, ...rest];
+}
+
+/**
+ * Saves the chosen cover, logo and/or banner for one game.
+ *
+ * Takes `{ cover, logo, banner }` where a missing or null key means "leave that
+ * one alone". Returns the columns it actually wrote.
+ */
+export async function saveChosenArt(id, picks = {}) {
+  const row = await loadGame(id);
+  if (!row) throw new Error(`No cached game with id ${id}`);
+
+  const patch = {};
+  for (const column of ART_COLUMNS) {
+    const url = picks[column];
+    if (!url) continue;
+    if (row[column]?.[0] === url) continue;
+    patch[column] = promote(row[column], url);
+  }
+
+  const written = Object.keys(patch);
+  if (!written.length) return written;
+
+  const { error } = await supabase
+    .from("games")
+    .update(patch)
+    .eq("id", Number(id));
+  if (error) throw error;
+
+  lookups.clear();
+  return written;
+}
