@@ -412,8 +412,15 @@ function paint(key) {
  * previews run to several megabytes apiece. That flood fills the browser's per
  * host connection pool, and while it drains, images on every other tab stall
  * with it.
+ *
+ * Reduced motion is respected: with the system setting on, videos load their
+ * first frame and stay still.
  */
 let mediaObserver = null;
+
+/** Whether the system asks for stillness instead of motion. */
+const calmMotion = () =>
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 function observeTiles(grid) {
   mediaObserver ??= new IntersectionObserver(
@@ -425,7 +432,7 @@ function observeTiles(grid) {
             if (!media.getAttribute("src")) {
               media.src = media.dataset.src;
             }
-            media.play().catch(() => {});
+            if (!calmMotion()) media.play().catch(() => {});
           } else if (!media.getAttribute("src")) {
             media.src = media.dataset.src;
           }

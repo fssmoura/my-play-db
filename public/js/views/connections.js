@@ -298,7 +298,10 @@ async function saveEdit(id) {
 }
 
 function setStatus(msg, isError = false) {
-  statusMsg = { text: msg ?? "", isError };
+  // Errors share the status line's look, so they say so in words.
+  const text =
+    isError && !/^error:/i.test(msg ?? "") ? `Error: ${msg}` : (msg ?? "");
+  statusMsg = { text, isError };
   const el = root?.querySelector("#conn-status");
   if (!el) return;
   el.textContent = statusMsg.text;

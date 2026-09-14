@@ -566,7 +566,9 @@ async function restoreFromUrl() {
 
 function setStatus(text, isError = false) {
   const node = el("#s-status");
-  node.textContent = text;
+  // Errors share the status line's look, so they say so in words.
+  node.textContent =
+    isError && !/^error:/i.test(text) ? `Error: ${text}` : text;
   node.classList.toggle("error", isError);
 }
 
