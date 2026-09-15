@@ -286,4 +286,8 @@ export const KEYLESS_PLATFORMS = {
     label: "SteamGridDB",
     actions: ["search", "game", "grids", "heroes", "logos"],
   },
+  hltb: {
+    label: "HowLongToBeat",
+    actions: ["auth", "search", "game", "reset"],
+  },
 };

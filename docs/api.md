@@ -368,3 +368,57 @@ Only Steam and Epic bridge. SGDB also accepts origin, uplay, bnet, flashpoint an
 **The year is a much stronger signal than it looks.** Measured across 187 games matched by Steam ID, so the match was certain: the year agreed exactly in 97.3% of cases, was one out in 2.1%, and the worst case in the whole sample was three. It never reached four. That is why a large year gap is treated as evidence of a different game rather than as noise.
 
 > Detailed API responses, field observations, data flows, and sync patterns for all handlers are in [`api-responses.md`](api-responses.md).
+
+## API (api/hltb.js)
+
+POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app. No API key, and none to add - there is nothing to sign up for.
+
+**There is no HowLongToBeat API.** HLTB has been an IGN Entertainment brand since 2019, publishes no developer documentation, and IGN's terms of use explicitly forbid automated retrieval. What exists is the internal endpoint HLTB's own front end calls, and that is what this handler talks to. Treat that as a standing caveat on everything below: it is not a contract, nobody owes us its stability, and it changes without notice.
+
+The logic is ported from the HLTB for Deck plugin (MIT, `github.com/morwy/hltb-for-deck`, `src/hooks/HltbApi.ts`) - the only implementation still maintained against HLTB's current defences. Keeping the structure close to that file is deliberate: when HLTB changes something, their fix can be read across directly. The abandoned original of that same plugin (`hulkrelax/hltb-for-deck`) returns 403 today, and every dead HLTB package on npm died the same way.
+
+### The three moving parts
+
+1. **The path rotates.** It has been `/api/search`, `/api/find`, `/api/seek`, `/api/bleed`, and is `/api/search/site` today. It is **discovered at runtime** by reading HLTB's homepage, fetching each of its script bundles, and finding the one that POSTs to `/api/...` near the strings `searchTerms` and `searchOptions`. `DEFAULT_SEARCH_PATH` is a last-resort fallback, not the primary route. **Never hardcode this.**
+2. **A token, per-use.** `GET <path>/init?t=<ms>` returns `{ token, hpKey, hpVal }`. All three go on the search request as `x-auth-token`, `x-hp-key` and `x-hp-val`.
+3. **A Next.js build id**, scraped from the `_buildManifest.js` / `_ssgManifest.js` script URL, needed for the per-game detail read.
+
+### Traps, all measured
+
+- **The body must repeat the token pair under a field named by `hpKey`'s VALUE.** The field is literally called something like `ign_5adbe3f6`, not `"hpKey"`. **Getting the field name wrong returns 404, not 403** - which is badly misleading, because a 404 looks exactly like a moved route and invites a pointless re-discovery. This cost real debugging time: everything else was correct and the endpoint simply denied existing.
+- **The token is bound to the requesting IP and User-Agent.** It is encoded in the token itself, in plain sight - base64-decode one and you get `<timestamp>::<ip>|<user-agent>|<hpKey>|<hmac>`. So `USER_AGENT` is a fixed constant and must stay identical between the `/init` call and the search call. Randomising it invalidates the token.
+- **Sending no User-Agent at all returns 403.** Confirmed by bisection.
+- **`profile_steam` is null in search results.** It only appears on the detail page, which is why confirming a match by Steam ID costs one extra request per candidate.
+- **`release_world` has two different types.** Search returns a bare year (`2022`); the detail page returns a full date (`"2022-02-25"`). `candidateYear()` in `hltb-match.js` handles both - a caller mixing them is otherwise an invisible bug.
+- **Times are in SECONDS.** Elden Ring's main story is `216329`, not `60.1`. Converting to hours is presentation and happens at render time. Only `comp_main`, `comp_plus` and `comp_100` are stored; see [`database.md`](database.md) for why `comp_all` and the submission counts are not.
+
+### Recovery
+
+Any non-200 on search walks a three-rung ladder, cheapest first: reuse the current token, mint a fresh one, then throw away the discovered path as well and start over. HLTB answers an expired token with a bare 403, so retrying is the only way to tell "expired" from "genuinely broken". The detail read has its own smaller version of this for a rotated build id, which presents as a 404.
+
+Discovered values are cached in module scope for 30 minutes (path, build id) and 5 minutes (token), surviving only while a serverless instance stays warm.
+
+| Action   | Params              | Returns                                                                                                                                                                       |
+| -------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`   | -                   | { searchPath, discovered, buildId, token, hpKey, hpVal } - diagnostic only                                                                                                    |
+| `search` | name [, page, size] | [{ game_id, game_name, game_alias, game_type, release_world (year), profile_platform, profile_steam (always null), comp_main, comp_plus, comp_100, comp_all, + _count each }] |
+| `game`   | hltbId              | { game_id, game_name, game_alias, game_type, release_world (date), profile_platform, profile_dev, profile_steam, comp_* , comp_*_count } or null when HLTB has no such id     |
+| `reset`  | -                   | { reset: true } - forgets the discovered path, token and build id                                                                                                             |
+
+`discovered: false` from `auth` means path discovery failed and the fallback is in use. That is the first thing to check when this stops working, and `reset` forces a re-discovery without waiting for the cache to expire.
+
+`search` sends an empty `modifier` rather than the plugin's `hide_dlc`. The plugin is matching a game someone is demonstrably playing, so hiding DLC is safe for it; this library holds DLC and expansions as entries in their own right and each needs to find its own record.
+
+### Matching IGDB games to HLTB entries
+
+The handler stays 1:1 with HLTB. Matching lives in `public/js/hltb-match.js` (pure) and `public/js/hltb.js` (fetching and freshness). It reuses the scoring from `sgdb-match.js` rather than duplicating it - sequels, editions and remasters are the same problem in both places, and two copies would drift.
+
+**The Decky plugin always returns something**; when nothing matches it falls back to the smallest edit distance. That is reasonable on a Steam Deck and wrong here, where DLC and special editions sit directly beside their base games. **No match is a valid answer**, and a blank playtime is honest where a wrong one is indistinguishable from a right one.
+
+Evidence, in order:
+
+- **Steam ID.** HLTB's `profile_steam` against IGDB's Steam appids. The only signal here that is not a guess. Costs one detail request per candidate checked, capped at 4, and only candidates already plausible on name are opened.
+- **Name and year**, scored, with the `sgdb-match.js` penalties plus one addition: an **add-on category conflict** (IGDB type 1/2/4/6/7 against HLTB's `game_type: "dlc"`) multiplies the name score by 0.6. Name scoring alone cannot catch DLC that is named nothing like its parent.
+- **Nothing**, and often.
+
+Measured across 9 games chosen as the awkward cases, at 1-2 requests each: Elden Ring, Hades (2020), Hades II and Spider-Man Remastered all resolved exactly by Steam ID; Shadow of the Erdtree and Phantom Liberty each found their **own** DLC entry rather than their base game; Spider-Man and Cyberpunk 2077 resolved by name; and the 1995 "Hades" correctly returned **no match** rather than taking Supergiant's.

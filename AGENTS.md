@@ -141,6 +141,7 @@ Browser (ES module)  POST /api/psn    Vercel serverless  psn-api  PlayStation Ne
                      POST /api/ea     Vercel serverless  https    EA GraphQL + REST APIs
                       POST /api/igdb   Vercel serverless  https    IGDB v4 (Twitch-backed)
                       POST /api/sgdb  Vercel serverless  https    SteamGridDB v2 (community game art)
+                      POST /api/hltb  Vercel serverless  https    HowLongToBeat (undocumented, scraped)
 ```
 
 ```
@@ -157,6 +158,7 @@ my-play-db/
     ea.js                  # EA handler - 3 actions
     igdb.js                # IGDB handler - 4 actions
     sgdb.js                # SteamGridDB handler - 5 actions
+    hltb.js                # HowLongToBeat handler - 4 actions (scraped, fragile)
   public/
     index.html             # app shell: login gate + tabs
     steam-callback.html    # bare Steam OpenID return target
@@ -176,7 +178,9 @@ my-play-db/
       schemas.js             # per-action parameter definitions for the console
       ranking.js             # pure search ranking/merging/paging logic
       sgdb-match.js          # pure IGDB->SteamGridDB matching rules
-      sgdb.js                # SteamGridDB lookup orchestration (not wired to a view)
+      sgdb.js                # SteamGridDB lookup orchestration (used by views/media.js)
+      hltb-match.js          # pure IGDB->HowLongToBeat matching rules
+      hltb.js                # HowLongToBeat lookup + weekly playtime refresh
       games-cache.js         # `games` table: search cache + single-game read/write
       search.js              # search orchestration: DB head start + IGDB, cached
       game.js                # one game: daily freshness rule + IGDB pull
@@ -231,6 +235,29 @@ the linked doc - this list exists so they cannot be missed.
   access only; profile data belongs in a future `platform_profiles` table.
 - `api/_platform-refresh.js` duplicates the token mapping from
   `psn.js`/`epic.js`/`xbox.js`/`ea.js`. Change one, change the other.
+
+**HowLongToBeat**
+
+- **HLTB has no API. `api/hltb.js` is a scraper, and it will break.** Ported
+  from the HLTB for Deck plugin (MIT), which is the only implementation still
+  maintained against HLTB's defences. When it breaks, read that project's
+  recent commits first - they have almost certainly already fixed it.
+- **Never hardcode HLTB's endpoint path.** It has moved four times in three
+  years and is discovered at runtime from HLTB's own homepage. Hardcoding is
+  how every dead HLTB library on npm died, including the abandoned original of
+  the plugin this is ported from.
+- **The search body must repeat the token value under a field named by
+  `hpKey`'s VALUE** (literally `ign_5adbe3f6`, not `"hpKey"`). Getting that name
+  wrong returns **404, not 403** - which looks exactly like a moved route and
+  sends you re-discovering a path that was never wrong.
+- **The token is bound to the requesting IP and User-Agent**, both encoded
+  inside it. `USER_AGENT` must stay a fixed constant across the init and search
+  calls, and sending none at all is a 403.
+- **`profile_steam` is null in search results** - it only exists on the detail
+  page, which is why proving a match costs an extra request per candidate.
+- **`release_world` is a year from `search` and a full date from `game`.**
+  Mixing them is an invisible bug; `candidateYear()` handles both.
+- Times are **seconds**. Hours are a rendering concern.
 
 **Database**
 
@@ -290,6 +317,12 @@ the linked doc - this list exists so they cannot be missed.
   base game's artwork and an edition must never inherit the base game's -
   they are separate entries with separate art. Loosening the matching to raise
   the hit rate is how the wrong cover ends up on a page.
+- **The same applies to HowLongToBeat, and harder.** A blank playtime is
+  honest; a wrong one is indistinguishable from a right one. The plugin this
+  is ported from always returns its nearest guess - ours deliberately does not.
+- **A missing playtime must render as a blank space, never an error.** HLTB
+  will be down periodically and `getPlaytimes()` never throws; anything that
+  turns a null into a visible failure defeats the point.
 
 ## Reference docs
 

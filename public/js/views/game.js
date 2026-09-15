@@ -10,6 +10,12 @@
  * All data decisions live in `game.js`. This file only draws.
  */
 import { getGame } from "../game.js";
+import {
+  getPlaytimes,
+  saveHltbId,
+  formatPlaytime,
+  PLAYTIME_FIELDS,
+} from "../hltb.js";
 import { gameTypeLabel } from "../ranking.js";
 import { go, onNavigate } from "../navigate.js";
 
@@ -119,6 +125,7 @@ const SECTIONS = [
     fields: [
       ["synced_at", "Last touched", STAMP],
       ["fully_synced_at", "Last full sync", STAMP],
+      ["hltb_synced_at", "Last HLTB check", STAMP],
     ],
   },
 ];
@@ -236,11 +243,12 @@ function renderGame(row, source, stale) {
         <div class="button-row">
           <button type="button" id="g-refresh">Force refresh</button>
           <button type="button" id="g-media">Select media</button>
+          <button type="button" id="g-hltb-refresh">Refresh playtimes</button>
         </div>
       </div>
     </header>
 
-    ${SECTIONS.map((section) => renderSection(row, section)).join("")}
+    ${renderSections(row)}
   `;
 
   el()
@@ -267,6 +275,161 @@ function renderGame(row, source, stale) {
         open(node.dataset.gameId);
       }),
     );
+
+  el()
+    .querySelector("#g-hltb-refresh")
+    ?.addEventListener("click", () => hydrateHltb(row, { force: true }));
+
+  // Deliberately not awaited: playtimes come from a scraped, sometimes slow
+  // source and must never hold up the rest of the page.
+  hydrateHltb(row);
+}
+
+/**
+ * Every section in order, with HowLongToBeat sitting after Description.
+ *
+ * It is not part of SECTIONS because it is not a column of `games` - it is
+ * filled in asynchronously after the page has painted. Third place because
+ * that is where it reads naturally: what the game is, what it is about, how
+ * long it takes.
+ */
+function renderSections(row) {
+  const rendered = SECTIONS.map((section) => renderSection(row, section));
+  rendered.splice(
+    2,
+    0,
+    `
+    <section class="game-section" id="g-hltb">
+      <h3>HowLongToBeat</h3>
+      <div id="g-hltb-body"><p class="meta">Checking&hellip;</p></div>
+    </section>`,
+  );
+  return rendered.join("");
+}
+
+/* ----------------------------------------------------------- howlongtobeat -- */
+
+/**
+ * Fills in the HowLongToBeat section after the page has already painted.
+ *
+ * Separate from the rest of the render because it is the only part of this page
+ * that may go to the network, may be slow, and may come back with nothing. None
+ * of those are failures: HLTB does not have every game, and it will be down
+ * from time to time. The section always shows all three figures, blank where
+ * there is no answer, so a missing playtime looks like a missing playtime
+ * rather than something broken.
+ */
+let hltbSequence = 0;
+
+/**
+ * The last answer, kept so the section can be redrawn without going back to the
+ * network - which is what opening and closing the id control does.
+ */
+let hltbResult = null;
+
+/** Whether the manual id control is expanded. Collapsed by default. */
+let hltbEditing = false;
+
+async function hydrateHltb(row, opts = {}) {
+  const mine = ++hltbSequence;
+  const body = () => el().querySelector("#g-hltb-body");
+  if (!body()) return;
+
+  if (opts.force) body().innerHTML = `<p class="meta">Checking&hellip;</p>`;
+
+  let result;
+  try {
+    result = await getPlaytimes(row, opts);
+  } catch {
+    // getPlaytimes does not throw, but a caller must never depend on that.
+    result = { times: null, hltbId: row.hltb_id ?? null, error: null };
+  }
+
+  if (mine !== hltbSequence) return;
+  hltbResult = result;
+  paintHltb(row);
+}
+
+/**
+ * Draws the section from the last answer and wires its controls.
+ *
+ * Redrawing wholesale rather than showing and hiding the id control: an earlier
+ * version toggled a `hidden` attribute on it, which does nothing at all to a
+ * flex row, so the button appeared to be broken. Re-rendering cannot fail that
+ * way.
+ */
+function paintHltb(row) {
+  const target = el().querySelector("#g-hltb-body");
+  if (!target || !hltbResult) return;
+
+  target.innerHTML = renderHltb(hltbResult);
+
+  target.querySelector("#g-hltb-edit")?.addEventListener("click", () => {
+    hltbEditing = true;
+    paintHltb(row);
+    target.querySelector("#g-hltb-id")?.focus();
+  });
+
+  target.querySelector("#g-hltb-cancel")?.addEventListener("click", () => {
+    hltbEditing = false;
+    paintHltb(row);
+  });
+
+  target.querySelector("#g-hltb-save")?.addEventListener("click", async () => {
+    const raw = target.querySelector("#g-hltb-id")?.value.trim();
+    const id = raw === "" ? null : Number(raw);
+    if (raw !== "" && !Number.isFinite(id)) return;
+    target.innerHTML = `<p class="meta">Saving&hellip;</p>`;
+    try {
+      await saveHltbId(row.id, id);
+      // The row in hand still holds the old id, so correct it rather than
+      // re-reading the whole game.
+      row.hltb_id = id;
+      row.hltb_synced_at = null;
+      hltbEditing = false;
+      await hydrateHltb(row, { force: true });
+    } catch (error) {
+      target.innerHTML = `<p class="meta error">${escapeHtml(error.message)}</p>`;
+    }
+  });
+}
+
+/**
+ * Drawn with the same label/value grid as every other section, on purpose.
+ *
+ * An earlier version used highlighted boxes for the three figures, which made
+ * playtimes look more important than the rest of the record simply because they
+ * were newer. This page is a wireframe onto what the database holds, and HLTB
+ * data is not special.
+ *
+ * "When was this last checked" is deliberately absent - it is already in
+ * Bookkeeping as `Last HLTB check`, alongside the other two sync clocks, which
+ * is where someone would look for it.
+ */
+function renderHltb({ times, hltbId }) {
+  const rows = PLAYTIME_FIELDS.map(([key, label]) =>
+    field(label, formatPlaytime(times?.[key])),
+  ).join("");
+
+  const control = hltbEditing
+    ? `<input type="text" id="g-hltb-id" inputmode="numeric" placeholder="HLTB id"
+              value="${hltbId == null ? "" : Number(hltbId)}" />
+       <button type="button" id="g-hltb-save">Save</button>
+       <button type="button" id="g-hltb-cancel">Cancel</button>`
+    : `<button type="button" id="g-hltb-edit">Set HLTB id</button>`;
+
+  return `
+    <dl class="game-fields">${rows}</dl>
+    <div class="button-row spaced-top">${control}</div>`;
+}
+
+/** One label/value row, matching `renderSection`. */
+function field(label, value) {
+  return `
+    <div class="game-field ${value == null ? "is-empty" : ""}">
+      <dt>${escapeHtml(label)}</dt>
+      <dd>${value == null ? `<span class="meta">&mdash;</span>` : value}</dd>
+    </div>`;
 }
 
 function renderSection(row, section) {

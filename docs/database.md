@@ -64,6 +64,9 @@ Supabase (Postgres). Three tables: `games`, `player_games`, `achievements`.
 | `first_release_date`    | integer     | IGDB                 | Unix seconds. Duplicates the earliest `release_dates` entry; search returns it directly                     |
 | `name_normalized`       | text        | derived              | `normalizeName(name)` - lookup key for search, see below                                                    |
 | `sgdb_id`               | integer     | matcher or by hand   | SteamGridDB entry this game maps to. `null` = unmatched. See below                                          |
+| `hltb_id`               | integer     | matcher or by hand   | HowLongToBeat entry this game maps to. `null` = unmatched. See below                                        |
+| `hltb`                  | jsonb       | HowLongToBeat        | Completion times in **seconds**, plus a submission count per figure. See below                              |
+| `hltb_synced_at`        | timestamptz | system               | Last time HLTB was consulted, found or not. `null` = never. See below                                       |
 | `synced_at`             | timestamptz | system               | Last time this row was written **by anything**                                                              |
 | `fully_synced_at`       | timestamptz | system               | Last time the **complete** IGDB record was pulled. `null` = never, see below                                |
 
@@ -75,6 +78,27 @@ Supabase (Postgres). Three tables: `games`, `player_games`, `achievements`.
 - **Provenance is not stored, because it does not need to be.** Every URL says where it came from: `images.igdb.com`, `image.api.playstation.com`, `cdn2.steamgriddb.com`.
 
 **`sgdb_id`** is filled in the first time the media picker is opened for a game, and is trusted from then on - it is never re-checked, because it may have been set by hand. Setting it by hand is how a release SteamGridDB has no entry for (a console edition, say) can be pointed at the artwork of the release it shares its art with. `null` means unmatched, and does not distinguish "never looked" from "looked and found nothing"; re-checking costs a handful of API calls and only happens on demand.
+
+### HowLongToBeat: `hltb_id`, `hltb`, `hltb_synced_at`
+
+**`hltb_id` follows the `sgdb_id` precedent exactly**: resolved once, trusted forever, never re-searched, and settable by hand. Once we know which HLTB entry a game is, that does not change, and re-running the match would only create chances to get it wrong. Setting it by hand is how a game the matcher refused - or matched to the wrong entry - gets corrected permanently.
+
+**`hltb` holds seconds, not hours.** `{comp_main, comp_plus, comp_100}` - main story, main + extras, completionist. Converting to hours is presentation and happens at render time (`toHours()` in `public/js/hltb.js`).
+
+Two things HLTB returns are deliberately **not** stored:
+
+- **`comp_all`**, an average across all three play styles. It describes no actual way of playing the game, so it answers "how long is this" with a number nobody's playthrough will resemble.
+- **The per-figure submission counts.** They are still used while _matching_, as a tiebreak between two equally plausible entries, but that happens against live search results - nothing reads them back out of the database.
+
+**`hltb_synced_at` is a different clock from the other two, with a different rule.** `synced_at` and `fully_synced_at` track IGDB; this tracks HLTB alone, on a **7-day** interval rather than 24 hours. Completion times are running averages over thousands of submissions, so they move slowly and never jump - a week is generous, and mostly what a refresh buys is a recently-released game's figures settling as its sample grows.
+
+Three behaviours make this survive an unreliable source, and all three matter:
+
+- **A failed lookup writes nothing at all** - not the times, not the timestamp. An HLTB outage therefore looks like nothing happened, rather than a page that empties out, and it retries on the next open rather than in a week.
+- **"HLTB has no entry for this game" is a success**, and stamps `hltb_synced_at` with a `null` `hltb_id`. Without that, every page open would re-scrape a game that will never have data. So unlike `sgdb_id`, a null id here **is** distinguishable from "never looked" - check `hltb_synced_at`.
+- **Clearing `hltb_id` forces a fresh search.** `saveHltbId()` also nulls `hltb_synced_at`, so a hand-set id takes effect on the next read.
+
+A cached row that nobody owns is still pruned after 30 days along with its playtimes, the same as everything else here. Harmless - it just means an occasional re-fetch.
 
 ### `games` as a search cache
 
