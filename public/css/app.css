@@ -687,6 +687,16 @@ a.game-art-frame:focus-visible {
   gap: 0.4rem 1rem;
 }
 
+/* ---------- howlongtobeat ----------
+   Deliberately almost nothing. The section uses the same label/value grid as
+   every other section on the page; the only addition is a width for the id
+   box, which would otherwise stretch to the full column like every other
+   text input. */
+
+#g-hltb-id {
+  width: 7rem;
+}
+
 .game-field {
   display: contents;
 }

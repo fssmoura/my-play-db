@@ -337,6 +337,45 @@ export const SCHEMAS = {
     heroes: ASSET_FIELDS(),
     logos: ASSET_FIELDS({ dimensions: false }),
   },
+
+  hltb: {
+    // No parameters: reports the search path, token and build id currently
+    // discovered. The first thing to run when HowLongToBeat stops working.
+    auth: NONE,
+    search: [
+      {
+        name: "name",
+        type: "string",
+        required: true,
+        hint: "Game name to search HowLongToBeat for.",
+        placeholder: "Elden Ring",
+      },
+      {
+        name: "page",
+        type: "number",
+        default: 1,
+        hint: "Results page, 1-based.",
+      },
+      {
+        name: "size",
+        type: "number",
+        default: 20,
+        hint: "Results per page.",
+      },
+    ],
+    game: [
+      {
+        name: "hltbId",
+        type: "number",
+        required: true,
+        hint: "HowLongToBeat game id (from `search`). Only this returns the Steam appid.",
+        placeholder: "68151",
+      },
+    ],
+    // Forgets the discovered path, token and build id. Use after HLTB changes
+    // something, to avoid waiting for the cache to expire.
+    reset: NONE,
+  },
 };
 
 /** grids/heroes/logos share the same long filter list. */
