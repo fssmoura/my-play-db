@@ -226,7 +226,7 @@ export async function mountMenu() {
   nav.className = "menu";
   nav.setAttribute("aria-label", "App menu");
 
-  // Inner frame from the Figma file: the icon row, 20px gap, no padding.
+  // The icon row: two 44x44 buttons edge to edge.
   const row = document.createElement("div");
   row.className = "menu-row";
   row.append(...PILL_ITEMS.map(buildPillItem));

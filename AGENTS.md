@@ -181,6 +181,8 @@ my-play-db/
       tokens.css           # colour palette variables (new app only)
       sign-in.css          # styling for the sign-in screen
       menu.css             # styling for the app menu
+    vendor/
+      liquidGL.js          # liquid glass library, vendored and PATCHED (see Gotchas)
     lab/                   # the lab / test bench for every feature (served at /lab/); no sign-in of its own
       index.html             # lab shell: tabs (redirects to / when signed out)
       steam-callback.html    # bare Steam OpenID return target
@@ -333,6 +335,12 @@ the linked doc - this list exists so they cannot be missed.
   the relevant HIG page through the `sosumi` MCP (or a `sosumi.ai` URL) instead
   of recalling it, and follow it unless the owner says otherwise. How, and which
   pages: docs/design.md.
+- **`public/vendor/liquidGL.js` is a patched copy, not the npm package.** Six
+  changes marked `my-play-db patch` are what make the glass look right (fixed
+  rim width, smooth blur, no drifting glow, readable on bright backgrounds and
+  more). Never swap it for a CDN or npm copy, and re-apply every patch if
+  upgrading. The approved look is in docs/design.md; how it works in
+  docs/frontend.md.
 - **No inline styles (in the lab).** JavaScript writes class names only; all CSS lives in
   `public/lab/css/app.css`.
 - **`public/lab/js/schemas.js` must be kept in step with the handlers.** A new
@@ -359,7 +367,7 @@ the linked doc - this list exists so they cannot be missed.
 | [docs/api.md](docs/api.md)                     | changing a handler or adding an action                           |
 | [docs/auth.md](docs/auth.md)                   | touching sign-in, the credential vault, connect flows or refresh |
 | [docs/database.md](docs/database.md)           | adding a table or column, or writing a sync script               |
-| [docs/frontend.md](docs/frontend.md)           | changing anything under `public/lab/`                            |
+| [docs/frontend.md](docs/frontend.md)           | changing anything under `public/` (lab, sign-in screen, glass menu) |
 | [docs/api-responses.md](docs/api-responses.md) | you need a real captured response or field observation           |
 | [docs/copilot-app.md](docs/copilot-app.md)     | every conversation in the GitHub Copilot app                     |
 | [docs/design.md](docs/design.md)               | changing anything visual in the new app (not the lab)            |
