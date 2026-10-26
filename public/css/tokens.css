@@ -1,0 +1,12 @@
+/* Palette for the new app. Define colours here once; use the variables
+   everywhere else. */
+:root {
+  --white: #ffffff;
+  --light-gray: #f4f4f4;
+  --gray: #7b7b7b;
+  --dark-gray: #48484d;
+  --black: #09090b;
+  /* Not part of the palette: Apple's dark-mode systemRed, for critical
+     actions only. */
+  --destructive: #ff453a;
+}

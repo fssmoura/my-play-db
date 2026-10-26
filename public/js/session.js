@@ -1,4 +1,4 @@
-import { supabase } from "./supabase.js";
+import { supabase } from "/js/supabase.js";
 
 /** Resolves once the initial session has been restored / parsed from the URL. */
 export async function getSession() {
@@ -14,11 +14,14 @@ export function onAuthChange(handler) {
   return () => data.subscription.unsubscribe();
 }
 
-export async function signInWithGoogle() {
+export async function signInWithGoogle(next = null) {
+  const redirectTo = next
+    ? `${window.location.origin}/?next=${encodeURIComponent(next)}`
+    : `${window.location.origin}/`;
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: window.location.origin,
+      redirectTo,
       queryParams: { prompt: "select_account" },
     },
   });

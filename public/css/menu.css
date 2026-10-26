@@ -1,0 +1,199 @@
+/* =========================================================================
+   my-play-db - the top-right app menu (see public/js/menu.js).
+
+   Layout: two 44x44 buttons edge to edge, 44px tall, 22px corner radius. The pill carries no fill, stroke or shadow of its own: liquidGL draws everything. The glass effect
+   itself (refraction, dispersion, specular) is drawn by liquidGL; its
+   settings live in GLASS_CONFIG in menu.js.
+   ========================================================================= */
+
+/* One fixed container holds both lenses (pill and pull-down), as in liquidGL's demos; each lens is a plain absolutely positioned child. */
+.menu-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.menu {
+  position: absolute;
+  top: 25px;
+  right: 25px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 44px;
+  padding: 0 4px;
+  border-radius: 22px;
+  /* liquidGL writes inline pointer-events:none on its lenses. */
+  pointer-events: auto !important;
+}
+
+/* liquidGL sets pointer-events:none on its targets (pill and panel); give it back to what must be clickable. */
+.menu .menu-row,
+.menu-panel > * {
+  pointer-events: auto;
+}
+
+/* Inner frame: the buttons sit edge to edge (44x44 hit areas), above the glass canvas. */
+.menu-row {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 44px;
+}
+
+/* Icon buttons. The .menu prefix beats the generic button rules in
+   sign-in.css (padding, border, hover background). */
+.menu .menu-item {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 22px;
+  background: none;
+  color: var(--light-gray);
+  text-decoration: none;
+  opacity: 0.95;
+  cursor: pointer;
+}
+
+.menu .menu-item:hover:not(:disabled),
+.menu .menu-item:focus-visible {
+  background: none;
+  opacity: 1;
+}
+
+.menu .menu-item:focus-visible {
+  outline: 1px solid var(--gray);
+  outline-offset: -4px;
+}
+
+/* Icons are smaller than their 44px hit area (HIG: 44pt minimum target). */
+.menu .menu-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.menu-icon-fill {
+  fill: currentColor;
+}
+
+/* Faint halo so icons and labels stay readable over bright backgrounds. */
+.menu .menu-icon,
+.menu-panel-item .menu-icon {
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.35));
+}
+
+.menu-panel-label {
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
+}
+
+.menu-icon-stroke {
+  fill: none;
+  stroke: currentColor;
+  stroke-linejoin: round;
+  /* Stroke width in the icon's 48-unit viewBox; raise to thicken. */
+  stroke-width: var(--icon-stroke, 4);
+}
+
+/* ---------- pull-down panel ---------- */
+
+.menu-panel {
+  position: absolute;
+  top: 77px; /* 25px + 44px pill + 8px gap */
+  right: 25px;
+  box-sizing: border-box;
+  padding: 6px;
+  /* Concentric with the capsule rows: row radius (18) + padding (6). */
+  border-radius: 24px;
+  /* No fill, blur, rim or shadow: liquidGL draws the glass. liquidGL draws a
+     lens whenever its element has a box, so closed means display: none (not
+     visibility), and there is no scale/fade animation. */
+  display: none;
+  pointer-events: auto !important;
+}
+
+.menu-panel.is-open {
+  display: block;
+}
+.menu-panel-item {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: var(--light-gray);
+  font-size: 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* Thin divider between groups of entries. */
+.menu-panel-separator {
+  position: relative;
+  z-index: 2;
+  height: 1px;
+  margin: 6px 12px;
+  background: rgba(244, 244, 244, 0.14);
+}
+
+/* Buttons: undo the generic button look from sign-in.css. */
+button.menu-panel-item {
+  width: 100%;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Critical actions use Apple's systemRed. */
+.menu-panel-item-destructive {
+  color: var(--destructive);
+}
+
+.menu-panel-item.menu-panel-item-destructive:hover:not(:disabled),
+.menu-panel-item.menu-panel-item-destructive:focus-visible {
+  background: rgba(255, 69, 58, 0.12);
+}
+
+.menu-panel-item .menu-icon {
+  display: block;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.menu-panel-label {
+  line-height: 1;
+}
+
+.menu-panel-item:hover,
+.menu-panel-item:focus-visible {
+  background: rgba(244, 244, 244, 0.08);
+  outline: none;
+}
+
+/* Touch: rows meet the 44px minimum target. */
+@media (pointer: coarse) {
+  .menu-panel {
+    border-radius: 28px; /* 22px capsule rows + 6px padding */
+  }
+
+  .menu-panel-item {
+    height: 44px;
+  }
+}

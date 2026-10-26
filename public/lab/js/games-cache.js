@@ -29,7 +29,7 @@
  * RLS grants `authenticated` full access to `games`, so this runs in the
  * browser with no API hop, the same way `vault.js` does.
  */
-import { supabase } from "./supabase.js";
+import { supabase } from "/js/supabase.js";
 import { normalizeName, matchScore, rankGames } from "./ranking.js";
 
 /** Search-grade columns. Deliberately not the detail-only ones. */

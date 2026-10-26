@@ -1,13 +1,28 @@
 # Frontend
 
-Structure of the `public/` SPA and the styling rules. Read this before changing
-anything under `public/`.
+Structure of the lab SPA (`public/lab/`, served at `/lab/`) and the styling rules.
+**Everything in this doc describes the lab at `/lab/`**, not the new app at `/`.
+Read this before changing anything under `public/lab/`.
 
-`public/` is a vanilla ES-module SPA. No bundler, no framework, no build step -
+`public/lab/` is a vanilla ES-module SPA. No bundler, no framework, no build step -
 the browser loads the files as written, so editing them is immediate.
 
-Four tabs behind a login gate (Google, or email + password): **Connections**, **API console**,
-**Search**, **Game**.
+The lab has four tabs, shown only to a signed-in user: **Connections**, **API console**,
+**Search**, **Game**. Sign-in is not part of the lab - it is the app's single sign-in at `/`
+(see [auth.md](auth.md#gate-1---who-can-sign-in)). On boot, and whenever the session
+disappears, the lab redirects to `/?next=<its own path + query>`; "Sign out" signs out and
+goes to `/`. The lab header has a plain "Back to app" link to `/`.
+
+**The sign-in screen (not part of the lab)** is styled in the Apple design language (single 360px column, 50px rounded fields and buttons, persistent field labels, inline errors in plain words, in-button progress, Google's dark-theme button with the multicolour G on a white chip). The rules and reasons are in [design.md](design.md); it uses the palette in `public/css/tokens.css`, with `sign-in.js` handling validation, the busy state and friendly error messages.
+
+**The app menu (not part of the lab).** The main app page at `/` shows a
+top-right "liquid glass" pill menu when signed in (never on the sign-in
+screen): `public/js/menu.js` (`PILL_ITEMS` for the pill's buttons - Profile, which does nothing yet, and More - and `MENU_ITEMS` for the pull-down that More opens) and `public/css/menu.css`. The pull-down has two entries: the flask icon + "Switch Environment" linking to `/lab/`, and a red "Sign Out" (Apple's systemRed `--destructive` in `tokens.css`, a deliberate exception to the palette, for critical actions only) that signs out via `/js/session.js` and lands on `/`. Entries are data (`href` or `action`, plus `destructive` and `separatorBefore`); Sign Out sits in its own group under a thin divider. The pill is fixed 25px from the top and right; 44px tall (HIG minimum target),
+22px radius (true half-height), 4px side padding, no CSS fill/rim/blur/shadow of its own (liquidGL draws all of it). Inside, the two buttons are 44x44 hit areas edge to edge, each with a 20px light-gray icon. Pull-down rows are 36px with a mouse and 44px on touch (`pointer: coarse`); their hover/focus highlight is a full capsule, and the panel radius is concentric with it (row radius + 6px padding: 24px, 28px on touch). The glass is drawn by
+[liquidGL](https://github.com/naughtyduk/liquidGL) (npm `liquid-gl` 3.0.0, MIT, no dependencies; WebGPU, then WebGL, then a CSS fallback automatically), served from `public/vendor/liquidGL.js` (licence beside it) and loaded by `menu.js` with a dynamic `import()`. **That copy is patched:** upstream measures refraction as a fraction of the whole page snapshot, so on a long scrolling page the vertical bend grew with page length (about 6x too strong on the glass test page) and the glass looked like a flat smear. The one-line patch, in both shaders and marked `my-play-db patch`, measures the vertical bend against the page width too. A second patch adds a thin white rim light when `specular` is on (upstream's specular is only two faint glows inside the lens), and a third makes `frost` a smooth blur instead of grainy random sampling. The drop shadow is liquidGL's own (`shadow: true`), unpatched - a stronger one was tried and rejected as too prominent. A fourth patch paints the tint over the glass (normal blend) instead of multiplying, so a grey tint actually looks grey - upstream's multiply can only darken. A fifth adds a `blur` option (CSS px): the snapshot is blurred once before upload with a downsample/upsample chain (the "dual filter" blur games use), giving a smooth blur. Use it instead of `frost`, which scatters a few samples per pixel and looks grainy or doubled at any real strength; canvas `filter: blur()` was tried first and is silently ignored on the tall snapshot canvas (and missing in Safari). A sixth adds dimming: the glass always darkens what shows through by 30% (keeping its colour), and by up to a further 40% where the background is bright, so white text stays readable on anything. Re-apply all six if liquidGL is ever upgraded. It is called on the fixed `#app-menu` pill. Its settings live in one `GLASS_CONFIG` object in `menu.js` (Figma dispersion -> `aberration`, frost -> `frost`). **To tune the look:** set `HELPER = true` in `menu.js` (localhost only) to load liquidGL's helper GUI (`liquidGL-helper.js`) with live sliders; copy the values you like back into `GLASS_CONFIG`. It is off by default and never loaded in production. If the library fails to load, the pill is plain (no fill) and the buttons still work. The pull-down (`.menu-panel`, a sibling of the pill, 8px below it, right-aligned) is Apple-style: closes on outside click, Escape (focus returns to More), or choosing an entry, arrow keys move between entries, and it respects `prefers-reduced-motion`. It is a second liquidGL lens with the same `GLASS_CONFIG` (its own call, `zIndex` 2 so it stacks above the pill) and no CSS fill, blur, rim or shadow of its own. liquidGL draws a lens whenever its element has a box and writes inline `opacity`/`pointer-events` on its targets, so the panel is `display: none` when closed (no scale/fade animation, which would also misalign the lens) and `.menu-panel > *` gets `pointer-events: auto`. Colours come from the palette in `public/css/tokens.css`
+(white, light gray, gray, dark gray, black), loaded before the other new-app
+stylesheets; the lab doesn't use it. Reuse it on a new page by importing
+`mountMenu()` and linking `menu.css`.
 
 - **Connections** - one row per platform: status dot, account name, expiry
   state, and buttons for connect / refresh / edit / delete. `edit` expands the
@@ -188,9 +203,13 @@ point of the whole structure - keep it intact.
 **Reusable logic** - contains no rendering, should survive a total redesign
 untouched:
 
-`api.js` `vault.js` `session.js` `platforms.js` `credentials.js` `connect.js`
+`api.js` `vault.js` `platforms.js` `credentials.js` `connect.js`
 `refresh.js` `schemas.js` `search.js` `game.js` `games-cache.js` `ranking.js`
-`sgdb.js` `sgdb-match.js` `navigate.js` `config.js` `supabase.js`
+`sgdb.js` `sgdb-match.js` `navigate.js`
+
+The shared auth modules `config.js`, `supabase.js` and `session.js` live in
+`public/js/` (app-level, not lab) and are imported by absolute URL (`/js/...`)
+so the browser loads one copy.
 
 **Presentation** - throwaway, rewrite freely:
 
@@ -222,7 +241,7 @@ listener for the vault re-read - that one is a view, so it is allowed to.)
 
 ### Styling rules (deliberate, keep them)
 
-All CSS lives in `public/css/app.css`, numbered into twelve sections with a guide
+All CSS lives in `public/lab/css/app.css`, numbered into twelve sections with a guide
 at the top. Two rules make it safe to restyle later without touching logic:
 
 1. **No inline styles anywhere.** JavaScript writes class names only, never
@@ -233,3 +252,7 @@ at the top. Two rules make it safe to restyle later without touching logic:
 
 Styling is intentionally wireframe-only: grayscale, no branding. Build
 functionality first, design later. Do not add colour or polish unless asked.
+
+**Testing the glass.** On the plain black home page there is nothing behind the glass to bend or blur, so it shows little more than its rim. To judge it, put real, colourful content under it (a scrolling page of photos was used while tuning, then removed). liquidGL snapshots the page, so content that loads later needs `liquidGL.registerDynamic()` or a fresh snapshot.
+To tune the glass live, set `HELPER = true` in `menu.js` (localhost only); it is off because its panel covers the page. Current look: the owner's exact liquidGL settings in `GLASS_CONFIG` (refraction 0.04, aberration 0, bevelDepth 0.06, bevelWidth 0.02, frost 0, blur 8, shadow, specular, tilt off, reveal fade, magnify 1.03, tint rgba(255,255,255,.06)), tuned by the owner on liquidGL's "Tinted Glass" demo card (380px wide); the owner then rejected grey/dark tints in favour of a reference (clear glass that keeps the background's colour, blurred, very slightly lightened), hence the near-clear white tint. `frost` stays 0: it showed grain and doubled images at every strength, even with the third vendor patch; the smooth blur comes from the `blur` option (fifth patch). The thin white rim light comes from the second vendor patch (on whenever `specular` is true), not from CSS. **`bevelWidth` is a fraction of each lens's shorter side**, so the same number gives a 4.5px rim on that card and a useless 0.5px one on the 44px pill; `fitBevel()` in `menu.js` rescales it per lens (and on resize) so every lens gets the rim the owner saw. Values tuned on a different-sized lens need the same treatment. The pill has no CSS layers behind or on it (no fill, rim, smoothing blur, isolation) - they were removed because they can cause visual glitches next to the lens; don't add them back. The only CSS help for legibility is a faint dark halo on the icons (`drop-shadow`) and pull-down labels (`text-shadow`), which the owner approved. Earlier tuning found bevel/specular can draw a dark ragged outline over bright content and bevelWidth alone can darken a band inside the rim - judge on real content.
+Two liquidGL quirks: it sets `pointer-events: none` on its target (the pill), so `.menu .menu-row` in `menu.css` turns it back on or the buttons can't be clicked; (and its frost renders grainy in software-rendered browsers).

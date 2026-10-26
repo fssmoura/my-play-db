@@ -50,7 +50,7 @@ import { nameVariants } from "./sgdb-match.js";
  * same thing for the same reason.
  */
 async function db() {
-  const { supabase } = await import("./supabase.js");
+  const { supabase } = await import("/js/supabase.js");
   return supabase;
 }
 

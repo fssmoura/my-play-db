@@ -1,0 +1,332 @@
+/* =========================================================================
+   my-play-db - the app's sign-in screen (public/index.html).
+   Apple-style: see docs/design.md. Colours come from tokens.css; the Google
+   button uses Google's official dark-theme colours on purpose. Nothing is
+   styled from JavaScript; JS only toggles class names and attributes.
+   ========================================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-size: 15px;
+  color: var(--light-gray);
+  background: var(--black);
+  -webkit-font-smoothing: antialiased;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------- booting ---------- */
+
+.gate {
+  max-width: 380px;
+  margin: 12vh auto;
+  text-align: center;
+}
+
+.gate p {
+  color: var(--gray);
+  line-height: 1.5;
+}
+
+/* ---------- layout ---------- */
+
+.login {
+  width: 100%;
+  max-width: 400px; /* 360px column + 20px side margins */
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.login h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 700;
+  color: var(--light-gray);
+}
+
+.login-sub {
+  margin: 6px 0 32px;
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--gray);
+}
+
+/* ---------- buttons ---------- */
+
+.btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 50px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    opacity 120ms ease,
+    filter 120ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+  opacity: 0.85;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btn.is-busy:disabled {
+  opacity: 0.85;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--light-gray);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  background: var(--light-gray);
+  color: var(--black);
+}
+
+/* Google's official dark theme. */
+.btn-google {
+  background: #131314;
+  box-shadow: inset 0 0 0 1px #8e918f;
+  color: #e3e3e3;
+}
+
+/* The G must stay multicolour, on white. */
+.google-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-right: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.btn.is-busy .google-chip {
+  display: none;
+}
+
+/* ---------- in-button progress ---------- */
+
+.spinner {
+  display: none;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-right: 10px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.btn.is-busy .spinner {
+  display: block;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  .btn {
+    transition: none;
+  }
+}
+
+/* ---------- divider ---------- */
+
+.login-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+  color: var(--gray);
+  font-size: 13px;
+}
+
+.login-or::before,
+.login-or::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--dark-gray);
+}
+
+/* ---------- fields ---------- */
+
+.field {
+  margin-bottom: 16px;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--gray);
+}
+
+/* Fill and ring are variables so every state (typed, focused, invalid,
+   autofilled) composes the same way. Solid colours: the fill over black. */
+.field input {
+  --field-fill: #161618;
+  --field-ring: transparent;
+  display: block;
+  width: 100%;
+  height: 50px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--field-fill);
+  box-shadow: inset 0 0 0 1px var(--field-ring);
+  color: var(--light-gray);
+  font: inherit;
+  font-size: 17px;
+  outline: none;
+}
+
+.field input::placeholder {
+  color: var(--gray);
+}
+
+.field input:focus {
+  --field-fill: #212123;
+  --field-ring: rgba(244, 244, 244, 0.35);
+}
+
+.field input:disabled {
+  opacity: 0.4;
+}
+
+.field input[aria-invalid="true"] {
+  --field-ring: var(--destructive);
+}
+
+/* The browser paints autofilled fields its own colour; a huge inset shadow is
+   the only way to override it, so the ring and the fill are both painted in
+   that one shadow to look exactly like the normal states. */
+.field input:-webkit-autofill,
+.field input:-webkit-autofill:hover,
+.field input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--light-gray);
+  -webkit-box-shadow:
+    inset 0 0 0 1px var(--field-ring),
+    inset 0 0 0 1000px var(--field-fill);
+  box-shadow:
+    inset 0 0 0 1px var(--field-ring),
+    inset 0 0 0 1000px var(--field-fill);
+  caret-color: var(--light-gray);
+  transition: background-color 9999s ease-out;
+}
+.field-error {
+  margin: 6px 0 0;
+  min-height: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--destructive);
+}
+
+.field-error:empty {
+  display: none;
+}
+
+.password-wrap {
+  position: relative;
+}
+
+.password-wrap input {
+  padding-right: 52px;
+}
+
+/* Hide the browser's own reveal/clear buttons; we draw our own eye. */
+.login input::-ms-reveal,
+.login input::-ms-clear {
+  display: none;
+}
+
+/* 44x44 hit area at the trailing end of the 50px field. */
+.password-toggle {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--gray);
+  cursor: pointer;
+}
+
+.password-toggle:hover:not(:disabled),
+.password-toggle[aria-pressed="true"] {
+  color: var(--light-gray);
+}
+
+.password-toggle:focus-visible {
+  outline: 2px solid var(--light-gray);
+}
+
+.password-toggle:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---------- errors ---------- */
+
+.login-error {
+  min-height: 18px;
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--destructive);
+}

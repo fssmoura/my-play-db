@@ -6,6 +6,8 @@ This is not a public service. It's a private data pipe. The API layer has zero b
 
 **Read this file in full at the start of every conversation.** In the GitHub Copilot app, also read [docs/copilot-app.md](docs/copilot-app.md) at the start - it covers the orchestrator/Builder setup, the local preview and signing in to it. The detail lives in `docs/` - don't pull it all in upfront, but know it's there and read the relevant one before working in that area (see [Reference docs](#reference-docs)). If you're unsure whether one applies, read it; guessing at something a doc already answers is the expensive mistake, not the reading.
 
+**Two frontends.** The real app is being built fresh at `/` from a blank page (`public/index.html`) with its own sign-in (see below). The old tabbed app lives at `/lab/` (`public/lab/`) as a lab / test bench for every feature. Keep the lab working, don't redesign it, and new app work must not change it. They share the same API, sign-in and database.
+
 ## Ways of working
 
 Notes on how this project has gone well - not a checklist, and not rules to
@@ -36,8 +38,12 @@ suggestions below and got walked past anyway, so it lives up here now.
 
 - Don't commit, push or open a PR unless asked. Building something isn't
   permission to ship it. Do mention when work is piling up uncommitted.
-- Don't say something works because you wrote it. Test it, and be clear about
-  what you couldn't test.
+- Don't say something works because you wrote it. Be clear about what hasn't
+  been tested.
+- In the GitHub Copilot app, the owner checks first. The Builder reviews its
+  own UI work before reporting done; the orchestrator tests, screenshots or
+  reviews only after a clear instruction from the owner - a finished build is
+  not one. See docs/copilot-app.md.
 - Check the diff for keys and tokens before committing.
 - Interrupt for anything risking security, data loss or money, even unasked.
   Where it's urgent, act first and explain after.
@@ -81,13 +87,14 @@ for the assistant, **not dependencies of my-play-db** - the app reaches
 Supabase through `public/js/supabase.js` and IGDB through `api/igdb.js`, and
 neither knows MCP exists. Config lives in `~/.config/opencode/opencode.json`,
 outside this repo; credentials are Windows user env vars, never in a file here.
-The GitHub Copilot app has its own config (`supabase` only, so far) - see
+The GitHub Copilot app has its own config (`supabase` and `sosumi`) - see
 [docs/copilot-app.md](docs/copilot-app.md#supabase-mcp).
 
-| Server     | Use it for                                                                      |
-| ---------- | ------------------------------------------------------------------------------- |
-| `supabase` | Inspecting schema, running SQL, applying migrations, checking advisors and logs |
-| `igdb`     | IGDB schema and data questions - `get_schema`, `query`, `aggregate`, `search`   |
+| Server     | Use it for                                                                                           |
+| ---------- | ---------------------------------------------------------------------------------------------------- |
+| `supabase` | Inspecting schema, running SQL, applying migrations, checking advisors and logs                      |
+| `igdb`     | IGDB schema and data questions - `get_schema`, `query`, `aggregate`, `search`                        |
+| `sosumi`   | Apple Human Interface Guidelines as Markdown (Copilot app config, not opencode) - see docs/design.md |
 
 **Prefer these over guessing or scraping docs.** The IGDB one in particular
 answers in seconds what otherwise means reading api-docs.igdb.com end to end.
@@ -131,7 +138,7 @@ auth  - returns access_token, refresh_token, account_id
 ## Stack
 
 - **CommonJS** everywhere (api/). `require()`, not `import`. package.json has no `"type": "module"` - psn-api is CJS.
-- **Vanilla JS frontend** (public/) - ES modules in browser, no bundler, no framework, no TypeScript.
+- **Vanilla JS frontend** (public/) - ES modules in browser, no bundler, no framework, no TypeScript. The blank new app is at `/`; the lab is at `/lab/`.
 - **Dependencies**: `psn-api` ^2.14.0. Steam, Epic, and IGDB handlers use raw `fetch`.
 
 ## Architecture
@@ -162,37 +169,47 @@ my-play-db/
     sgdb.js                # SteamGridDB handler - 5 actions
     hltb.js                # HowLongToBeat handler - 4 actions (scraped, fragile)
   public/
-    index.html             # app shell: login gate + tabs
-    steam-callback.html    # bare Steam OpenID return target
-    css/
-      app.css              # ALL styling, 10 numbered sections
+    index.html             # NEW APP - the app's sign-in screen, then a blank page (served at /)
     js/
       config.js            # Supabase URL + publishable key (browser-safe)
       supabase.js          # supabase-js client (ESM from esm.sh)
       session.js           # Google OAuth sign in/out, JWT access
-      api.js                 # single /api/* caller, injects bearer token
-      navigate.js            # tab-to-tab navigation (pushState + subscribers)
-      vault.js             # platform_credentials CRUD
-      platforms.js         # per-platform connect/refresh + expiry normalization
-      credentials.js         # pure credential extractors (no imports, testable)
-      connect.js             # popup / redirect / clipboard capture
-      refresh.js             # in-tab auto-refresh scheduler
-      schemas.js             # per-action parameter definitions for the console
-      ranking.js             # pure search ranking/merging/paging logic
-      sgdb-match.js          # pure IGDB->SteamGridDB matching rules
-      sgdb.js                # SteamGridDB lookup orchestration (used by views/media.js)
-      hltb-match.js          # pure IGDB->HowLongToBeat matching rules
-      hltb.js                # HowLongToBeat lookup + weekly playtime refresh
-      games-cache.js         # `games` table: search cache + single-game read/write
-      search.js              # search orchestration: DB head start + IGDB, cached
-      game.js                # one game: daily freshness rule + IGDB pull
-      app.js                 # boot, auth gate, tab routing
-      views/
-        connections.js       # platform list + connect/edit/delete
-        console.js           # generic action runner
-        search.js            # IGDB search tab (typeahead + full results)
-        game.js              # game detail tab (?game=<igdb id>)
-        media.js             # artwork picker tab (?media=<igdb id>)
+      sign-in.js           # sign-in screen wiring + `next` redirect
+      menu.js              # top-right app menu (glass pill via liquidGL, Profile + More pull-down)
+      dev-reload.js        # localhost-only auto-reload when files change
+    css/
+      tokens.css           # colour palette variables (new app only)
+      sign-in.css          # styling for the sign-in screen
+      menu.css             # styling for the app menu
+    lab/                   # the lab / test bench for every feature (served at /lab/); no sign-in of its own
+      index.html             # lab shell: tabs (redirects to / when signed out)
+      steam-callback.html    # bare Steam OpenID return target
+      css/
+        app.css              # ALL styling, 10 numbered sections
+      js/
+        api.js                 # single /api/* caller, injects bearer token
+        navigate.js            # tab-to-tab navigation (pushState + subscribers)
+        vault.js             # platform_credentials CRUD
+        platforms.js         # per-platform connect/refresh + expiry normalization
+        credentials.js         # pure credential extractors (no imports, testable)
+        connect.js             # popup / redirect / clipboard capture
+        refresh.js             # in-tab auto-refresh scheduler
+        schemas.js             # per-action parameter definitions for the console
+        ranking.js             # pure search ranking/merging/paging logic
+        sgdb-match.js          # pure IGDB->SteamGridDB matching rules
+        sgdb.js                # SteamGridDB lookup orchestration (used by views/media.js)
+        hltb-match.js          # pure IGDB->HowLongToBeat matching rules
+        hltb.js                # HowLongToBeat lookup + weekly playtime refresh
+        games-cache.js         # `games` table: search cache + single-game read/write
+        search.js              # search orchestration: DB head start + IGDB, cached
+        game.js                # one game: daily freshness rule + IGDB pull
+        app.js                 # boot, tab routing (redirects to / when signed out)
+        views/
+          connections.js       # platform list + connect/edit/delete
+          console.js           # generic action runner
+          search.js            # IGDB search tab (typeahead + full results)
+          game.js              # game detail tab (?game=<igdb id>)
+          media.js             # artwork picker tab (?media=<igdb id>)
   .env.local               # local env (managed by `vercel env pull`)
   package.json
   vercel.json              # outputDirectory + cron schedule
@@ -206,7 +223,7 @@ the linked doc - this list exists so they cannot be missed.
 **API handlers**
 
 - **`psn.js` reads credentials from the TOP LEVEL of the body. Every other
-  handler expects them nested inside `options`.** `public/js/api.js` absorbs
+  handler expects them nested inside `options`.** `public/lab/js/api.js` absorbs
   this; don't reintroduce it elsewhere.
 - **`psn.js` handles the `auth` action before the generic authorization path.**
   Do not reorder.
@@ -248,10 +265,11 @@ the linked doc - this list exists so they cannot be missed.
   years and is discovered at runtime from HLTB's own homepage. Hardcoding is
   how every dead HLTB library on npm died, including the abandoned original of
   the plugin this is ported from.
-- **The search body must repeat the token value under a field named by
-  `hpKey`'s VALUE** (literally `ign_5adbe3f6`, not `"hpKey"`). Getting that name
-  wrong returns **404, not 403** - which looks exactly like a moved route and
-  sends you re-discovering a path that was never wrong.
+- **If `/init` returns an `hpKey`/`hpVal` pair (it doesn't today - since Oct
+  2026 it returns only `token`), the search body must repeat the value under a
+  field named by `hpKey`'s VALUE** (literally `ign_5adbe3f6`, not `"hpKey"`).
+  Getting that name wrong returns **404, not 403** - which looks exactly like a
+  moved route and sends you re-discovering a path that was never wrong.
 - **The token is bound to the requesting IP and User-Agent**, both encoded
   inside it. `USER_AGENT` must stay a fixed constant across the init and search
   calls, and sending none at all is a 403.
@@ -310,9 +328,14 @@ the linked doc - this list exists so they cannot be missed.
 
 **Frontend**
 
-- **No inline styles.** JavaScript writes class names only; all CSS lives in
-  `public/css/app.css`.
-- **`public/js/schemas.js` must be kept in step with the handlers.** A new
+- **Apple's Human Interface Guidelines are the design authority for the new
+  app at `/` (not the lab).** Before designing or changing any UI there, look up
+  the relevant HIG page through the `sosumi` MCP (or a `sosumi.ai` URL) instead
+  of recalling it, and follow it unless the owner says otherwise. How, and which
+  pages: docs/design.md.
+- **No inline styles (in the lab).** JavaScript writes class names only; all CSS lives in
+  `public/lab/css/app.css`.
+- **`public/lab/js/schemas.js` must be kept in step with the handlers.** A new
   action or option that isn't there is unreachable from the API console.
 - **SteamGridDB matching may return nothing, and that is correct.** One IGDB
   game maps to one SteamGridDB entry or to none. A DLC must never inherit its
@@ -336,9 +359,10 @@ the linked doc - this list exists so they cannot be missed.
 | [docs/api.md](docs/api.md)                     | changing a handler or adding an action                           |
 | [docs/auth.md](docs/auth.md)                   | touching sign-in, the credential vault, connect flows or refresh |
 | [docs/database.md](docs/database.md)           | adding a table or column, or writing a sync script               |
-| [docs/frontend.md](docs/frontend.md)           | changing anything under `public/`                                |
+| [docs/frontend.md](docs/frontend.md)           | changing anything under `public/lab/`                            |
 | [docs/api-responses.md](docs/api-responses.md) | you need a real captured response or field observation           |
 | [docs/copilot-app.md](docs/copilot-app.md)     | every conversation in the GitHub Copilot app                     |
+| [docs/design.md](docs/design.md)               | changing anything visual in the new app (not the lab)            |
 
 ## Git
 

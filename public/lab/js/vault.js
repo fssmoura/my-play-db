@@ -1,4 +1,4 @@
-import { supabase } from "./supabase.js";
+import { supabase } from "/js/supabase.js";
 
 /**
  * Cross-device store for platform ACCESS credentials.
