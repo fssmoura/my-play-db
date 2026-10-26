@@ -9,7 +9,7 @@ The app is a private, single-owner tool deployed publicly. Two independent gates
 
 ### Gate 1 - who can sign in
 
-Supabase Auth with the **Google provider only**. Sign-in is locked by a `before insert` trigger on `auth.users` (`public.enforce_owner_allowlist`):
+Supabase Auth with two methods: **Google** and **email + password**. The owner's password is already set; the app has no sign-up, forgot-password or set-password UI - to change it, use the Supabase dashboard. In Supabase, "Allow new users to sign up" is OFF and the Email provider is ON, on top of the trigger below. Sign-in is locked by a `before insert` trigger on `auth.users` (`public.enforce_owner_allowlist`):
 
 - If the email is in `public.owner_allowlist`, allow.
 - Else if `auth.users` is empty, allow **and record that email as the owner** (first signup claims the app).
