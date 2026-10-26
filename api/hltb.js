@@ -120,8 +120,9 @@ function searchHeaders(current) {
     ...baseHeaders(),
     Authority: "howlongtobeat.com",
     "x-auth-token": current.token,
-    "x-hp-key": current.hpKey,
-    "x-hp-val": current.hpVal,
+    ...(current.hpKey && current.hpVal
+      ? { "x-hp-key": current.hpKey, "x-hp-val": current.hpVal }
+      : {}),
   };
 }
 
@@ -287,8 +288,9 @@ function parseAuth(data) {
     else if (!hpVal && lower.includes("val")) hpVal = value;
   }
 
-  if (!token || !hpKey || !hpVal) return null;
-  return { token, hpKey, hpVal };
+  if (!token) return null;
+  // Since Oct 2026 /init returns only `token`; the pair is kept in case it returns.
+  return hpKey && hpVal ? { token, hpKey, hpVal } : { token };
 }
 
 async function fetchAuth(path) {
@@ -428,7 +430,7 @@ const GAME_FIELDS = (g) => {
  * left to callers.
  *
  * Apostrophes are deleted and everything else non-alphanumeric becomes a space,
- * which is the same rule `normalizeName()` uses in `public/js/sgdb-match.js`.
+ * which is the same rule `normalizeName()` uses in `public/lab/js/sgdb-match.js`.
  * Tested across seven awkward titles: never worse than sending the raw name,
  * sometimes the difference between 0 results and the right one.
  */
@@ -471,15 +473,20 @@ function searchBody(name, { page = 1, size = 20 } = {}, current) {
       sort: 0,
       randomizer: 0,
     },
-    // The token's value repeated inside the body, under a field named by
-    // `hpKey` itself - so the field is literally called something like
+    // CONDITIONAL: HLTB dropped the hpKey/hpVal pair in Oct 2026 (init now
+    // returns only `token`); this is kept in case it comes back.
+    //
+    // When present, the value is repeated inside the body under a field named
+    // by `hpKey` itself - so the field is literally called something like
     // "ign_5adbe3f6", not "hpKey". This is the least obvious part of the whole
     // exchange and the easiest to get subtly wrong.
     //
     // MEASURED: getting the field NAME wrong returns 404, not 403. A 404 here
     // therefore means "the body was malformed", not "the route moved" - so do
     // not react to one by re-running path discovery.
-    [current.hpKey]: current.hpVal,
+    ...(current.hpKey && current.hpVal
+      ? { [current.hpKey]: current.hpVal }
+      : {}),
   };
 }
 
