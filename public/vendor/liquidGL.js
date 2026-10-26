@@ -6,7 +6,8 @@
  * The patch makes the vertical bend use the page WIDTH as well, so the glass
  * looks the same on a short page and a long scrolling one.
  * Second patch (same marker): with `specular` on, a thin white rim light,
- * brightest at the top-left and bottom-right, like Apple's Liquid Glass.
+ * brightest at the top-left and bottom-right, like Apple's Liquid Glass. It
+ * is a fixed 1.5 CSS px wide on every lens, whatever its size.
  * Upstream's specular was two faint glows drifting inside the lens; they
  * are removed, so `specular` now means the rim light only.
  * Third patch (same marker): frost samples an even spiral instead of random
@@ -3019,6 +3020,7 @@ const liquidGL = (() => {
         uniform vec4 u_stackRegion;
         uniform vec4 u_interaction;
         uniform float u_interactionRadius;
+        uniform float u_dpr; // my-play-db patch
         uniform sampler2D u_shadow;
         uniform vec4 u_shadowMapping;
 
@@ -3172,10 +3174,10 @@ const liquidGL = (() => {
           if (u_specular) {
             // my-play-db patch: upstream's two drifting glows removed (rim light below only).
             // my-play-db patch: thin white rim, brightest at top-left and bottom-right.
-            float rimW = clamp(0.03 * min(u_boxSize.x, u_boxSize.y), 1.5, 4.0);
+            float rimW = 1.5 * u_dpr; // my-play-db patch: fixed 1.5 CSS px on every lens
             float rim = 1.0 - smoothstep(0.0, rimW, -dmask);
             float facing = abs(dot(refractDir, vec2(-0.7071, 0.7071)));
-            final.rgb += rim * (0.08 + 0.32 * facing * facing);
+            final.rgb += rim * (0.05 + 0.2 * facing * facing);
           }
 
           if (u_revealType == 1) {
@@ -3238,6 +3240,7 @@ const liquidGL = (() => {
         shadow: gl.getUniformLocation(this.program, "u_shadow"),
         shadowMapping: gl.getUniformLocation(this.program, "u_shadowMapping"),
         interaction: gl.getUniformLocation(this.program, "u_interaction"),
+        dpr: gl.getUniformLocation(this.program, "u_dpr"), // my-play-db patch
         interactionRadius: gl.getUniformLocation(
           this.program,
           "u_interactionRadius",
@@ -3704,6 +3707,7 @@ const liquidGL = (() => {
       gl.uniform4fv(this.u.stackMapping, p.stackMapping);
       gl.uniform4fv(this.u.interaction, p.interaction);
       gl.uniform1f(this.u.interactionRadius, p.interactionRadius);
+      gl.uniform1f(this.u.dpr, p.dpr || 1); // my-play-db patch
       gl.activeTexture(gl.TEXTURE0);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -3953,10 +3957,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   if (u.specular > 0.5) {
     // my-play-db patch: upstream's two drifting glows removed (rim light below only).
     // my-play-db patch: thin white rim, brightest at top-left and bottom-right.
-    let rimW = clamp(0.03 * min(u.boxSize.x, u.boxSize.y), 1.5, 4.0);
+    let rimW = 1.5 * max(u.interactionRadius.y, 1.0); // my-play-db patch: fixed 1.5 CSS px (.y carries dpr)
     let rim = 1.0 - smoothstep(0.0, rimW, -dmask);
     let facing = abs(dot(refractDir, vec2<f32>(-0.7071, 0.7071)));
-    finalCol = vec4<f32>(finalCol.rgb + vec3<f32>(rim * (0.08 + 0.32 * facing * facing)), finalCol.a);
+    finalCol = vec4<f32>(finalCol.rgb + vec3<f32>(rim * (0.05 + 0.2 * facing * facing)), finalCol.a);
   }
 
   if (u.revealType == 1.0) {
@@ -4978,6 +4982,7 @@ fn fs() -> @location(0) vec4<f32> {
           data.set(p.stackMapping, o + 32);
           data.set(p.interaction, o + 40);
           data[o + 44] = p.interactionRadius;
+          data[o + 45] = p.dpr || 1; // my-play-db patch: dpr for the rim light
           data.set(p.shadowEntry ? p.shadowMapping : INTERACTION_OFF, o + 48);
           if (p.stackRegion) {
             const r = p.stackRegion;
