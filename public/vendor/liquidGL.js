@@ -7,7 +7,8 @@
  * looks the same on a short page and a long scrolling one.
  * Second patch (same marker): with `specular` on, a thin white rim light,
  * brightest at the top-left and bottom-right, like Apple's Liquid Glass.
- * Upstream's specular is only two faint moving glows inside the lens.
+ * Upstream's specular was two faint glows drifting inside the lens; they
+ * are removed, so `specular` now means the rim light only.
  * Third patch (same marker): frost samples an even spiral instead of random
  * points per pixel, with 32 samples instead of 16, so the blur is smooth
  * instead of grainy.
@@ -3169,12 +3170,7 @@ const liquidGL = (() => {
           final.rgb *= 0.7 * (1.0 - smoothstep(0.3, 0.9, bgLum) * 0.4);
 
           if (u_specular) {
-            vec2 lp1 = vec2(sin(u_time*0.2), cos(u_time*0.3))*0.6 + 0.5;
-            vec2 lp2 = vec2(sin(u_time*-0.4+1.5), cos(u_time*0.25-0.5))*0.6 + 0.5;
-            float h = 0.0;
-            h += smoothstep(0.4,0.0,distance((p_px + b_px) / u_boxSize, lp1))*0.1;
-            h += smoothstep(0.5,0.0,distance((p_px + b_px) / u_boxSize, lp2))*0.08;
-            final.rgb += h;
+            // my-play-db patch: upstream's two drifting glows removed (rim light below only).
             // my-play-db patch: thin white rim, brightest at top-left and bottom-right.
             float rimW = clamp(0.03 * min(u_boxSize.x, u_boxSize.y), 1.5, 4.0);
             float rim = 1.0 - smoothstep(0.0, rimW, -dmask);
@@ -3955,12 +3951,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   finalCol = vec4<f32>(finalCol.rgb * 0.7 * (1.0 - smoothstep(0.3, 0.9, bgLum) * 0.4), finalCol.a);
 
   if (u.specular > 0.5) {
-    let lp1 = vec2<f32>(sin(u.time * 0.2), cos(u.time * 0.3)) * 0.6 + vec2<f32>(0.5);
-    let lp2 = vec2<f32>(sin(u.time * -0.4 + 1.5), cos(u.time * 0.25 - 0.5)) * 0.6 + vec2<f32>(0.5);
-    var h = 0.0;
-    h = h + smoothstep(0.4, 0.0, distance((p_px + b_px) / u.boxSize, lp1)) * 0.1;
-    h = h + smoothstep(0.5, 0.0, distance((p_px + b_px) / u.boxSize, lp2)) * 0.08;
-    finalCol = vec4<f32>(finalCol.rgb + vec3<f32>(h), finalCol.a);
+    // my-play-db patch: upstream's two drifting glows removed (rim light below only).
     // my-play-db patch: thin white rim, brightest at top-left and bottom-right.
     let rimW = clamp(0.03 * min(u.boxSize.x, u.boxSize.y), 1.5, 4.0);
     let rim = 1.0 - smoothstep(0.0, rimW, -dmask);
