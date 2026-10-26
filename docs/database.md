@@ -83,7 +83,7 @@ Supabase (Postgres). Three tables: `games`, `player_games`, `achievements`.
 
 **`hltb_id` follows the `sgdb_id` precedent exactly**: resolved once, trusted forever, never re-searched, and settable by hand. Once we know which HLTB entry a game is, that does not change, and re-running the match would only create chances to get it wrong. Setting it by hand is how a game the matcher refused - or matched to the wrong entry - gets corrected permanently.
 
-**`hltb` holds seconds, not hours.** `{comp_main, comp_plus, comp_100}` - main story, main + extras, completionist. Converting to hours is presentation and happens at render time (`toHours()` in `public/js/hltb.js`).
+**`hltb` holds seconds, not hours.** `{comp_main, comp_plus, comp_100}` - main story, main + extras, completionist. Converting to hours is presentation and happens at render time (`toHours()` in `public/lab/js/hltb.js`).
 
 Two things HLTB returns are deliberately **not** stored:
 
@@ -143,7 +143,7 @@ nothing to poll and nothing to subscribe to, so there is no cron sweep and no
 webhook here. The same measurement shows the data barely moves, which is what
 makes a 24-hour interval generous rather than risky.
 
-The interval lives in `FULL_SYNC_TTL_MS` in `public/js/game.js`.
+The interval lives in `FULL_SYNC_TTL_MS` in `public/lab/js/game.js`.
 
 ### `cache_game_details()`
 
@@ -177,7 +177,7 @@ everything else here.
 **Why `name_normalized` exists.** Searching `name` directly cannot work: typing
 "marvel spider man" has to find "Marvel's Spider-Man", and no `ilike` pattern
 bridges the apostrophe and the hyphen. The column holds the output of
-`normalizeName()` from `public/js/ranking.js` - lowercased, apostrophes deleted,
+`normalizeName()` from `public/lab/js/ranking.js` - lowercased, apostrophes deleted,
 every other non-alphanumeric collapsed to a space - and is written by the client
 so the stored form and the ranker can never disagree. A GIN trigram index
 (`pg_trgm`) covers it.

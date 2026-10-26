@@ -1,4 +1,4 @@
-import { getAccessToken } from "./session.js";
+import { getAccessToken } from "/js/session.js";
 
 /**
  * Single entry point for every /api/* call.

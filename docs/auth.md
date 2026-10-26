@@ -2,7 +2,7 @@
 
 How the app proves it's the owner, and how platform tokens are stored and kept
 alive. Read this before touching `api/_auth.js`, `public/js/session.js`,
-`public/js/vault.js`, `public/js/refresh.js`, `public/js/connect.js` or
+`public/lab/js/vault.js`, `public/lab/js/refresh.js`, `public/lab/js/connect.js` or
 `api/cron-refresh.js`.
 
 The app is a private, single-owner tool deployed publicly. Two independent gates enforce that.
@@ -16,6 +16,8 @@ Supabase Auth with two methods: **Google** and **email + password**. The owner's
 - Else `raise exception 'signup is closed'`.
 
 Owner is `fssmoura.fm@gmail.com`. To authorise a second identity, insert it into `owner_allowlist` via SQL - there is no UI for this, and `owner_allowlist` has RLS on with **no policies**, so it is unreachable from any client key.
+
+**Sign-in flow.** There is **one sign-in, owned by the app at `/`** (`public/index.html`, `public/js/sign-in.js`, styled by `public/css/sign-in.css`). The lab at `/lab/` has no sign-in of its own: with no session it redirects to `/?next=<path+query>`, and once signed in `/` sends the user back to `next` (accepted only if it starts with `/` and not `//`). With no `next`, a signed-in user sees an empty page. Google sign-in returns to `<origin>/` (carrying `?next=` through), set as `redirectTo` in `session.js`. Supabase Auth's redirect allow-list (Authentication > URL Configuration, dashboard-only) **must include the root URLs** (e.g. `http://localhost:3000/` and `https://my-play-db.vercel.app/`, wildcard if the dashboard needs one to permit the `?next=` query), or Google sign-in falls back to the Site URL. Sign out from the lab goes to `/`.
 
 ### Gate 2 - who can call /api/\*
 
@@ -71,7 +73,7 @@ surfacing when the refresh token finally lapses.
 
 ### Expiry normalization
 
-Every platform reports expiry differently. `public/js/platforms.js` normalizes all of them into `expires_at`:
+Every platform reports expiry differently. `public/lab/js/platforms.js` normalizes all of them into `expires_at`:
 
 | Platform | Raw response                        | Normalized                    |
 | -------- | ----------------------------------- | ----------------------------- |
@@ -86,7 +88,7 @@ Two platform quirks the client compensates for, both easy to regress:
 - **Xbox refresh rotates `xstsToken` AND `userHash`**, not just the token. The whole tuple is re-persisted on every refresh or subsequent calls 401.
 - **Epic burns a token refresh** resolving the account id if `epicAccountId` is omitted, so `callCredentials` always sends it.
 
-`public/js/api.js` also absorbs the one handler inconsistency: **psn.js reads credentials from the top level of the body; every other handler expects them nested in `options`.**
+`public/lab/js/api.js` also absorbs the one handler inconsistency: **psn.js reads credentials from the top level of the body; every other handler expects them nested in `options`.**
 
 ### Connect flows (how a credential is captured)
 
@@ -102,7 +104,7 @@ domain cannot have its URL or body read by us.
 | Xbox     | `clipboard` | Redirect URI is `login.live.com/oauth20_desktop.srf`, which we don't own.                                          |
 
 **Steam (`openid`)**: `connect.js` builds the OpenID URL with
-`return_to = <origin>/steam-callback.html`. That bare page postMessages the
+`return_to = <origin>/lab/steam-callback.html`. That bare page postMessages the
 `openid.*` params to `window.opener` and closes. The parent then calls
 `steam.openid_verify`, which does the mandatory `check_authentication` handshake
 with Steam server-side before trusting the SteamID64 - never trust the callback
@@ -115,7 +117,7 @@ focus. The moment the clipboard parses into a valid credential it connects and
 closes the popup. Clipboard permission can be denied, so the modal **always**
 keeps a manual paste field - do not remove it.
 
-`public/js/credentials.js` holds the pure extractors (no imports, unit-testable).
+`public/lab/js/credentials.js` holds the pure extractors (no imports, unit-testable).
 Each accepts JSON, a full redirect URL, or the bare value, and returns `null`
 when the text isn't a credential - that `null` is what makes clipboard polling
 keep waiting instead of connecting with garbage.
@@ -126,7 +128,7 @@ keep waiting instead of connecting with garbage.
 
 ### Auto-refresh
 
-`public/js/refresh.js` keeps tokens alive so you don't reconnect constantly. A
+`public/lab/js/refresh.js` keeps tokens alive so you don't reconnect constantly. A
 platform is refreshed when under **10 minutes** remain, checked on app boot,
 every 4 minutes, on tab focus, and lazily before any API console call.
 
@@ -178,7 +180,7 @@ that needs a real per-platform health check, which does not exist.
 
 **EA renews from session cookies, not a refresh token.** This is the one place
 where "does the record have a `refreshToken`?" is the wrong question, so both
-`public/js/platforms.js` (`hasRefreshMaterial`) and
+`public/lab/js/platforms.js` (`hasRefreshMaterial`) and
 `api/_platform-refresh.js` (`hasRefreshMaterial`) decide it per platform. The
 full story is below.
 
@@ -250,7 +252,7 @@ the popup; do not "helpfully" add one back.
 
 **Do not expose `refresh` in the API console.** Running it by hand spends the
 rotating cookies outside the vault, so the replacements are discarded and the
-stored chain is left dead. `public/js/schemas.js` omits it deliberately.
+stored chain is left dead. `public/lab/js/schemas.js` omits it deliberately.
 
 ### Scheduled refresh (the thing that survives the app being closed)
 

@@ -1,11 +1,4 @@
-import {
-  getSession,
-  onAuthChange,
-  signInWithGoogle,
-  signOut,
-  signInWithPassword,
-  readAuthErrorFromUrl,
-} from "./session.js";
+import { getSession, onAuthChange, signOut } from "/js/session.js";
 import * as connections from "./views/connections.js";
 import * as search from "./views/search.js";
 import * as game from "./views/game.js";
@@ -25,24 +18,30 @@ const VIEWS = {
 
 const el = {
   loading: document.getElementById("loading"),
-  gate: document.getElementById("gate"),
-  gateError: document.getElementById("gate-error"),
   app: document.getElementById("app"),
   userEmail: document.getElementById("user-email"),
 };
 
 let mountedViews = false;
+let signingOut = false;
 
 function show(which) {
   el.loading.classList.toggle("hidden", which !== "loading");
-  el.gate.classList.toggle("hidden", which !== "gate");
   el.app.classList.toggle("hidden", which !== "app");
+}
+
+// Sign-in belongs to the whole app and lives at `/`; it sends us back here.
+function goToSignIn() {
+  location.replace(
+    "/?next=" + encodeURIComponent(location.pathname + location.search),
+  );
 }
 
 async function applySession(session) {
   if (!session) {
     mountedViews = false;
-    show("gate");
+    // Sign out redirects to "/" itself; don't race it with a `next` return.
+    if (!signingOut) goToSignIn();
     return;
   }
 
@@ -98,11 +97,6 @@ function wireTabs() {
   });
 }
 
-const ICON_EYE =
-  '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" />';
-const ICON_EYE_OFF =
-  '<path d="M17.9 17.9A10.9 10.9 0 0 1 12 19C5.5 19 2 12 2 12a18 18 0 0 1 4.1-5.1M9.9 5.2A9.7 9.7 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-2.2 3.2M1 1l22 22" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />';
-
 async function boot() {
   wireTabs();
 
@@ -110,51 +104,11 @@ async function boot() {
   // itself updates the URL; this only brings the right tab to the front.
   onNavigate((view) => selectTab(view));
 
-  const authError = readAuthErrorFromUrl();
-  if (authError) el.gateError.textContent = authError;
-
-  document.getElementById("sign-in").addEventListener("click", async () => {
-    el.gateError.textContent = "";
-    try {
-      await signInWithGoogle();
-    } catch (err) {
-      el.gateError.textContent = err.message;
-    }
-  });
-
   document.getElementById("sign-out").addEventListener("click", async () => {
+    signingOut = true;
     await signOut();
+    location.replace("/");
   });
-
-  const passwordInput = document.getElementById("auth-password");
-  const passwordToggle = document.getElementById("password-toggle");
-  passwordToggle.addEventListener("click", () => {
-    const reveal = passwordInput.type === "password";
-    passwordInput.type = reveal ? "text" : "password";
-    passwordToggle.querySelector("svg").innerHTML = reveal
-      ? ICON_EYE_OFF
-      : ICON_EYE;
-    passwordToggle.setAttribute(
-      "aria-label",
-      reveal ? "Hide password" : "Show password",
-    );
-  });
-
-  document
-    .getElementById("password-form")
-    .addEventListener("submit", async (event) => {
-      event.preventDefault();
-      el.gateError.textContent = "";
-      try {
-        await signInWithPassword(
-          document.getElementById("auth-email").value,
-          passwordInput.value,
-        );
-        passwordInput.value = "";
-      } catch (err) {
-        el.gateError.textContent = err.message;
-      }
-    });
 
   // onAuthStateChange also fires for the initial session and for token
   // refreshes, so it is the single source of truth after boot.
@@ -162,9 +116,8 @@ async function boot() {
 
   try {
     await applySession(await getSession());
-  } catch (err) {
-    el.gateError.textContent = err.message;
-    show("gate");
+  } catch {
+    goToSignIn();
   }
 }
 

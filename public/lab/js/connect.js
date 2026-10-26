@@ -104,7 +104,7 @@ export function beginSteamRedirect() {
   const state = newState();
   writePending({ platform: "steam", state, createdAt: Date.now() });
   window.location.href = steamOpenIdUrl(
-    `${window.location.origin}/?mpdb_state=${state}`,
+    `${window.location.origin}/lab/?mpdb_state=${state}`,
   );
 }
 
@@ -142,7 +142,7 @@ export function consumePendingRedirect() {
 /* ---------------------------------------------------------------- Steam ---- */
 
 export function steamOpenIdUrl(
-  returnTo = `${window.location.origin}/steam-callback.html`,
+  returnTo = `${window.location.origin}/lab/steam-callback.html`,
 ) {
   const origin = window.location.origin;
   const params = new URLSearchParams({

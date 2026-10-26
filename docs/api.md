@@ -320,7 +320,7 @@ The `search` action accepts an optional `type` parameter to filter results by ga
 when the query contains punctuation: `search "marvel spider man"` puts Marvel's
 Spider-Man first, while `search "Marvel Spider-Man"` puts a DLC first. The
 handler deliberately returns IGDB's raw order anyway (no business logic in the
-API layer) - `public/js/ranking.js` re-ranks.
+API layer) - `public/lab/js/ranking.js` re-ranks.
 
 Known IGDB limitation: some abbreviations return **nothing at all**, on any
 endpoint - `ac odyssey` matches no game, no alternative name and no `/v4/search`
@@ -357,7 +357,7 @@ Paging is zero-based, `limit` maxes out at 50, and `total` is the real count - B
 
 ### Matching IGDB games to SGDB entries
 
-The handler stays 1:1 with SGDB. The matching lives in `public/js/sgdb-match.js` (pure) and `public/js/sgdb.js` (fetching). The rule is one IGDB game to one SGDB entry, or nothing:
+The handler stays 1:1 with SGDB. The matching lives in `public/lab/js/sgdb-match.js` (pure) and `public/lab/js/sgdb.js` (fetching). The rule is one IGDB game to one SGDB entry, or nothing:
 
 - **Store ID first.** IGDB's `external_games` gives Steam and Epic IDs; SGDB accepts those directly as `{ platform: "steam" | "egs", platformId }`. Provably exact, and it has not misfired in testing. IGDB often lists several Steam IDs for one game (base game, a separate multiplayer app, a playtest) and each resolves to a different SGDB entry, so they are tried best-first by the store's own title.
 - **Name second.** Real title, then IGDB's alternative names. Nothing is trimmed or broadened.
@@ -380,12 +380,12 @@ The logic is ported from the HLTB for Deck plugin (MIT, `github.com/morwy/hltb-f
 ### The three moving parts
 
 1. **The path rotates.** It has been `/api/search`, `/api/find`, `/api/seek`, `/api/bleed`, and is `/api/search/site` today. It is **discovered at runtime** by reading HLTB's homepage, fetching each of its script bundles, and finding the one that POSTs to `/api/...` near the strings `searchTerms` and `searchOptions`. `DEFAULT_SEARCH_PATH` is a last-resort fallback, not the primary route. **Never hardcode this.**
-2. **A token, per-use.** `GET <path>/init?t=<ms>` returns `{ token, hpKey, hpVal }`. All three go on the search request as `x-auth-token`, `x-hp-key` and `x-hp-val`.
+2. **A token, per-use.** `GET <path>/init?t=<ms>` returns only `{ token }` (since Oct 2026; it used to also return `hpKey` and `hpVal`). The token goes on the search request as `x-auth-token`. `x-hp-key` / `x-hp-val` (and the body field below) are sent only if HLTB returns a pair again. Upstream fix: morwy/hltb-for-deck commit `3651f03`.
 3. **A Next.js build id**, scraped from the `_buildManifest.js` / `_ssgManifest.js` script URL, needed for the per-game detail read.
 
 ### Traps, all measured
 
-- **The body must repeat the token pair under a field named by `hpKey`'s VALUE.** The field is literally called something like `ign_5adbe3f6`, not `"hpKey"`. **Getting the field name wrong returns 404, not 403** - which is badly misleading, because a 404 looks exactly like a moved route and invites a pointless re-discovery. This cost real debugging time: everything else was correct and the endpoint simply denied existing.
+- **Only when `/init` returns an hp pair (it currently doesn't - see above), the body must repeat it under a field named by `hpKey`'s VALUE.** The field is literally called something like `ign_5adbe3f6`, not `"hpKey"`. **Getting the field name wrong returns 404, not 403** - which is badly misleading, because a 404 looks exactly like a moved route and invites a pointless re-discovery. This cost real debugging time: everything else was correct and the endpoint simply denied existing.
 - **The token is bound to the requesting IP and User-Agent.** It is encoded in the token itself, in plain sight - base64-decode one and you get `<timestamp>::<ip>|<user-agent>|<hpKey>|<hmac>`. So `USER_AGENT` is a fixed constant and must stay identical between the `/init` call and the search call. Randomising it invalidates the token.
 - **Sending no User-Agent at all returns 403.** Confirmed by bisection.
 - **`profile_steam` is null in search results.** It only appears on the detail page, which is why confirming a match by Steam ID costs one extra request per candidate.
@@ -411,7 +411,7 @@ Discovered values are cached in module scope for 30 minutes (path, build id) and
 
 ### Matching IGDB games to HLTB entries
 
-The handler stays 1:1 with HLTB. Matching lives in `public/js/hltb-match.js` (pure) and `public/js/hltb.js` (fetching and freshness). It reuses the scoring from `sgdb-match.js` rather than duplicating it - sequels, editions and remasters are the same problem in both places, and two copies would drift.
+The handler stays 1:1 with HLTB. Matching lives in `public/lab/js/hltb-match.js` (pure) and `public/lab/js/hltb.js` (fetching and freshness). It reuses the scoring from `sgdb-match.js` rather than duplicating it - sequels, editions and remasters are the same problem in both places, and two copies would drift.
 
 **The Decky plugin always returns something**; when nothing matches it falls back to the smallest edit distance. That is reasonable on a Steam Deck and wrong here, where DLC and special editions sit directly beside their base games. **No match is a valid answer**, and a blank playtime is honest where a wrong one is indistinguishable from a right one.
 
