@@ -29,6 +29,14 @@ export async function signOut() {
   await supabase.auth.signOut();
 }
 
+export async function signInWithPassword(email, password) {
+  const { error } = await supabase.auth.signInWithPassword({
+    email: email.trim(),
+    password,
+  });
+  if (error) throw error;
+}
+
 /**
  * Current Supabase JWT, used as the bearer token for /api/* calls.
  * supabase-js refreshes this automatically, so always read it fresh.

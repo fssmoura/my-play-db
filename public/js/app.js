@@ -3,6 +3,7 @@ import {
   onAuthChange,
   signInWithGoogle,
   signOut,
+  signInWithPassword,
   readAuthErrorFromUrl,
 } from "./session.js";
 import * as connections from "./views/connections.js";
@@ -97,6 +98,11 @@ function wireTabs() {
   });
 }
 
+const ICON_EYE =
+  '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" />';
+const ICON_EYE_OFF =
+  '<path d="M17.9 17.9A10.9 10.9 0 0 1 12 19C5.5 19 2 12 2 12a18 18 0 0 1 4.1-5.1M9.9 5.2A9.7 9.7 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-2.2 3.2M1 1l22 22" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />';
+
 async function boot() {
   wireTabs();
 
@@ -119,6 +125,36 @@ async function boot() {
   document.getElementById("sign-out").addEventListener("click", async () => {
     await signOut();
   });
+
+  const passwordInput = document.getElementById("auth-password");
+  const passwordToggle = document.getElementById("password-toggle");
+  passwordToggle.addEventListener("click", () => {
+    const reveal = passwordInput.type === "password";
+    passwordInput.type = reveal ? "text" : "password";
+    passwordToggle.querySelector("svg").innerHTML = reveal
+      ? ICON_EYE_OFF
+      : ICON_EYE;
+    passwordToggle.setAttribute(
+      "aria-label",
+      reveal ? "Hide password" : "Show password",
+    );
+  });
+
+  document
+    .getElementById("password-form")
+    .addEventListener("submit", async (event) => {
+      event.preventDefault();
+      el.gateError.textContent = "";
+      try {
+        await signInWithPassword(
+          document.getElementById("auth-email").value,
+          passwordInput.value,
+        );
+        passwordInput.value = "";
+      } catch (err) {
+        el.gateError.textContent = err.message;
+      }
+    });
 
   // onAuthStateChange also fires for the initial session and for token
   // refreshes, so it is the single source of truth after boot.

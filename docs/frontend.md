@@ -6,7 +6,7 @@ anything under `public/`.
 `public/` is a vanilla ES-module SPA. No bundler, no framework, no build step -
 the browser loads the files as written, so editing them is immediate.
 
-Four tabs behind a Google login gate: **Connections**, **API console**,
+Four tabs behind a login gate (Google, or email + password): **Connections**, **API console**,
 **Search**, **Game**.
 
 - **Connections** - one row per platform: status dot, account name, expiry

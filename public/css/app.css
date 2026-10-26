@@ -131,6 +131,136 @@ main {
   line-height: 1.5;
 }
 
+.login {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 480px;
+  margin: 25vh auto 0;
+  padding: 0 20px;
+}
+
+.login h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.login-sub {
+  margin: 0 0 44px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.login button {
+  width: 100%;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.login-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 12px;
+  background: transparent;
+  border-color: var(--line);
+}
+
+.login-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.login-or::before,
+.login-or::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+
+.login .field {
+  margin-bottom: 20px;
+}
+
+.login label {
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.login .field input {
+  box-sizing: border-box;
+  height: 34px;
+  padding: 0 10px;
+  border-color: var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 14px;
+}
+
+.login .field input::placeholder {
+  color: var(--muted);
+}
+
+/* Chrome paints autofilled fields light blue; an inset shadow is the only
+   way to override its background. */
+.login .field input:-webkit-autofill {
+  -webkit-text-fill-color: var(--text);
+  -webkit-box-shadow: 0 0 0 1000px var(--panel) inset;
+  caret-color: var(--text);
+}
+
+.password-wrap {
+  position: relative;
+}
+
+.login .password-wrap input {
+  padding-right: 40px;
+}
+
+.login .password-toggle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.login .login-submit {
+  height: 42px;
+  margin-top: 12px;
+  padding: 0 12px;
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+.login .login-submit:hover:not(:disabled) {
+  background: var(--text);
+  opacity: 0.9;
+}
+
+.login .status-line {
+  margin: 12px 0 0;
+}
+
 /* ---------- 4. controls ---------- */
 
 button {
@@ -153,6 +283,8 @@ button:disabled {
 }
 
 input[type="text"],
+input[type="email"],
+input[type="password"],
 select,
 textarea {
   font: inherit;
@@ -1093,6 +1225,8 @@ a.game-art-frame:focus-visible {
   /* >=16px prevents iOS zoom-on-focus. */
   button,
   input[type="text"],
+  input[type="email"],
+  input[type="password"],
   select,
   textarea {
     font-size: 16px;

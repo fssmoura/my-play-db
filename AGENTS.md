@@ -4,7 +4,7 @@ Personal game library - pulls PSN (and eventually other platforms) data into one
 
 This is not a public service. It's a private data pipe. The API layer has zero business logic, no database, no merging. It maps 1:1 to what the source provides so a sync script or frontend can decide what to store and how.
 
-**Read this file in full at the start of every conversation.** The detail lives in `docs/` - don't pull it all in upfront, but know it's there and read the relevant one before working in that area (see [Reference docs](#reference-docs)). If you're unsure whether one applies, read it; guessing at something a doc already answers is the expensive mistake, not the reading.
+**Read this file in full at the start of every conversation.** In the GitHub Copilot app, also read [docs/copilot-app.md](docs/copilot-app.md) at the start - it covers the orchestrator/Builder setup, the local preview and signing in to it. The detail lives in `docs/` - don't pull it all in upfront, but know it's there and read the relevant one before working in that area (see [Reference docs](#reference-docs)). If you're unsure whether one applies, read it; guessing at something a doc already answers is the expensive mistake, not the reading.
 
 ## Ways of working
 
@@ -81,6 +81,8 @@ for the assistant, **not dependencies of my-play-db** - the app reaches
 Supabase through `public/js/supabase.js` and IGDB through `api/igdb.js`, and
 neither knows MCP exists. Config lives in `~/.config/opencode/opencode.json`,
 outside this repo; credentials are Windows user env vars, never in a file here.
+The GitHub Copilot app has its own config (`supabase` only, so far) - see
+[docs/copilot-app.md](docs/copilot-app.md#supabase-mcp).
 
 | Server     | Use it for                                                                      |
 | ---------- | ------------------------------------------------------------------------------- |
@@ -336,6 +338,7 @@ the linked doc - this list exists so they cannot be missed.
 | [docs/database.md](docs/database.md)           | adding a table or column, or writing a sync script               |
 | [docs/frontend.md](docs/frontend.md)           | changing anything under `public/`                                |
 | [docs/api-responses.md](docs/api-responses.md) | you need a real captured response or field observation           |
+| [docs/copilot-app.md](docs/copilot-app.md)     | every conversation in the GitHub Copilot app                     |
 
 ## Git
 

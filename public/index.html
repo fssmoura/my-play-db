@@ -9,11 +9,66 @@
 
   <body>
     <!-- Signed out -->
-    <section id="gate" class="gate hidden">
-      <h1>my-play-db</h1>
-      <p>Private game library. Owner access only.</p>
-      <p id="gate-error" class="status-line error"></p>
-      <button id="sign-in">Sign in with Google</button>
+    <section id="gate" class="login hidden">
+      <h1>Welcome back</h1>
+      <p class="login-sub">Sign in to your account</p>
+      <button id="sign-in" class="login-google">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M21.35 11.1H12v2.9h5.35c-.5 2.4-2.5 3.9-5.35 3.9a6 6 0 1 1 0-12c1.5 0 2.8.55 3.85 1.45l2.1-2.1A9 9 0 1 0 12 21c5.2 0 9.0-3.65 9.0-8.8 0-.35-.03-.75-.1-1.1z"
+          />
+        </svg>
+        Continue with Google
+      </button>
+      <div class="login-or"><span>or</span></div>
+      <form id="password-form">
+        <div class="field">
+          <label for="auth-email">Email</label>
+          <input
+            id="auth-email"
+            type="email"
+            placeholder="you@example.com"
+            autocomplete="username"
+            required
+          />
+        </div>
+        <div class="field">
+          <label for="auth-password">Password</label>
+          <div class="password-wrap">
+            <input
+              id="auth-password"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+            <button
+              type="button"
+              id="password-toggle"
+              class="password-toggle"
+              aria-label="Show password"
+            >
+              <svg
+                id="password-icon"
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <button type="submit" class="login-submit">Sign in</button>
+        <p id="gate-error" class="status-line error"></p>
+      </form>
     </section>
 
     <!-- Booting -->
