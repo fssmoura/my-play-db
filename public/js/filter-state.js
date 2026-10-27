@@ -4,6 +4,7 @@
 
 export function createFilterState() {
   const selected = new Set();
+  let inLibrary = false;
   const listeners = new Set();
   const countListeners = new Set();
   let counts = null;
@@ -16,23 +17,39 @@ export function createFilterState() {
     get values() {
       return [...selected].sort((a, b) => a - b);
     },
+    // Selected types.
     get count() {
       return selected.size;
+    },
+    // "Only games I own".
+    get inLibrary() {
+      return inLibrary;
+    },
+    // Everything applied: selected types, plus 1 for In Library.
+    get total() {
+      return selected.size + (inLibrary ? 1 : 0);
     },
     has: (value) => selected.has(value),
     toggle(value) {
       if (!selected.delete(value)) selected.add(value);
       emit();
     },
-    clear() {
-      if (!selected.size) return;
-      selected.clear();
+    toggleInLibrary() {
+      inLibrary = !inLibrary;
       emit();
     },
-    // Does a result of this type pass the filter?
-    matches: (value) => selected.size === 0 || selected.has(value),
-    // How many results there are of each type ({ [value]: n }), or null while
-    // there are none to count. Set by the results page, shown by the menu.
+    clear() {
+      if (!selected.size && !inLibrary) return;
+      selected.clear();
+      inLibrary = false;
+      emit();
+    },
+    // Does a result of this type (and library status) pass the filter?
+    matches: (value, owned = false) =>
+      (selected.size === 0 || selected.has(value)) && (!inLibrary || owned),
+    // How many results there are of each type ({ [value]: n }, plus
+    // `inLibrary`), or null while there are none to count. Set by the results
+    // page, shown by the menu.
     get counts() {
       return counts;
     },

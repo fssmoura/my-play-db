@@ -38,6 +38,38 @@ const ICONS = {
     markup:
       '<path d="M21 3H5a1 1 0 0 0-1 1v2.59c0 .523.213 1.037.583 1.407L10 13.414V21a1 1 0 0 0 1.447.895l4-2c.339-.17.553-.516.553-.895v-5.586l5.417-5.417c.37-.37.583-.884.583-1.407V4a1 1 0 0 0-1-1m-6.707 9.293A1 1 0 0 0 14 13v5.382l-2 1V13a1 1 0 0 0-.293-.707L6 6.59V5h14.001l.002 1.583z" />',
   },
+  // Filter pull-down rows: In Library, By Type, Clear all, and the submenu
+  // chevron (points right; menu.css turns it down when expanded).
+  library: {
+    viewBox: "0 0 24 24",
+    style: "stroke",
+    markup:
+      '<path stroke-width="2" d="M2 3L7 3L7 21L2 21L2 3ZM7 3L12 3L12 21L7 21L7 3ZM12 4.4864L16.3257 3L22 19.5136L17.6743 21L12 4.4864Z" />',
+  },
+  byType: {
+    viewBox: "0 0 24 24",
+    style: "fill",
+    markup:
+      '<path d="M11 11V2H2v9m2-2V4h5v5m11-2.5C20 7.9 18.9 9 17.5 9S15 7.9 15 6.5S16.11 4 17.5 4S20 5.11 20 6.5M6.5 14L2 22h9m-3.42-2H5.42l1.08-1.92M22 6.5C22 4 20 2 17.5 2S13 4 13 6.5s2 4.5 4.5 4.5S22 9 22 6.5M19 17v-3h-2v3h-3v2h3v3h2v-3h3v-2Z" />',
+  },
+  clearAll: {
+    viewBox: "0 0 24 24",
+    style: "stroke",
+    markup:
+      '<path stroke-width="2" stroke-linecap="square" d="M4 15v7h16v-7M4 15h16M4 15v-4.5h6V2h4v8.5h6V15m-5 7v-3" />',
+  },
+  chevron: {
+    viewBox: "0 0 24 24",
+    style: "fill",
+    markup: '<path d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z" />',
+  },
+  // Leading to-do circle on each type row; the tick path shows when checked.
+  typeCheck: {
+    viewBox: "0 0 32 32",
+    style: "type",
+    markup:
+      '<path class="menu-type-circle" d="M29 16a13 13 0 1 1-26 0a13 13 0 0 1 26 0" /><path class="menu-type-tick" d="m11.5 16l3.5 3.5l6-6" />',
+  },
   // Selected-item checkmark in the filter pull-down.
   check: {
     viewBox: "0 0 24 24",
@@ -272,36 +304,87 @@ function buildFilterButton() {
   return { wrap, circle, button, badge };
 }
 
-// The type pull-down: a short list of common types plus "See more" (which
-// swaps in all 15, in place), then a divider and a destructive "Clear all".
-// No "All types" row - none selected means all. Rows are built once; wireFilter
+// The filter pull-down: "In Library" (a toggle), "By Type" (opens a second
+// panel layered over this one, growing out of the row), then a divider and a
+// destructive "Clear all". The second panel has a header that repeats the By
+// Type row, then the types: a short list plus "See more" (all 15). No "All
+// types" row - none selected means all. Rows are built once; wireFilter
 // decides which are shown.
 function buildFilterPanel() {
   const panel = document.createElement("div");
   panel.id = "app-filter-panel";
   panel.className = "menu-panel menu-filter-panel";
   panel.setAttribute("role", "menu");
-  panel.setAttribute("aria-label", "Filter by type");
+  panel.setAttribute("aria-label", "Filter");
 
   const list = document.createElement("div");
   list.className = "menu-panel-scroll overlay-scroll-host";
+
+  const checkMark = () =>
+    iconSvg("check").replace(
+      'class="menu-icon',
+      'class="menu-icon menu-check-mark',
+    );
+
+  const library = document.createElement("button");
+  library.type = "button";
+  library.className = "menu-panel-item menu-panel-check";
+  library.setAttribute("role", "menuitemcheckbox");
+  library.setAttribute("aria-checked", "false");
+  library.innerHTML = `${iconSvg("library")}<span class="menu-panel-label">In Library<span class="menu-panel-count"></span></span>${checkMark()}`;
+
+  const typesToggle = document.createElement("button");
+  typesToggle.type = "button";
+  typesToggle.className = "menu-panel-item menu-filter-types-toggle";
+  typesToggle.setAttribute("role", "menuitem");
+  typesToggle.setAttribute("aria-expanded", "false");
+  typesToggle.setAttribute("aria-haspopup", "menu");
+  typesToggle.setAttribute("aria-controls", "app-filter-sub");
+  const typesRow = (extra = "") =>
+    `${iconSvg("byType")}<span class="menu-panel-text"><span class="menu-panel-label">By Type</span><span class="menu-panel-sub">None applied</span></span>${iconSvg("chevron").replace('class="menu-icon', `class="menu-icon menu-chevron${extra}`)}`;
+  typesToggle.innerHTML = typesRow();
+
+  // The layered panel: its header sits exactly over the By Type row.
+  const subPanel = document.createElement("div");
+  subPanel.id = "app-filter-sub";
+  subPanel.className = "menu-panel menu-filter-sub";
+  subPanel.setAttribute("role", "menu");
+  subPanel.setAttribute("aria-label", "By Type");
+  const typesHeader = document.createElement("button");
+  typesHeader.type = "button";
+  typesHeader.className = "menu-panel-item menu-filter-types-toggle";
+  typesHeader.setAttribute("role", "menuitem");
+  typesHeader.setAttribute("aria-expanded", "true");
+  typesHeader.innerHTML = typesRow(" menu-chevron-down");
+  const subList = document.createElement("div");
+  subList.className = "menu-panel-scroll overlay-scroll-host";
+  const typesBox = document.createElement("div");
+  typesBox.className = "menu-filter-types";
+  subList.append(typesBox);
+  subPanel.append(typesHeader, subList);
+  const sub = [typesToggle, typesHeader].map((b) =>
+    b.querySelector(".menu-panel-sub"),
+  );
+
+  list.append(library, typesToggle);
+
   const rows = new Map();
   for (const type of TYPES) {
     const item = document.createElement("button");
     item.type = "button";
-    item.className = "menu-panel-item menu-panel-check";
+    item.className = "menu-panel-item menu-filter-type";
     item.setAttribute("role", "menuitemcheckbox");
     item.setAttribute("aria-checked", "false");
     item.dataset.value = type.value;
-    item.innerHTML = `<span class="menu-panel-label">${type.label}<span class="menu-panel-count"></span></span>${iconSvg("check")}`;
+    item.innerHTML = `${iconSvg("typeCheck")}<span class="menu-panel-label">${type.label}<span class="menu-panel-count"></span></span>`;
     rows.set(type.value, item);
   }
 
   const more = document.createElement("button");
   more.type = "button";
-  more.className = "menu-panel-item menu-filter-more";
+  more.className = "menu-panel-item menu-filter-type menu-filter-more";
   more.setAttribute("role", "menuitem");
-  more.innerHTML = '<span class="menu-panel-label">See more</span>';
+  more.innerHTML = `<span class="menu-panel-label">See more</span>${iconSvg("chevron").replace('class="menu-icon', 'class="menu-icon menu-more-chevron')}`;
 
   const line = document.createElement("div");
   line.className = "menu-panel-separator";
@@ -313,30 +396,52 @@ function buildFilterPanel() {
     "menu-panel-item menu-panel-item-destructive menu-filter-clear";
   clearAll.setAttribute("role", "menuitem");
   clearAll.disabled = true;
-  clearAll.innerHTML = '<span class="menu-panel-label">Clear all</span>';
+  clearAll.innerHTML = `${iconSvg("clearAll")}<span class="menu-panel-label">Clear all</span>`;
 
   panel.append(list, line, clearAll);
-  return { panel, list, rows, more, clearAll };
+  return {
+    panel,
+    list,
+    library,
+    typesToggle,
+    subPanel,
+    subList,
+    typesHeader,
+    sub,
+    typesBox,
+    rows,
+    more,
+    clearAll,
+  };
 }
 
-// Keeps the filter button, badge and panel in step with the filter state, and
-// reports toggles back to it. Choosing a type keeps the panel open. Returns
-// { prepare, cleanup }: call prepare() just before the panel opens (it picks
-// the short list, or the full one when a selected type is only in the full
-// list, so the selection is visible).
+// Keeps the filter button, badge and panels in step with the filter state, and
+// reports toggles back to it. Choosing a type keeps the panels open. Returns
+// { prepare, onKey, owns, closeSub, cleanup }: call prepare() just before the
+// panel opens; onKey/owns plug into wirePullDown.
 function wireFilter({
   circle,
   button,
   badge,
   panel,
   list,
+  library,
+  typesToggle,
+  subPanel,
+  subList,
+  typesHeader,
+  sub,
+  typesBox,
   rows,
   more,
   clearAll,
   filter,
   search,
 }) {
-  const checks = () => [...list.querySelectorAll('[role="menuitemcheckbox"]')];
+  const reduced = () =>
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  let isOpen = false;
   let full = false;
   // "See more" appends to the short list rather than reordering it, so the
   // rows already on screen stay put while the panel grows.
@@ -345,134 +450,350 @@ function wireFilter({
     ...TYPES.map((t) => t.value).filter((v) => !COMMON_TYPES.includes(v)),
   ];
 
-  function render() {
-    const shown = full
-      ? FULL_ORDER.map((v) => rows.get(v))
-      : [...COMMON_TYPES.map((v) => rows.get(v)), more];
-    list.replaceChildren(...shown);
-    panel.classList.toggle("is-full", full);
+  // The type rows exist in the DOM only while the submenu is open, so
+  // keyboard navigation never lands on a hidden row.
+  function renderTypes() {
+    const shown = isOpen
+      ? full
+        ? FULL_ORDER.map((v) => rows.get(v))
+        : [...COMMON_TYPES.map((v) => rows.get(v)), more]
+      : [];
+    typesBox.replaceChildren(...shown);
   }
 
-  // The list's height is animated by a spring (liquidGL forces transition:
-  // none on lenses, and watches the lens's size, so the glass follows each
-  // frame). Inline height only exists while it runs.
-  let fromH = 0;
-  let toH = 0;
+  // The submenu grows out of the By Type row. liquidGL forces transition: none
+  // on lenses and follows a lens's size and position every frame, so the
+  // spring drives plain CSS variables and an inline height. `v` is the open
+  // amount (0 = the row, 1 = the full panel); `g` animates a height change
+  // while it is open (See more). The header stays where the row was: the
+  // panel's padding grows from 0 as it grows from the row's own rect.
+  const PAD = 6;
+  const MARGIN = 12;
+  const MIN_TOP = 77;
+  let row = { l: 0, t: 0, w: 0, h: 0 };
+  let end = { x: 0, y0: 0, y1: 0, w: 0, h0: 0, h1: 0 };
+  let v = 0;
+  let g = 0;
+  const paint = () => {
+    const h = lerp(row.h, lerp(end.h0, end.h1, g), v);
+    subPanel.style.setProperty("--sub-x", `${lerp(row.l, end.x, v)}px`);
+    subPanel.style.setProperty(
+      "--sub-y",
+      `${lerp(row.t, lerp(end.y0, end.y1, g), v)}px`,
+    );
+    subPanel.style.setProperty("--sub-w", `${lerp(row.w, end.w, v)}px`);
+    subPanel.style.setProperty("--sub-pad", `${PAD * v}px`);
+    subPanel.style.setProperty("--sub-t", String(Math.min(v, 1)));
+    subPanel.style.height = `${h}px`;
+  };
+  const rest = () => {
+    // At rest the panel sizes itself; only its place stays fixed.
+    subPanel.classList.remove("is-animating");
+    for (const name of ["--sub-pad", "--sub-t"]) {
+      subPanel.style.removeProperty(name);
+    }
+    subPanel.style.height = "";
+    subPanel.style.setProperty("--sub-x", `${end.x}px`);
+    subPanel.style.setProperty("--sub-y", `${end.y1}px`);
+    subPanel.style.setProperty("--sub-w", `${end.w}px`);
+  };
+  const open = createSpring({
+    onUpdate: (value) => {
+      v = value;
+      if (v > 0 || isOpen) paint();
+    },
+    onRest: (target) => {
+      if (target === 1) return rest();
+      subPanel.classList.remove("is-open", "is-animating");
+      subPanel.style.height = "";
+      typesBox.replaceChildren();
+      v = 0;
+    },
+  });
   const grow = createSpring({
-    onUpdate: (v) => {
-      list.style.height = `${fromH + (toH - fromH) * v}px`;
+    onUpdate: (value) => {
+      g = value;
+      paint();
     },
     onRest: (target) => {
       if (target !== 1) return;
-      list.style.height = "";
-      list.classList.remove("is-resizing");
+      end.h0 = end.h1;
+      end.y0 = end.y1;
+      g = 0;
+      if (v >= 1) rest();
     },
   });
-  const settle = () => {
-    grow.to(0, { instant: true });
-    list.style.height = "";
-    list.classList.remove("is-resizing");
-  };
 
-  // Fix the panel's width once, to its widest row of the full list with room
-  // for counts, so neither "See more" nor counts arriving change it.
+  // Where the panel would sit and how tall it would be at its natural size,
+  // measured with the current rows. Starts level with the By Type row and
+  // moves up only as far as needed to stay on screen.
+  function measureEnd() {
+    const rect = typesToggle.getBoundingClientRect();
+    const room = window.innerHeight - MARGIN - MIN_TOP;
+    subPanel.style.height = "";
+    subPanel.style.removeProperty("--sub-w");
+    subPanel.style.setProperty("--sub-pad", `${PAD}px`);
+    subPanel.style.setProperty(
+      "--sub-list-max",
+      `${room - PAD * 2 - typesHeader.offsetHeight}px`,
+    );
+    const box = subPanel.getBoundingClientRect();
+    const h = box.height;
+    const w = Math.ceil(box.width);
+    return {
+      rect,
+      h,
+      w,
+      x: Math.max(
+        MARGIN,
+        Math.min(rect.left - PAD, window.innerWidth - MARGIN - w),
+      ),
+      y: Math.max(
+        MIN_TOP,
+        Math.min(rect.top - PAD, window.innerHeight - MARGIN - h),
+      ),
+    };
+  }
+
+  function setSubOpen(next, { byKeyboard = false } = {}) {
+    if (next === isOpen) return;
+    isOpen = next;
+    typesToggle.setAttribute("aria-expanded", String(next));
+    if (next) {
+      setCovered(true);
+      full = false;
+      grow.to(0, { instant: true });
+      g = 0;
+      renderTypes();
+      subPanel.classList.add("is-open");
+      const m = measureEnd();
+      row = {
+        l: m.rect.left,
+        t: m.rect.top,
+        w: m.rect.width,
+        h: m.rect.height,
+      };
+      end = { x: m.x, y0: m.y, y1: m.y, w: m.w, h0: m.h, h1: m.h };
+      if (reduced()) {
+        open.to(1, { instant: true });
+      } else {
+        v = 0;
+        subPanel.classList.add("is-animating");
+        paint();
+        open.to(1);
+      }
+      if (byKeyboard) {
+        subPanel.querySelector('[role="menuitemcheckbox"]')?.focus();
+      } else {
+        typesHeader.focus({ preventScroll: true });
+      }
+      return;
+    }
+    // Collapse back into the row, wherever the spring currently is.
+    setCovered(false);
+    const rect = typesToggle.getBoundingClientRect();
+    row = { l: rect.left, t: rect.top, w: rect.width, h: rect.height };
+    end.h0 = end.h1;
+    end.y0 = end.y1;
+    grow.to(0, { instant: true });
+    if (reduced()) {
+      open.to(0, { instant: true });
+    } else {
+      subPanel.classList.add("is-animating");
+      open.to(0);
+    }
+    typesToggle.focus({ preventScroll: true });
+  }
+
+  function seeMore() {
+    const from = subPanel.getBoundingClientRect().height;
+    full = true;
+    grow.to(0, { instant: true });
+    g = 0;
+    renderTypes();
+    // Focus moves to the first row the swap revealed.
+    rows.get(FULL_ORDER[COMMON_TYPES.length]).focus({ preventScroll: true });
+    const m = measureEnd();
+    end = { ...end, y0: end.y1, y1: m.y, h0: from, h1: m.h };
+    if (reduced() || m.h === from) {
+      end.h0 = end.h1 = m.h;
+      end.y0 = end.y1;
+      v = 1;
+      return rest();
+    }
+    subPanel.classList.add("is-animating");
+    subPanel.style.height = `${from}px`;
+    grow.to(1);
+  }
+
+  // Fix both panels' widths once: the parent to its own widest row, the
+  // submenu to the widest of its header and the full type list, with room for
+  // 3-digit counts, so nothing changes width as counts arrive or See more is
+  // used.
   let widthFixed = false;
   function fixWidth() {
     if (widthFixed) return;
     widthFixed = true;
-    const wasFull = full;
-    full = true;
-    render();
-    const labels = [...rows.values()].map((r) => r.querySelector(".menu-panel-count"));
-    labels.forEach((c) => (c.textContent = " (999)"));
+    const counts = [...rows.values(), library].map((r) =>
+      r.querySelector(".menu-panel-count"),
+    );
+    counts.forEach((c) => (c.textContent = " (999)"));
     panel.classList.add("is-measuring");
-    const width = Math.ceil(panel.getBoundingClientRect().width);
+    const parentW = Math.ceil(panel.getBoundingClientRect().width);
     panel.classList.remove("is-measuring");
-    panel.style.setProperty("--filter-w", `${Math.max(220, width)}px`);
-    full = wasFull;
+    panel.style.setProperty("--filter-w", `${Math.max(220, parentW)}px`);
+
+    isOpen = true;
+    full = true;
+    renderTypes();
+    subPanel.classList.add("is-measuring");
+    const subW = Math.ceil(subPanel.getBoundingClientRect().width);
+    subPanel.classList.remove("is-measuring");
+    subPanel.style.setProperty("--filter-w", `${Math.max(220, subW)}px`);
+    isOpen = full = false;
+    renderTypes();
     syncCounts();
-    render();
   }
 
   function syncCounts() {
     const counts = filter.counts;
     panel.classList.toggle("has-counts", counts !== null);
-    for (const [value, row] of rows) {
-      row.querySelector(".menu-panel-count").textContent =
-        counts === null ? "" : ` (${counts[value] ?? 0})`;
+    subPanel.classList.toggle("has-counts", counts !== null);
+    const text = (n) => (counts === null ? "" : ` (${n ?? 0})`);
+    for (const [value, item] of rows) {
+      item.querySelector(".menu-panel-count").textContent = text(
+        counts?.[value],
+      );
     }
+    library.querySelector(".menu-panel-count").textContent = text(
+      counts?.inLibrary,
+    );
   }
 
   function sync() {
-    const count = filter.count;
-    badge.hidden = count === 0;
-    badge.textContent = String(count);
+    const total = filter.total;
+    badge.hidden = total === 0;
+    badge.textContent = String(total);
     button.setAttribute(
       "aria-label",
-      count ? `Filter, ${count} selected` : "Filter",
+      total ? `Filter, ${total} selected` : "Filter",
     );
     button.title = button.getAttribute("aria-label");
-    for (const [value, row] of rows) {
-      row.setAttribute("aria-checked", String(filter.has(value)));
+    for (const [value, item] of rows) {
+      item.setAttribute("aria-checked", String(filter.has(value)));
     }
-    clearAll.disabled = count === 0;
+    library.setAttribute("aria-checked", String(filter.inLibrary));
+    for (const s of sub) {
+      s.textContent = filter.count
+        ? `${filter.count} Selected`
+        : "None applied";
+    }
+    clearAll.disabled = total === 0;
   }
+
+  // The dimmed parent can't be reached while the submenu is open (its own
+  // click folds the submenu instead).
+  const setCovered = (on) => {
+    panel.classList.toggle("is-covered", on);
+    list.inert = clearAll.inert = on;
+  };
 
   const onList = (event) => {
     const item = event.target.closest("button");
     if (!item) return;
-    if (item === more) {
-      const from = list.getBoundingClientRect().height;
-      full = true;
-      render();
-      // Focus moves to the first row the swap revealed.
-      rows.get(FULL_ORDER[COMMON_TYPES.length]).focus({ preventScroll: true });
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-      const to = list.getBoundingClientRect().height;
-      if (to <= from) return;
-      settle();
-      fromH = from;
-      toH = to;
-      list.style.height = `${from}px`;
-      list.classList.add("is-resizing");
-      grow.to(1);
-      return;
+    if (item === typesToggle) {
+      // Stop here so the panel's own click handler (which folds the submenu)
+      // doesn't see the click that just opened it.
+      event.stopPropagation();
+      return setSubOpen(true, { byKeyboard: event.detail === 0 });
     }
+    if (item === library) filter.toggleInLibrary();
+  };
+  const onSub = (event) => {
+    const item = event.target.closest("button");
+    if (!item) return;
+    if (item === typesHeader) {
+      return setSubOpen(false);
+    }
+    if (item === more) return seeMore();
     if (item.matches('[role="menuitemcheckbox"]')) {
       filter.toggle(Number(item.dataset.value));
     }
   };
+  // Clicking the dimmed parent panel folds the submenu away.
+  const onPanel = () => {
+    if (isOpen) setSubOpen(false);
+  };
   const onClearAll = (event) => {
     filter.clear();
     // A disabled button loses focus; keep keyboard users in the menu.
-    if (event.detail === 0) checks()[0]?.focus();
+    if (event.detail === 0) library.focus();
+  };
+  const closeSub = () => {
+    if (!isOpen && !subPanel.classList.contains("is-open")) return;
+    isOpen = false;
+    typesToggle.setAttribute("aria-expanded", "false");
+    setCovered(false);
+    open.to(0, { instant: true });
   };
   const closePanel = () => {
+    closeSub();
     panel.classList.remove("is-open");
     button.setAttribute("aria-expanded", "false");
     if (circle.contains(document.activeElement)) document.activeElement.blur();
   };
 
+  // Keys while the submenu is open belong to it: Escape and Left fold it,
+  // Up/Down walk its rows.
+  const onKey = (event) => {
+    if (!isOpen) return false;
+    if (event.key === "Escape" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      setSubOpen(false);
+      return true;
+    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return false;
+    const items = [...subPanel.querySelectorAll('[role^="menuitem"]')].filter(
+      (e) => !e.disabled,
+    );
+    event.preventDefault();
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    const at = items.indexOf(document.activeElement);
+    items[(at + step + items.length) % items.length].focus();
+    return true;
+  };
+
   list.addEventListener("click", onList);
-  const overlay = createOverlayScroll({ scroller: list, host: panel, top: 6, bottom: 6 });
+  panel.addEventListener("click", onPanel);
+  subPanel.addEventListener("click", onSub);
+  const overlay = createOverlayScroll({
+    scroller: subList,
+    content: typesBox,
+    host: subPanel,
+    top: 6,
+    bottom: 6,
+  });
   clearAll.addEventListener("click", onClearAll);
   const offChange = filter.on("change", sync);
   const offCounts = filter.on("counts", syncCounts);
   const offExit = search.on("exit", closePanel);
-  render();
   sync();
   syncCounts();
   return {
     prepare() {
-      settle();
+      closeSub();
       fixWidth();
-      full = filter.values.some((v) => !COMMON_TYPES.includes(v));
-      render();
     },
+    onKey,
+    owns: subPanel,
+    closeSub,
     cleanup() {
+      open.destroy();
       grow.destroy();
       overlay.destroy();
       list.removeEventListener("click", onList);
+      panel.removeEventListener("click", onPanel);
+      subPanel.removeEventListener("click", onSub);
       clearAll.removeEventListener("click", onClearAll);
       offChange();
       offCounts();
@@ -566,7 +887,9 @@ function wireSearch({
     openedByKeyboard = byKeyboard;
     stage.classList.add("is-search-active");
     trigger.setAttribute("aria-expanded", "true");
-    input.focus({ preventScroll: true });
+    // A click or tap leaves the field unfocused (no phone keyboard popping up);
+    // only the keyboard moves focus into it.
+    if (byKeyboard) input.focus({ preventScroll: true });
     run();
   }
 
@@ -685,8 +1008,14 @@ let teardown = null;
 // A pull-down: opens from `trigger`, closes on outside click, Escape (focus
 // returns to the trigger, and the event is marked handled so search mode
 // doesn't also leave) or choosing an entry - unless `keepOpen`, for menus of
-// toggles. `onOpen` runs just before it shows.
-function wirePullDown(panel, trigger, { keepOpen = false, onOpen } = {}) {
+// toggles. `onOpen` runs just before it shows. `onKey(event)` may consume a
+// key first (a layered submenu); `owns` is an extra element that counts as
+// inside for outside clicks; `onClose` runs whenever it closes.
+function wirePullDown(
+  panel,
+  trigger,
+  { keepOpen = false, onOpen, onClose, onKey, owns } = {},
+) {
   const entries = () =>
     [...panel.querySelectorAll('[role^="menuitem"]')].filter(
       (e) => !e.disabled,
@@ -695,6 +1024,7 @@ function wirePullDown(panel, trigger, { keepOpen = false, onOpen } = {}) {
 
   function setOpen(open) {
     if (open) onOpen?.();
+    else onClose?.();
     panel.classList.toggle("is-open", open);
     trigger.setAttribute("aria-expanded", String(open));
   }
@@ -711,6 +1041,7 @@ function wirePullDown(panel, trigger, { keepOpen = false, onOpen } = {}) {
     // The click may have removed its own target (e.g. "See more" swaps the
     // list), so test the original path, not the live tree.
     const path = event.composedPath();
+    if (owns && path.includes(owns)) return;
     if (path.includes(panel) || path.includes(trigger)) {
       // Choosing an entry closes the menu; the link still navigates.
       if (path.includes(panel) && !keepOpen) setOpen(false);
@@ -721,6 +1052,7 @@ function wirePullDown(panel, trigger, { keepOpen = false, onOpen } = {}) {
 
   function onKeydown(event) {
     if (!isOpen()) return;
+    if (onKey?.(event)) return;
     if (event.key === "Escape") {
       event.preventDefault();
       setOpen(false);
@@ -795,14 +1127,12 @@ export async function mountMenu({ search, filter }) {
   } = buildFilterButton();
   const {
     panel: filterPanel,
-    list: filterList,
-    rows: filterRows,
-    more: filterMore,
-    clearAll: filterClearAll,
+    subPanel: filterSub,
+    ...filterParts
   } = buildFilterPanel();
   bar.append(filterWrap, searchPill, nav);
   const { circle: backCircle, button: backButton } = buildBackButton();
-  stage.append(backCircle, bar, panel, filterPanel);
+  stage.append(backCircle, bar, panel, filterPanel, filterSub);
   document.body.append(stage);
 
   const trigger = row.querySelector('[data-opens="pull-down"]');
@@ -813,16 +1143,17 @@ export async function mountMenu({ search, filter }) {
     button: filterButton,
     badge: filterBadge,
     panel: filterPanel,
-    list: filterList,
-    rows: filterRows,
-    more: filterMore,
-    clearAll: filterClearAll,
+    subPanel: filterSub,
+    ...filterParts,
     filter,
     search,
   });
   cleanups.push(
     wirePullDown(filterPanel, filterButton, {
       keepOpen: true,
+      onKey: filterWiring.onKey,
+      owns: filterSub,
+      onClose: filterWiring.closeSub,
       onOpen: () => {
         filterWiring.prepare();
         // The panel lines up under the filter circle's left edge.
@@ -901,6 +1232,14 @@ export async function mountMenu({ search, filter }) {
         target: "#app-filter-panel",
         content: false,
         zIndex: 3,
+      }),
+      liquidGL({
+        ...GLASS_CONFIG,
+        target: "#app-filter-sub",
+        content: false,
+        zIndex: 4,
+        // Small extra tint; the ::before layer does the blur and darkening.
+        tint: "rgba(9, 9, 11, 0.15)",
       }),
     ]
       .flat()

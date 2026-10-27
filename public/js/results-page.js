@@ -11,10 +11,11 @@ import { TYPES } from "/js/result-types.js";
 
 // One card: a cover tile (placeholder for now, nothing on top of it), then
 // title, then "type · year". Missing year or type simply leaves the dot out.
-export function renderCard({ title, year, type, category }) {
+export function renderCard({ title, year, type, category, inLibrary }) {
   const card = document.createElement("li");
   card.className = "result-card";
   if (category != null) card.dataset.category = category;
+  if (inLibrary) card.dataset.inLibrary = "1";
 
   const art = document.createElement("div");
   art.className = "result-cover";
@@ -63,10 +64,11 @@ export function renderLoading(list, count = 12) {
 
 const TRAILING = 12;
 
-// `loader(offset, limit, { types })` resolves { items, hasMore, counts? };
-// `counts` ({ [type]: n } for the whole result set) feeds the filter menu's
-// per-type numbers - without it they count the loaded items. `types` are
-// the selected filter values at the time of the request (empty = all), so real
+// `loader(offset, limit, { types, inLibrary })` resolves { items, hasMore, counts? };
+// `counts` ({ [type]: n, inLibrary: n } for the whole result set) feeds the
+// filter menu's numbers - without it they count the loaded items. `types` and
+// `inLibrary` are the filter at the time of the request (empty / false =
+// everything), so real
 // search can filter in its request. `filter` (optional, see filter-state.js)
 // also hides already-drawn cards that don't match when it changes, and the
 // same rule applies to batches that arrive later. The first batch loads on
@@ -96,7 +98,10 @@ export function createResultsPage(
   function publishCounts(reported) {
     if (!filter) return;
     filter.setCounts(
-      reported ?? Object.fromEntries(TYPES.map((t) => [t.value, tally[t.value] || 0])),
+      reported ?? {
+        ...Object.fromEntries(TYPES.map((t) => [t.value, tally[t.value] || 0])),
+        inLibrary: tally.inLibrary || 0,
+      },
     );
   }
 
@@ -114,6 +119,7 @@ export function createResultsPage(
     for (const card of list.querySelectorAll(".result-card:not(.is-skeleton)")) {
       card.hidden = !filter.matches(
         card.dataset.category === undefined ? null : Number(card.dataset.category),
+        card.dataset.inLibrary === "1",
       );
     }
     refreshGlass();
@@ -137,13 +143,17 @@ export function createResultsPage(
     observer?.disconnect();
     observer = null;
     const mine = run;
-    loader(loaded, batch, { types: filter?.values ?? [] }).then(
+    loader(loaded, batch, {
+      types: filter?.values ?? [],
+      inLibrary: filter?.inLibrary ?? false,
+    }).then(
       ({ items, hasMore, counts }) => {
         if (mine !== run) return;
         loading = false;
         loaded += items.length;
         for (const item of items) {
           if (item.category != null) tally[item.category] = (tally[item.category] || 0) + 1;
+          if (item.inLibrary) tally.inLibrary = (tally.inLibrary || 0) + 1;
         }
         publishCounts(counts);
         list.querySelectorAll(".is-skeleton").forEach((s) => s.remove());

@@ -1,8 +1,9 @@
 // TEMPORARY placeholder data for the result-card draft. Delete this file (and
 // its import in results-page.js) when real search results plug in.
 //
-// Shape of one result: { title, year, type, category } - `type` is the label,
-// `category` the IGDB number (see result-types.js) the filter works on.
+// Shape of one result: { title, year, type, category, inLibrary } - `type` is
+// the label, `category` the IGDB number (see result-types.js) the filter works
+// on, `inLibrary` whether the game is owned.
 
 import { TYPES } from "/js/result-types.js";
 
@@ -17,16 +18,21 @@ const SAMPLE_RESULTS = Array.from({ length: 60 }, (_, i) => {
     year: 2024,
     type: TYPES.find((t) => t.value === category).label,
     category,
+    inLibrary: i % 4 === 2,
   };
 });
 
 // TEMPORARY fake paged load so the skeleton and load-on-scroll behaviour can
 // be seen. Resolves { items, hasMore } for the slice after a fake delay (first
-// batch slower), plus `counts` (type -> how many in the whole set). It ignores
-// the filter ({ types }); real search applies it in its request and replaces
-// this with its own.
+// batch slower), plus `counts` (type -> how many in the whole set, and
+// `inLibrary`). It ignores the filter ({ types, inLibrary }); real search
+// applies it in its request and replaces this with its own.
 const COUNTS = Object.fromEntries(TYPES.map((t) => [t.value, 0]));
-for (const r of SAMPLE_RESULTS) COUNTS[r.category]++;
+COUNTS.inLibrary = 0;
+for (const r of SAMPLE_RESULTS) {
+  COUNTS[r.category]++;
+  if (r.inLibrary) COUNTS.inLibrary++;
+}
 
 export function loadSampleResults(offset, limit) {
   const delay = offset === 0 ? 1500 : 800;

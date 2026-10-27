@@ -362,6 +362,42 @@
   text-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
 }
 
+.menu-icon-type {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.menu-filter-type .menu-icon-type {
+  color: rgba(244, 244, 244, 0.55);
+}
+
+.menu-filter-type[aria-checked="true"] .menu-icon-type {
+  color: var(--light-gray);
+}
+
+.menu-filter-type .menu-type-tick {
+  visibility: hidden;
+}
+
+.menu-filter-type[aria-checked="true"] .menu-type-tick {
+  visibility: visible;
+}
+
+/* "See more": dim label with a dim down chevron right after it. Doubled class
+   so it beats .menu-panel-item's own colour further down. */
+.menu-panel-item.menu-filter-more,
+.menu-panel-item.menu-filter-more .menu-panel-label {
+  color: rgba(244, 244, 244, 0.55);
+}
+
+.menu-more-chevron {
+  transform: rotate(90deg);
+  margin-left: -4px;
+}
+
 .menu-icon-stroke {
   fill: none;
   stroke: currentColor;
@@ -416,20 +452,125 @@
   overflow-y: auto;
 }
 
-/* While the list grows, clip instead of showing a scrollbar. */
-.menu-panel-scroll.is-resizing {
-  overflow: hidden;
-}
-
 /* Selected rows show a trailing checkmark; the slot is always there so rows
    never shift. */
 .menu-panel-check {
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
 }
 
 .menu-panel-check .menu-panel-label {
   flex: 1;
+  margin-right: 6px;
+}
+
+/* The "By Type" row: label with a dimmer, smaller line under it, and a
+   chevron that turns down while the type list is open. */
+.menu-panel-item.menu-filter-types-toggle {
+  height: auto;
+  min-height: 36px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+@media (pointer: coarse) {
+  .menu-panel-item.menu-filter-types-toggle {
+    min-height: 44px;
+  }
+}
+
+.menu-panel-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  margin-right: 6px;
+}
+
+.menu-panel-sub {
+  color: rgba(244, 244, 244, 0.55);
+  font-size: 12px;
+  line-height: 1.1;
+}
+
+/* The submenu's header chevron points down; --sub-t turns it from the row's
+   right-pointing one while the panel opens. */
+.menu-chevron-down {
+  transform: rotate(calc(var(--sub-t, 1) * 90deg));
+}
+
+/* The By Type submenu: a second glass panel layered over the filter panel,
+   growing out of the By Type row. menu.js drives --sub-x/-y/-w, --sub-pad
+   and an inline height from a spring while it opens, closes or grows; at rest
+   it sizes itself. */
+.menu-filter-sub {
+  /* Above the parent panel's rows, which sit at z-index 2 in the stage. */
+  z-index: 5;
+  right: auto;
+  top: var(--sub-y, 77px);
+  left: var(--sub-x, 25px);
+  width: var(--sub-w, var(--filter-w, 220px));
+  padding: var(--sub-pad, 6px);
+}
+
+.menu-filter-sub::before {
+  /* Blurs the dimmed parent rows under the submenu into a soft smear; the lens
+     tint alone is drawn below all page text, so it cannot. Follows the
+     panel's size. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: rgba(9, 9, 11, 0.4);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  pointer-events: none;
+}
+
+.menu-filter-sub.is-animating {
+  overflow: hidden;
+}
+
+.menu-filter-sub.is-measuring {
+  display: block;
+  visibility: hidden;
+  width: max-content;
+}
+
+.menu-filter-sub .menu-panel-scroll {
+  max-height: var(--sub-list-max, 60dvh);
+}
+
+/* While the submenu is up, the parent behind it dims and its By Type row
+   (replaced by the submenu's header) hides. */
+.menu-filter-panel .menu-panel-scroll,
+.menu-filter-panel .menu-panel-separator,
+.menu-filter-panel .menu-filter-clear {
+  transition: opacity 200ms ease;
+}
+
+.menu-filter-panel.is-covered .menu-panel-scroll,
+.menu-filter-panel.is-covered .menu-panel-separator,
+.menu-filter-panel.is-covered .menu-filter-clear {
+  opacity: 0.35;
+}
+
+.menu-filter-panel.is-covered .menu-filter-types-toggle {
+  visibility: hidden;
+}
+
+.menu-filter-types {
+  position: relative;
+  z-index: 2;
+}
+.menu-panel-check .menu-check-mark {
+  visibility: hidden;
+}
+
+.menu-panel-check[aria-checked="true"] .menu-check-mark {
+  visibility: visible;
 }
 
 /* Per-type result counts: "Main Game (39)", in the label's own size but dimmer,
@@ -442,14 +583,6 @@
 .has-counts .menu-panel-count,
 .is-measuring .menu-panel-count {
   display: inline;
-}
-
-.menu-panel-check .menu-icon {
-  visibility: hidden;
-}
-
-.menu-panel-check[aria-checked="true"] .menu-icon {
-  visibility: visible;
 }
 
 .menu-panel-item:disabled {
