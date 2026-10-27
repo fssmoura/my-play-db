@@ -40,10 +40,11 @@ suggestions below and got walked past anyway, so it lives up here now.
   permission to ship it. Do mention when work is piling up uncommitted.
 - Don't say something works because you wrote it. Be clear about what hasn't
   been tested.
-- In the GitHub Copilot app, the owner checks first. The Builder reviews its
-  own UI work before reporting done; the orchestrator tests, screenshots or
-  reviews only after a clear instruction from the owner - a finished build is
-  not one. See docs/copilot-app.md.
+- In the GitHub Copilot app, the Builder reviews its own UI work before
+  reporting done, and the orchestrator reviews the Builder's code when it
+  reports. Beyond that code review, the orchestrator tests or screenshots
+  only after a clear instruction from the owner - a finished build is not
+  one. See docs/copilot-app.md.
 - Check the diff for keys and tokens before committing.
 - Interrupt for anything risking security, data loss or money, even unasked.
   Where it's urgent, act first and explain after.
@@ -175,12 +176,24 @@ my-play-db/
       supabase.js          # supabase-js client (ESM from esm.sh)
       session.js           # Google OAuth sign in/out, JWT access
       sign-in.js           # sign-in screen wiring + `next` redirect
-      menu.js              # top-right app menu (glass pill via liquidGL, Profile + More pull-down)
+      menu.js              # top-right app menu (glass pill via liquidGL, Search / Profile / More pull-down, Back circle)
+      app-shell.js         # new app wiring: search state + pages + results page + history + menu
+      search-state.js      # search mode + query state, emits events (no DOM)
+      filter-state.js      # selected result types, emits change (no DOM)
+      result-types.js      # the 15 IGDB game types (value + label) + the short list
+      glass-refresh.js     # asks liquidGL to retake its snapshot after page changes
+      overlay-scroll.js    # thin overlay scroll indicator (native scrollbar hidden)
+      pages.js             # page switcher for the content area (hides, never destroys)
+      results-page.js      # results page: card grid, skeletons, scroll loading, type filter
+      sample-results.js    # TEMPORARY placeholder cards, delete when real search plugs in
+      spring.js            # small spring used to animate lens CSS variables
       dev-reload.js        # localhost-only auto-reload when files change
     css/
       tokens.css           # colour palette variables (new app only)
       sign-in.css          # styling for the sign-in screen
       menu.css             # styling for the app menu
+      pages.css            # content area + results grid, cards, skeletons
+      overlay-scroll.css   # hides native scrollbars, styles the overlay indicator
     vendor/
       liquidGL.js          # liquid glass library, vendored and PATCHED (see Gotchas)
     lab/                   # the lab / test bench for every feature (served at /lab/); no sign-in of its own

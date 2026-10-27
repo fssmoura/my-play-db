@@ -1,7 +1,7 @@
 /* =========================================================================
    my-play-db - the top-right app menu (see public/js/menu.js).
 
-   Layout: two 44x44 buttons edge to edge, 44px tall, 22px corner radius. The pill carries no fill, stroke or shadow of its own: liquidGL draws everything. The glass effect
+   Layout: 44x44 buttons edge to edge (width follows the button count), 44px tall, 22px corner radius. The pill carries no fill, stroke or shadow of its own: liquidGL draws everything. A second pill of the same kind (the search field) splits off its left end; see the search block below. The glass effect
    itself (refraction, dispersion, specular) is drawn by liquidGL; its
    settings live in GLASS_CONFIG in menu.js.
    ========================================================================= */
@@ -12,12 +12,34 @@
   inset: 0;
   z-index: 100;
   pointer-events: none;
+  /* Search pill morph: --search-t is 0 closed, 1 open (driven by menu.js).
+     --search-w is the open width: 280px, or less on a phone so it stops at the
+     page's side margin (25px each side, the 96px main pill left holding
+     Profile and More, 8px gap). */
+  --search-t: 0;
+  /* Back circle slide: 0 hidden, 1 shown (driven by menu.js). While it shows,
+     the search pill stops 52px (44 + 8 gap) short of the left margin so the
+     two never overlap on a phone. */
+  --back-t: 0;
+  --search-w: min(280px, calc(100vw - 206px - 52px * var(--back-t)));
+  /* Text size shared by the pull-down labels and the search field, so they
+     cannot drift apart. Unitless (px) so the iOS fix below can do sums with it. */
+  --menu-font-px: 14;
 }
 
-.menu {
+/* Holds the search pill and the main pill side by side, anchored top-right. */
+.menu-bar {
   position: absolute;
   top: 25px;
   right: 25px;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.menu {
+  position: relative;
+  flex: none;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -27,6 +49,235 @@
   border-radius: 22px;
   /* liquidGL writes inline pointer-events:none on its lenses. */
   pointer-events: auto !important;
+}
+
+/* The Back circle: the same lens, 25px from the top and left (the pill's
+   margins mirrored). Hidden it is display: none; shown it slides in from
+   off-screen left with --back-t. */
+.menu.menu-back {
+  position: absolute;
+  top: 25px;
+  left: calc(25px - 69px * (1 - var(--back-t)));
+  display: none;
+  width: 44px;
+  padding: 0;
+}
+
+.menu-stage.is-back-active .menu-back {
+  display: flex;
+}
+
+/* The filter circle sits immediately left of the search pill and grows out
+   with it: the wrapper's width and gap follow --search-t, the lens fills it
+   and the row inside clips the button while it is narrower than 44px. The
+   badge is the wrapper's other child (outside the lens, so nothing clips it)
+   and straddles the circle's top-right rim. */
+.menu-filter-wrap {
+  position: relative;
+  flex: none;
+  display: none;
+  width: max(0px, calc(44px * var(--search-t)));
+  height: 44px;
+  margin-right: calc(8px * var(--search-t));
+}
+
+.menu-stage.is-search-active .menu-filter-wrap {
+  display: block;
+}
+
+.menu.menu-filter {
+  width: 100%;
+  padding: 0;
+}
+
+.menu-filter .menu-row {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 22px;
+}
+
+.menu-filter-badge {
+  position: absolute;
+  z-index: 5;
+  top: -2px;
+  right: -2px;
+  box-sizing: border-box;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--black);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+  /* Appears once the circle is nearly full size. */
+  opacity: clamp(0, calc((var(--search-t) - 0.6) * 2.5), 1);
+}
+
+.menu-filter-badge[hidden] {
+  display: none;
+}
+
+/* The search pill, a second lens. Closed it is display: none (liquidGL draws
+   a lens whenever its element has a box). Its width and right margin follow
+   --search-t: at 0 it is 48px wide and sits exactly over the main pill's
+   left end (margin -48px), at 1 it is --search-w wide with an 8px gap. */
+.menu-search {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  display: none;
+  height: 44px;
+  width: max(48px, calc(48px + (var(--search-w) - 48px) * var(--search-t)));
+  margin-right: calc(-48px + 56px * var(--search-t));
+  border-radius: 22px;
+  overflow: hidden;
+  pointer-events: auto !important;
+}
+
+.menu-stage.is-search-active .menu-search {
+  display: block;
+}
+
+/* The search button's slot in the main pill closes up as the pill opens. */
+.menu-slot {
+  flex: none;
+  width: max(0px, calc(44px * (1 - var(--search-t))));
+  height: 44px;
+  overflow: hidden;
+}
+
+.menu-stage.is-search-active .menu-slot .menu-item {
+  visibility: hidden;
+}
+
+.menu-search-row {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding-left: 4px;
+  pointer-events: auto;
+}
+
+.menu-search-icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: var(--light-gray);
+  opacity: 0.95;
+}
+
+/* Text size, family and weight match the pull-down labels. */
+.menu-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: none;
+  box-shadow: none;
+  color: var(--light-gray);
+  caret-color: var(--light-gray);
+  font: inherit;
+  font-size: calc(var(--menu-font-px) * 1px);
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
+  appearance: none;
+  -webkit-appearance: none;
+  /* The text fades in once the pill is wide enough to show it. */
+  opacity: calc((var(--search-t) - 0.35) * 2);
+}
+
+/* iOS Safari zooms the page when a field under 16px is focused. Only there,
+   the field is laid out at 16px and scaled down to the shared size (the width
+   is enlarged by the same ratio so it still fills the pill), so it looks the
+   same as everywhere else but never triggers the zoom. */
+@supports (-webkit-touch-callout: none) {
+  .menu-search-input {
+    flex: none;
+    width: calc((100% - 88px) * 16 / var(--menu-font-px));
+    /* The scaled box keeps its enlarged layout size; pull the clear button
+       back by the extra so the field still ends exactly at it. */
+    margin-right: calc(
+      (100% - 88px) * (var(--menu-font-px) - 16) / var(--menu-font-px)
+    );
+    font-size: 16px;
+    transform: scale(calc(var(--menu-font-px) / 16));
+    transform-origin: left center;
+  }
+}
+
+.menu-search-input::placeholder {
+  color: rgba(244, 244, 244, 0.6);
+}
+
+/* Clear button: a 44px hit area at the pill's right end. It always takes its
+   space (so the text never runs under it and nothing jumps) and only fades in
+   while the field has text (the pill's has-text class, set by menu.js).
+   Hidden means visibility: hidden, so it is also out of the tab order. */
+.menu-search-clear {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 22px;
+  background: none;
+  color: rgba(244, 244, 244, 0.6);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 120ms ease,
+    visibility 0s linear 120ms;
+}
+
+.menu-search.has-text .menu-search-clear {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 120ms ease;
+}
+
+.menu-search .menu-search-clear .menu-icon {
+  width: 16px;
+  height: 16px;
+}
+
+@media (hover: hover) {
+  .menu-search-clear:hover {
+    color: var(--light-gray);
+  }
+}
+
+.menu-search-clear:focus {
+  outline: none;
+}
+
+.menu-search-clear:focus-visible {
+  outline: 1px solid var(--gray);
+  outline-offset: -4px;
+}
+
+/* No browser search-field chrome: our own icon is the only one. */
+.menu-search-input::-webkit-search-cancel-button,
+.menu-search-input::-webkit-search-decoration,
+.menu-search-input::-webkit-search-results-button,
+.menu-search-input::-webkit-search-results-decoration,
+.menu-search-input::-ms-clear {
+  display: none;
+  -webkit-appearance: none;
 }
 
 /* liquidGL sets pointer-events:none on its targets (pill and panel); give it back to what must be clickable. */
@@ -65,10 +316,22 @@
   cursor: pointer;
 }
 
-.menu .menu-item:hover:not(:disabled),
+/* Hover only where there is a real hover (not sticky after a tap); the focus
+   ring is keyboard-only (:focus-visible), never left behind by mouse or touch. */
 .menu .menu-item:focus-visible {
   background: none;
   opacity: 1;
+}
+
+@media (hover: hover) {
+  .menu .menu-item:hover:not(:disabled) {
+    background: none;
+    opacity: 1;
+  }
+}
+
+.menu .menu-item:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .menu .menu-item:focus-visible {
@@ -77,7 +340,8 @@
 }
 
 /* Icons are smaller than their 44px hit area (HIG: 44pt minimum target). */
-.menu .menu-icon {
+.menu .menu-icon,
+.menu-search .menu-icon {
   flex: none;
   width: 20px;
   height: 20px;
@@ -89,6 +353,7 @@
 
 /* Faint halo so icons and labels stay readable over bright backgrounds. */
 .menu .menu-icon,
+.menu-search .menu-icon,
 .menu-panel-item .menu-icon {
   filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.35));
 }
@@ -125,6 +390,76 @@
 .menu-panel.is-open {
   display: block;
 }
+
+/* The type pull-down lines up under the filter circle (--filter-left is set
+   by menu.js when it opens). Its types scroll if the window is short; the
+   divider and Clear all stay put below them. */
+.menu-filter-panel {
+  right: auto;
+  left: var(--filter-left, 25px);
+  /* --filter-w is measured once by menu.js from the widest row. */
+  width: var(--filter-w, 220px);
+  min-width: 220px;
+}
+
+/* Briefly shown (hidden) so menu.js can measure the widest row. */
+.menu-filter-panel.is-measuring {
+  display: block;
+  visibility: hidden;
+  width: max-content;
+}
+
+.menu-panel-scroll {
+  position: relative;
+  z-index: 2;
+  max-height: calc(100dvh - 77px - 25px - 12px - 36px - 13px);
+  overflow-y: auto;
+}
+
+/* While the list grows, clip instead of showing a scrollbar. */
+.menu-panel-scroll.is-resizing {
+  overflow: hidden;
+}
+
+/* Selected rows show a trailing checkmark; the slot is always there so rows
+   never shift. */
+.menu-panel-check {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.menu-panel-check .menu-panel-label {
+  flex: 1;
+}
+
+/* Per-type result counts: "Main Game (39)", in the label's own size but dimmer,
+   only once there are results. */
+.menu-panel-count {
+  display: none;
+  color: rgba(244, 244, 244, 0.55);
+}
+
+.has-counts .menu-panel-count,
+.is-measuring .menu-panel-count {
+  display: inline;
+}
+
+.menu-panel-check .menu-icon {
+  visibility: hidden;
+}
+
+.menu-panel-check[aria-checked="true"] .menu-icon {
+  visibility: visible;
+}
+
+.menu-panel-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.menu-panel-item:disabled:hover {
+  background: none;
+}
 .menu-panel-item {
   position: relative;
   z-index: 2;
@@ -135,7 +470,7 @@
   padding: 0 14px;
   border-radius: 999px;
   color: var(--light-gray);
-  font-size: 14px;
+  font-size: calc(var(--menu-font-px) * 1px);
   text-decoration: none;
   white-space: nowrap;
 }
@@ -155,7 +490,7 @@ button.menu-panel-item {
   border: 0;
   background: none;
   font: inherit;
-  font-size: 14px;
+  font-size: calc(var(--menu-font-px) * 1px);
   text-align: left;
   cursor: pointer;
 }

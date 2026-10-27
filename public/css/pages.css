@@ -1,0 +1,163 @@
+/* =========================================================================
+   my-play-db - the new app's content area and its pages (public/js/pages.js).
+   One page is visible at a time; the others are hidden, not destroyed.
+   ========================================================================= */
+
+.page[hidden] {
+  display: none;
+}
+
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Results: a grid of cover cards. Content starts below the fixed top bar
+   (25px + 44px + breathing room) and scrolls behind it. */
+.results {
+  box-sizing: border-box;
+  padding: 85px 25px 40px;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 24px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 640px) {
+  .results-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.result-card {
+  min-width: 0;
+}
+
+.result-cover {
+  position: relative;
+  aspect-ratio: 264 / 374;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--dark-gray);
+}
+
+/* The stroke: 1px inside on all sides, white at the top-left corner, fading to
+   nothing through the middle and back to white at the bottom-right corner.
+   Static, pure CSS, drawn over the cover. */
+.result-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(244, 244, 244, 0.25) 0%,
+    rgba(244, 244, 244, 0) 40%,
+    rgba(244, 244, 244, 0) 60%,
+    rgba(244, 244, 244, 0.25) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+
+.result-title,
+.result-meta {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.result-title {
+  margin-top: 8px;
+  color: var(--light-gray);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.result-meta {
+  margin-top: 2px;
+  color: rgba(244, 244, 244, 0.6);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* A card with no cover shows the plain dark gray tile (--dark-gray, above). */
+
+/* Loading: a skeleton card (.is-skeleton, whole card) or a card whose cover is
+   still loading (.is-cover-loading). A soft diagonal light band sweeps across,
+   1.5s, looping. Pure CSS; all shimmers start together so they stay in sync. */
+.result-card.is-skeleton .result-cover,
+.result-card.is-skeleton .result-title,
+.result-card.is-skeleton .result-meta,
+.result-card.is-cover-loading .result-cover {
+  background-color: #1f1f23;
+  background-image: linear-gradient(
+    115deg,
+    rgba(244, 244, 244, 0) 35%,
+    rgba(244, 244, 244, 0.07) 50%,
+    rgba(244, 244, 244, 0) 65%
+  );
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  animation: result-shimmer 1.5s linear infinite;
+}
+
+.result-card.is-skeleton .result-cover::after {
+  display: none;
+}
+
+.result-card.is-skeleton .result-title,
+.result-card.is-skeleton .result-meta {
+  border-radius: 6px;
+}
+
+.result-card.is-skeleton .result-title {
+  width: 70%;
+  height: 14px;
+  margin-top: 10px;
+}
+
+.result-card.is-skeleton .result-meta {
+  width: 45%;
+  height: 10px;
+  margin-top: 8px;
+}
+
+@keyframes result-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result-card.is-skeleton .result-cover,
+  .result-card.is-skeleton .result-title,
+  .result-card.is-skeleton .result-meta,
+  .result-card.is-cover-loading .result-cover {
+    background-image: none;
+    animation: result-pulse 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes result-pulse {
+  50% {
+    opacity: 0.6;
+  }
+}
