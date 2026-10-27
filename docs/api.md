@@ -194,7 +194,7 @@ Uses IGDB v4 (Twitch-backed game database) via OAuth client_credentials flow. No
 | Action        | What it needs                           | Returns                                                                                                                                                                                                                                                                                        |
 | ------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `auth`        | nothing                                 | `{ accessToken, expiresAt }` - Twitch OAuth token (auto-refreshed in-memory)                                                                                                                                                                                                                   |
-| `search`      | query [+ limit=200] [+ offset] [+ type] | Everything a result card needs, in one request: `name`, `slug`, `summary`, `game_type`, `first_release_date`, `cover.url` (t_1080p), `platforms`, plus `alternative_names`, `total_rating_count`, `hypes` and `popularity` `{ visits, want_to_play }` for ranking. `type` filters by game_type |
+| `search`      | query [+ limit=200] [+ offset] [+ type] | Everything a result card needs, in one request: `name`, `slug`, `summary`, `game_type`, `first_release_date`, `cover.url` (t_1080p), `platforms`, plus `alternative_names`, `total_rating_count`, `hypes` and `popularity` `{ visits, want_to_play }` for ranking. `type` filters by game_type (a number, or an array of 0-14) |
 | `game`        | ids (single int or array of ints)       | Array of full game records by IGDB id. **A strict superset of `search`** - see below. `external_games` bundled in response with `source` name (enriched from numeric ID). See [game response fields](api-responses.md#game) in api-responses.md.                                               |
 | `by_external` | source + uid                            | Lightweight lookup: `{ id }` (IGDB game ID) or `null`. Use `game(id)` for full record. `source` accepts name or number.                                                                                                                                                                        |
 
@@ -314,7 +314,7 @@ about still needs a full fetch. It needs a permanently public URL answering in
 under 15 seconds, and after 5 failed deliveries IGDB deactivates the webhook
 silently - failure looks identical to "nothing changed".
 
-The `search` action accepts an optional `type` parameter to filter results by game_type (e.g. `{"query":"Elden Ring","type":0}` returns only main games).
+The `search` action accepts an optional `type` parameter to filter results by game_type: one integer (`{"query":"Elden Ring","type":0}` returns only main games) or an array (`"type":[0,1]` becomes `where game_type = (0,1)`). Values must be integers 0-14; anything else is a validation error (500, like the other handlers). The in-process cache key uses the sorted, de-duplicated set, so `[1,0]` and `[0,1]` share an entry.
 
 **IGDB's own result order is not usable as-is.** Its relevance ranking collapses
 when the query contains punctuation: `search "marvel spider man"` puts Marvel's

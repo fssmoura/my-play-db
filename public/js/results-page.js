@@ -1,35 +1,117 @@
-// The results page: renders a grid of result cards from plain objects
-// { title, year, type }, with a skeleton state while loading. For now it shows
-// TEMPORARY placeholder data (after a fake delay) whatever the query is; real
-// search plugs in later by passing its own loader (or via showLoading() /
-// renderResults(items)). It knows nothing about the menu or the lab's search
-// code.
+// The results page: renders what a search session (search-session.js) exposes,
+// and nothing else. No searching, no filtering decisions - those live in the
+// session. It shows a card grid, skeletons while waiting, a short message for
+// "no results" / an error, and reveals the pool 20 cards at a time as the
+// trailing skeletons scroll into view.
+//
+// Cards are reconciled by game id, so a card (and its cover image) survives
+// the head-start draw, the final draw, narrowing and paging without being
+// rebuilt.
 
-import { loadSampleResults } from "/js/sample-results.js";
 import { refreshGlass } from "/js/glass-refresh.js";
 import { TYPES } from "/js/result-types.js";
+import { releaseYear } from "/js/ranking.js";
 
-// One card: a cover tile (placeholder for now, nothing on top of it), then
-// title, then "type · year". Missing year or type simply leaves the dot out.
-export function renderCard({ title, year, type, category, inLibrary }) {
+const PAGE_SIZE = 20;
+const TRAILING = 12;
+const TYPE_LABELS = new Map(TYPES.map((type) => [type.value, type.label]));
+
+// IGDB serves covers at a size segment like t_1080p; the grid only needs
+// t_cover_big_2x. Other hosts (SteamGridDB, PlayStation) are left alone.
+export function displayCoverUrl(url) {
+  if (!url) return "";
+  try {
+    if (new URL(url).hostname !== "images.igdb.com") return url;
+    return url.replace(/\/t_[a-z0-9_]+\//i, "/t_cover_big_2x/");
+  } catch {
+    return url;
+  }
+}
+
+// Image loads can arrive in a burst; ask liquidGL to retake its snapshot once
+// the burst settles rather than per image.
+let glassTimer = null;
+function refreshGlassSoon() {
+  if (glassTimer) return;
+  glassTimer = setTimeout(() => {
+    glassTimer = null;
+    refreshGlass();
+  }, 120);
+}
+
+// Puts a cover into a tile. liquidGL snapshots the page, so images ask for CORS
+// (crossOrigin) and set src last; hosts that send no CORS headers fail that
+// way, so one retry without it. Nothing usable leaves the plain dark tile.
+function setCover(card, art, url) {
+  const wanted = displayCoverUrl(url);
+  const current = art.querySelector("img");
+  if (current && current.dataset.src === wanted) return;
+  current?.remove();
+  card.classList.remove("is-cover-loading");
+  card.classList.toggle("is-no-cover", !wanted);
+  if (!wanted) return;
+
+  const img = document.createElement("img");
+  img.alt = "";
+  img.loading = "lazy";
+  img.decoding = "async";
+  img.dataset.src = wanted;
+  card.classList.add("is-cover-loading");
+
+  let retried = false;
+  img.addEventListener("load", () => {
+    card.classList.remove("is-cover-loading");
+    refreshGlassSoon();
+  });
+  img.addEventListener("error", () => {
+    if (!retried && img.crossOrigin) {
+      retried = true;
+      img.removeAttribute("crossorigin");
+      img.src = wanted;
+      return;
+    }
+    img.remove();
+    card.classList.remove("is-cover-loading");
+    card.classList.add("is-no-cover");
+  });
+  img.crossOrigin = "anonymous";
+  art.append(img);
+  img.src = wanted;
+}
+
+function cardText(game) {
+  const type = TYPE_LABELS.get(game.game_type);
+  const year = releaseYear(game);
+  return {
+    title: game.name ?? "",
+    meta: [type, year].filter(Boolean).join(" · "),
+  };
+}
+
+// One card: a cover tile, then title, then "type · year". Tapping does nothing
+// yet; the card just carries its game id.
+export function renderCard(game) {
   const card = document.createElement("li");
   card.className = "result-card";
-  if (category != null) card.dataset.category = category;
-  if (inLibrary) card.dataset.inLibrary = "1";
+  card.dataset.id = String(game.id);
 
   const art = document.createElement("div");
   art.className = "result-cover";
-
   const name = document.createElement("p");
   name.className = "result-title";
-  name.textContent = title;
-
   const meta = document.createElement("p");
   meta.className = "result-meta";
-  meta.textContent = [type, year].filter(Boolean).join(" · ");
-
   card.append(art, name, meta);
+  updateCard(card, game);
   return card;
+}
+
+function updateCard(card, game) {
+  const { title, meta } = cardText(game);
+  const [art, name, metaLine] = card.children;
+  if (name.textContent !== title) name.textContent = title;
+  if (metaLine.textContent !== meta) metaLine.textContent = meta;
+  setCover(card, art, game.cover?.url);
 }
 
 // A skeleton card: same grid cell and shape as a real card, quiet shimmer.
@@ -47,167 +129,146 @@ export function renderSkeletonCard() {
   return card;
 }
 
-// Cards that are ready show now; `pending` skeletons hold the places of those
-// still on their way (e.g. the next page of a lazy-loaded list).
-export function renderResults(list, items, pending = 0) {
+// Makes the list hold exactly these games, in this order, followed by `pending`
+// skeletons. Cards already there (matched by id) are moved, not rebuilt.
+export function syncCards(list, games, pending = 0) {
+  const existing = new Map();
+  const skeletons = [];
+  for (const node of [...list.children]) {
+    if (node.dataset.id) existing.set(node.dataset.id, node);
+    else skeletons.push(node);
+  }
+
+  let previous = null;
+  for (const game of games) {
+    const id = String(game.id);
+    let node = existing.get(id);
+    if (node) {
+      existing.delete(id);
+      updateCard(node, game);
+    } else {
+      node = renderCard(game);
+    }
+    const target = previous ? previous.nextSibling : list.firstChild;
+    if (node !== target) list.insertBefore(node, target);
+    previous = node;
+  }
+  for (const node of existing.values()) node.remove();
+
+  // Skeletons already on screen stay as the same nodes so their shimmer never
+  // restarts; only the difference is added or removed.
+  for (const node of skeletons.splice(pending)) node.remove();
+  for (const node of skeletons) {
+    if (node.previousSibling !== previous)
+      list.insertBefore(
+        node,
+        previous ? previous.nextSibling : list.firstChild,
+      );
+    previous = node;
+  }
+  for (let i = skeletons.length; i < pending; i++) {
+    const node = renderSkeletonCard();
+    list.append(node);
+    syncShimmer(node);
+  }
   list.toggleAttribute("aria-busy", pending > 0);
-  list.replaceChildren(
-    ...items.map(renderCard),
-    ...Array.from({ length: pending }, renderSkeletonCard),
-  );
 }
 
-export function renderLoading(list, count = 12) {
-  list.setAttribute("aria-busy", "true");
-  list.replaceChildren(...Array.from({ length: count }, renderSkeletonCard));
+// Every shimmer shares one clock, so skeletons added later join in phase
+// instead of starting their sweep from the beginning.
+function syncShimmer(node) {
+  if (typeof node.getAnimations !== "function") return;
+  for (const animation of node.getAnimations({ subtree: true })) {
+    animation.startTime = 0;
+  }
 }
-
-const TRAILING = 12;
-
-// `loader(offset, limit, { types, inLibrary })` resolves { items, hasMore, counts? };
-// `counts` ({ [type]: n, inLibrary: n } for the whole result set) feeds the
-// filter menu's numbers - without it they count the loaded items. `types` and
-// `inLibrary` are the filter at the time of the request (empty / false =
-// everything), so real
-// search can filter in its request. `filter` (optional, see filter-state.js)
-// also hides already-drawn cards that don't match when it changes, and the
-// same rule applies to batches that arrive later. The first batch loads on
-// entering search; further batches load as the trailing skeletons come within
-// about a screen of the viewport. Defaults to the TEMPORARY sample loader.
-export function createResultsPage(
-  searchState,
-  { loader = loadSampleResults, batch = 20, filter = null } = {},
-) {
+// `session` is a search session (see search-session.js): { status, visible,
+// generation, on("change") }. Nothing here knows how results are found.
+export function createResultsPage(session) {
   const element = document.createElement("section");
   element.className = "results";
   element.setAttribute("aria-label", "Results");
 
   const list = document.createElement("ul");
   list.className = "results-grid";
-  element.append(list);
+  const message = document.createElement("p");
+  message.className = "results-message";
+  message.hidden = true;
+  const note = document.createElement("p");
+  note.className = "results-note";
+  note.hidden = true;
+  note.textContent = "IGDB search failed";
+  element.append(list, message, note);
 
-  // Each entry starts fresh; a late batch from an abandoned entry is ignored
-  // via the run counter.
-  let run = 0;
-  let loaded = 0;
-  let loading = false;
+  let revealed = PAGE_SIZE;
+  let generation = session.generation;
   let observer = null;
-  // Fallback counts from loaded items, for loaders that don't report counts.
-  let tally = {};
-
-  function publishCounts(reported) {
-    if (!filter) return;
-    filter.setCounts(
-      reported ?? {
-        ...Object.fromEntries(TYPES.map((t) => [t.value, tally[t.value] || 0])),
-        inLibrary: tally.inLibrary || 0,
-      },
-    );
-  }
-
-  function stop() {
-    run++;
-    loading = false;
-    observer?.disconnect();
-    observer = null;
-    tally = {};
-    filter?.setCounts(null);
-  }
-
-  function applyFilter() {
-    if (!filter) return;
-    for (const card of list.querySelectorAll(".result-card:not(.is-skeleton)")) {
-      card.hidden = !filter.matches(
-        card.dataset.category === undefined ? null : Number(card.dataset.category),
-        card.dataset.inLibrary === "1",
-      );
-    }
-    refreshGlass();
-  }
 
   function observeTrailing() {
     const first = list.querySelector(".is-skeleton");
     if (!first || typeof IntersectionObserver === "undefined") return;
     observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) loadBatch();
+        if (!entries.some((e) => e.isIntersecting)) return;
+        revealed += PAGE_SIZE;
+        render();
       },
       { rootMargin: "0px 0px 100% 0px" },
     );
     observer.observe(first);
   }
 
-  function loadBatch() {
-    if (loading) return;
-    loading = true;
+  function showMessage(text) {
+    message.textContent = text;
+    message.hidden = false;
+  }
+
+  function render() {
     observer?.disconnect();
     observer = null;
-    const mine = run;
-    loader(loaded, batch, {
-      types: filter?.values ?? [],
-      inLibrary: filter?.inLibrary ?? false,
-    }).then(
-      ({ items, hasMore, counts }) => {
-        if (mine !== run) return;
-        loading = false;
-        loaded += items.length;
-        for (const item of items) {
-          if (item.category != null) tally[item.category] = (tally[item.category] || 0) + 1;
-          if (item.inLibrary) tally.inLibrary = (tally.inLibrary || 0) + 1;
-        }
-        publishCounts(counts);
-        list.querySelectorAll(".is-skeleton").forEach((s) => s.remove());
-        list.append(...items.map(renderCard));
-        applyFilter();
-        list.toggleAttribute("aria-busy", hasMore);
-        if (hasMore) {
-          list.append(...Array.from({ length: TRAILING }, renderSkeletonCard));
-          observeTrailing();
-        }
-        refreshGlass();
-      },
-      () => {
-        // A failed batch drops its skeletons rather than shimmering forever.
-        if (mine !== run) return;
-        loading = false;
-        list.querySelectorAll(".is-skeleton").forEach((s) => s.remove());
-        list.removeAttribute("aria-busy");
-        refreshGlass();
-      },
-    );
-  }
+    message.hidden = true;
+    note.hidden = true;
 
-  function start() {
-    stop();
-    loaded = 0;
-    window.scrollTo(0, 0);
-    renderLoading(list);
+    if (session.generation !== generation) {
+      generation = session.generation;
+      revealed = PAGE_SIZE;
+      window.scrollTo(0, 0);
+    }
+
+    const { status } = session;
+    const visible = session.visible;
+    const shown = visible.slice(0, revealed);
+
+    if (status === "blank") {
+      syncCards(list, []);
+    } else if (status === "loading") {
+      syncCards(list, [], TRAILING);
+    } else if (status === "error") {
+      syncCards(list, []);
+      showMessage("Couldn't search. Try again.");
+    } else if (status === "partial") {
+      // The real answer is still coming: the rest of the grid is skeletons.
+      syncCards(list, shown, TRAILING);
+    } else if (!visible.length) {
+      syncCards(list, []);
+      showMessage("No results");
+    } else {
+      const remaining = visible.length - shown.length;
+      syncCards(list, shown, Math.min(TRAILING, remaining));
+      observeTrailing();
+      note.hidden = !session.failed;
+    }
     refreshGlass();
-    loadBatch();
   }
 
-  const offs = [
-    searchState.on("enter", start),
-    searchState.on("exit", stop),
-    filter?.on("change", applyFilter),
-  ].filter(Boolean);
-  renderLoading(list);
+  const off = session.on("change", render);
+  render();
 
   return {
     element,
-    showLoading: () => {
-      stop();
-      renderLoading(list);
-      refreshGlass();
-    },
-    renderResults: (items, pending) => {
-      stop();
-      renderResults(list, items, pending);
-      refreshGlass();
-    },
     destroy: () => {
-      stop();
-      offs.forEach((off) => off());
+      observer?.disconnect();
+      off();
     },
   };
 }

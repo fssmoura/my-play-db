@@ -7,16 +7,22 @@
 
 import { createSearchState } from "/js/search-state.js";
 import { createFilterState } from "/js/filter-state.js";
+import { createSearchSession } from "/js/search-session.js";
+import * as searchEngine from "/js/search.js";
+import { readUrl, wireUrl } from "/js/url-state.js";
 import { createPageSwitcher } from "/js/pages.js";
 import { createResultsPage } from "/js/results-page.js";
 import { mountMenu, unmountMenu } from "/js/menu.js";
 import { createOverlayScroll } from "/js/overlay-scroll.js";
 
-// Keeps one history entry in step with the results screen.
+// Keeps one history entry in step with the results screen. When the page was
+// loaded straight into a search (a refreshed or shared link) there is no entry
+// of ours to pop, so leaving rewrites the address to "/" instead.
 function wireHistory(searchState) {
   let owns = false; // our entry is the current one
   let pendingPops = 0; // history.back() calls of ours still in flight
   let pendingPush = false; // search re-entered before those finished
+  let skipPush = false; // entering because the address already says so
 
   const push = () => {
     history.pushState({ search: true }, "");
@@ -24,6 +30,7 @@ function wireHistory(searchState) {
   };
 
   const offEnter = searchState.on("enter", () => {
+    if (skipPush) return;
     if (pendingPops > 0) pendingPush = true;
     else push();
   });
@@ -38,6 +45,8 @@ function wireHistory(searchState) {
       owns = false;
       pendingPops++;
       history.back();
+    } else if (location.search) {
+      history.replaceState(null, "", location.pathname);
     }
   });
 
@@ -58,13 +67,24 @@ function wireHistory(searchState) {
   }
 
   window.addEventListener("popstate", onPopstate);
-  return () => {
-    offEnter();
-    offExit();
-    window.removeEventListener("popstate", onPopstate);
-    // Unmounting (sign-out) is followed by a location.replace, so an async
-    // back() would race it; just neutralise our entry instead.
-    if (owns) history.replaceState(null, "");
+  return {
+    // Runs `enter` (which starts search mode) without pushing an entry.
+    enterWithoutPush(enter) {
+      skipPush = true;
+      try {
+        enter();
+      } finally {
+        skipPush = false;
+      }
+    },
+    cleanup() {
+      offEnter();
+      offExit();
+      window.removeEventListener("popstate", onPopstate);
+      // Unmounting (sign-out) is followed by a location.replace, so an async
+      // back() would race it; just neutralise our entry instead.
+      if (owns) history.replaceState(null, "");
+    },
   };
 }
 
@@ -85,7 +105,12 @@ export function mountApp() {
   pages.show("home");
 
   const filter = createFilterState();
-  const results = createResultsPage(searchState, { filter });
+  const session = createSearchSession({
+    searchState,
+    filter,
+    engine: searchEngine,
+  });
+  const results = createResultsPage(session);
   pages.register("results", results.element);
 
   const offs = [
@@ -95,7 +120,8 @@ export function mountApp() {
       pages.back();
     }),
   ];
-  const stopHistory = wireHistory(searchState);
+  const history_ = wireHistory(searchState);
+  const stopUrl = wireUrl({ searchState, filter });
   const scrollIndicator = createOverlayScroll({
     content,
     top: 85,
@@ -103,13 +129,25 @@ export function mountApp() {
   });
 
   mountMenu({ search: searchState, filter });
+  searchEngine.warmUp();
+
+  // A link with ?q= opens straight into that search, filters applied first, so
+  // they count as set before the search.
+  const initial = readUrl();
+  if (initial.query) {
+    filter.set(initial.types);
+    searchState.setQuery(initial.query);
+    history_.enterWithoutPush(() => searchState.enter());
+  }
 
   cleanup = () => {
     scrollIndicator.destroy();
     unmountMenu();
-    stopHistory();
+    stopUrl();
+    history_.cleanup();
     offs.forEach((off) => off());
     results.destroy();
+    session.destroy();
     content.remove();
   };
 }
