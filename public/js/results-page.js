@@ -17,15 +17,50 @@ const TRAILING = 12;
 const TYPE_LABELS = new Map(TYPES.map((type) => [type.value, type.label]));
 
 // IGDB serves covers at a size segment like t_1080p; the grid only needs
-// t_cover_big_2x. Other hosts (SteamGridDB, PlayStation) are left alone.
+// t_cover_big_2x. PlayStation and SteamGridDB send no CORS headers, so
+// liquidGL couldn't read them into its snapshot; they are shown through
+// same-origin rewrites (vercel.json). Display only: stored URLs are unchanged.
+const PROXIED_HOSTS = {
+  "image.api.playstation.com": "/img/psn",
+  "cdn2.steamgriddb.com": "/img/sgdb",
+};
+
 export function displayCoverUrl(url) {
   if (!url) return "";
   try {
-    if (new URL(url).hostname !== "images.igdb.com") return url;
-    return url.replace(/\/t_[a-z0-9_]+\//i, "/t_cover_big_2x/");
+    const parsed = new URL(url);
+    if (parsed.hostname === "images.igdb.com") {
+      return url.replace(/\/t_[a-z0-9_]+\//i, "/t_cover_big_2x/");
+    }
+    const prefix = PROXIED_HOSTS[parsed.hostname];
+    if (prefix) {
+      // Sony's image API resizes with ?w=; 528 matches IGDB's t_cover_big_2x.
+      if (parsed.hostname === "image.api.playstation.com") {
+        parsed.searchParams.set("w", "528");
+      }
+      return prefix + parsed.pathname + parsed.search;
+    }
+    return url;
   } catch {
     return url;
   }
+}
+
+// One warning per host whose cover only loaded without CORS: liquidGL can't read
+// it, so it shows grey under the glass until vercel.json gets a rewrite for it.
+const warnedHosts = new Set();
+function warnNoCors(url) {
+  let host = "";
+  try {
+    host = new URL(url, location.href).hostname;
+  } catch {
+    return;
+  }
+  if (!host || warnedHosts.has(host)) return;
+  warnedHosts.add(host);
+  console.warn(
+    `Cover host ${host} sends no CORS headers: add a same-origin /img rewrite for it in vercel.json, or it shows grey under the glass.`,
+  );
 }
 
 // Image loads can arrive in a burst; ask liquidGL to retake its snapshot once
@@ -60,6 +95,7 @@ function setCover(card, art, url) {
 
   let retried = false;
   img.addEventListener("load", () => {
+    if (retried) warnNoCors(wanted);
     card.classList.remove("is-cover-loading");
     refreshGlassSoon();
   });
