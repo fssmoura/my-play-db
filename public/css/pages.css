@@ -40,7 +40,7 @@
 
 .result-cover {
   position: relative;
-  aspect-ratio: 264 / 374;
+  aspect-ratio: 2 / 3;
   border-radius: 10px;
   overflow: hidden;
   background: var(--dark-gray);
@@ -83,16 +83,16 @@
 .result-title {
   margin-top: 8px;
   color: var(--light-gray);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 18px;
+  line-height: 17px;
 }
 
 .result-meta {
   margin-top: 2px;
   color: rgba(244, 244, 244, 0.6);
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 11px;
+  line-height: 14px;
 }
 
 /* A card with no cover shows the plain dark gray tile (--dark-gray, above). */

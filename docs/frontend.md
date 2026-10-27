@@ -71,20 +71,33 @@ once signed in):
   reload) and the same rule applies to later batches. In `menu.js` a glass
   circle (funnel icon, `#app-filter`) sits left of the search pill and
   grows/shrinks with it (`--search-t`); a white badge with the count shows
-  while 1+ types are selected, straddling the circle's top-right rim (it sits
+  while the filter count is 1+ (types selected + 1 if In Library is on),
+  straddling the circle's top-right rim (it sits
   beside the lens, not in it, so nothing clips it). It opens a pull-down
-  (`menuitemcheckbox` rows, trailing checkmark with its slot always reserved
-  so rows never shift, stays open on toggle, divider,
-  destructive "Clear all" disabled when empty) built on the same
-  `wirePullDown` as More. The panel's width is measured once (widest full-list
-  row with room for 3-digit counts, min 220px) into `--filter-w`, so it never
-  changes. It opens on a short list (Main Game, DLC, Remaster, Remake,
-  Bundle - `COMMON_TYPES`) plus a "See more" item. The full list is those
-  five then the rest, so See more only appends: the panel's list height
-  springs (`createSpring`) from short to full, clipped while it runs, capped by
-  max-height (instant under reduced motion). Focus moves to the first new row;
-  it reopens on the full list when a selected type is only there. Once results have loaded each
-  row shows its count after the label in brackets, dimmer, e.g. "Main Game (39)": the loader may return `counts` ({ type: n }, whole
+  built on the same `wirePullDown` as More, with three top-level rows: **In
+  Library** (`menuitemcheckbox`, "only games I own", `filter.inLibrary`),
+  **By Type** (button, `aria-expanded`, sublabel "None applied" / "N
+  Selected", chevron that turns down) and, after a divider, destructive
+  **Clear all** (resets types and In Library, disabled when both are empty).
+  In Library has a trailing checkmark (slot always reserved so rows never shift); each type row instead has a leading to-do circle (`typeCheck` icon: circle path always shown, dim; tick path shown when `aria-checked` is true, full light gray) and `See more` is a dim label followed directly by a dim down chevron;
+  toggling keeps the menu open. By Type opens a second glass panel
+  (`#app-filter-sub`, its own liquidGL lens, `zIndex` 4, with a light tint, `rgba(9,9,11,.15)`) layered over the
+  parent. It starts as the By Type row's rect and grows to full size with
+  `createSpring` (CSS vars `--sub-x/-y/-w`, inline height; the lens follows
+  via liquidGL's ResizeObserver); its first row is a header (icon, label,
+  sublabel, down chevron) that stays where the row was. Top edge = row top,
+  shifted up only as far as needed to fit, capped by max-height and
+  scrolling inside. The parent's rows stay visible, dimmed to 0.35, and go inert while it is open (the lens tint is drawn under all page text, so a `::before` layer inside the submenu, `backdrop-filter: blur(20px)` plus `rgba(9,9,11,.4)`, blurs the live rows behind it into a smear; it is on the pseudo-element because liquidGL sets `backdrop-filter: none` inline on the lens itself); a
+  click on the parent, the header, Left Arrow or Escape folds it back (focus
+  returns to By Type). Escape order: submenu, parent, search; an outside
+  click closes both. Types: the short list (Main Game, DLC, Remaster,
+  Remake, Bundle - `COMMON_TYPES`) plus See more, which grows the height with
+  a second spring. Instant under reduced motion. Each panel's width is
+  measured once (`--filter-w`, min 220px) so neither changes. The loader gets
+  `{ types, inLibrary }`. Once results have loaded each
+  counts, min 220px) into `--filter-w`, so it never changes. The loader gets
+  `{ types, inLibrary }`. Once results have loaded each
+  row shows its count after the label in brackets, dimmer, e.g. "Main Game (39)": the loader may return `counts` ({ type: n, inLibrary: n }, whole
   set) with a batch, else loaded items are counted; `filter-state.js` holds
   them (`setCounts`, `on("counts")`) and they reset on exit. Escape closes the
   pull-down before leaving search. At narrow widths the search pill shrinks
@@ -99,7 +112,7 @@ once signed in):
   `data-liquid-ignore` (kept out of the glass snapshot). Used for the page and
   for the filter panel's own scroll area. Instant show/hide under reduced motion.
   **Glass refresh:** liquidGL's snapshot is only retaken (debounced) when the
-  page's *size* changes, so hiding cards with a filter, swapping skeletons for
+  page's _size_ changes, so hiding cards with a filter, swapping skeletons for
   cards or emptying the list left the glass showing the old page. The results
   page calls `refreshGlass()` (`glass-refresh.js`, one capture per frame, drops
   any capture in flight) after every DOM change; a capture measured ~10ms at
@@ -112,17 +125,19 @@ once signed in):
   `.is-cover-loading` on a real card gives just its cover the same shimmer
   (unused until real images exist). A card with no cover shows the plain
   dark gray tile.
-  **Card:** a plain dark cover tile (264/374, 10px corners, nothing on top)
+  **Card:** a plain dark cover tile (2:3, e.g. 600x900 art; 10px corners, nothing on top)
   with a static CSS stroke (1px inside on all sides, a 135deg gradient: #F4F4F4
   at 25% at the top-left corner, transparent through the middle, back to 25% at
   the bottom-right corner; a masked pseudo-element),
-  then a one-line semibold title and a dimmer 12px "type · year" line, both
+  then a one-line 13px semibold title and a dimmer 11px "type · year" line, both
   ellipsised; a missing year or type leaves no stray dot. Grid: 3 columns on a
   phone, otherwise auto-fill columns of at least 150px that share the width evenly (12px across, 24px down); content starts 85px down and scrolls
   behind the fixed pills.
 
-Rules: clicking Search does everything at once (pill opens, field focused,
-results page shows, Back circle slides in, one history entry pushed). Typing,
+Rules: clicking Search does everything at once (pill opens, results page
+shows, Back circle slides in, one history entry pushed). The field is not
+focused on a click or tap, so a phone's keyboard doesn't pop up until the
+field itself is tapped; only opening Search from the keyboard focuses it. Typing,
 clearing (delete-all or the clear button, which only empties the field) and
 clicking away never open or close anything; the pill stays open with whatever
 text for as long as the results page is open. Only leaving closes it: the Back

@@ -179,7 +179,7 @@ my-play-db/
       menu.js              # top-right app menu (glass pill via liquidGL, Search / Profile / More pull-down, Back circle)
       app-shell.js         # new app wiring: search state + pages + results page + history + menu
       search-state.js      # search mode + query state, emits events (no DOM)
-      filter-state.js      # selected result types, emits change (no DOM)
+      filter-state.js      # filter: selected types + In Library, emits change (no DOM)
       result-types.js      # the 15 IGDB game types (value + label) + the short list
       glass-refresh.js     # asks liquidGL to retake its snapshot after page changes
       overlay-scroll.js    # thin overlay scroll indicator (native scrollbar hidden)
