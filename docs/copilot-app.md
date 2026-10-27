@@ -28,16 +28,21 @@ and compares against the spec and the relevant HIG page
 checked and what it could not. This is the Builder's own quality gate before
 handing over; it does not replace the layers below.
 
-Checking happens in two layers:
+Checking happens in three layers:
 
 1. **The owner checks first**, in the shared preview (the app's browser canvas
    at `localhost:3000`). That's deliberate: the orchestrator sees the same page,
    so the owner can point at something on it.
-2. **The orchestrator checks only after a clear instruction from the owner** -
-   reviewing a diff, testing in the preview, or doing a specific task itself.
-   The Builder finishing is not that instruction. When it finishes, report what
-   changed and stop: no screenshots, no clicking through the preview, no
-   reading the diff. This has been broken before and the owner had to repeat it.
+2. **Code review (standing step).** When the Builder reports a task done, the
+   orchestrator reviews its diff. The Builder is the weaker model, so look for
+   clear errors, gaps against the spec, and things that are inefficient or
+   done poorly - not for things merely done differently from how the
+   orchestrator would write them. Send real problems back to the Builder to
+   fix, then tell the owner what changed and what the review found.
+3. **Anything beyond code review happens only after a clear instruction from
+   the owner** - testing in the preview, screenshots, clicking through it, or
+   doing a task itself. The Builder finishing is not that instruction. This
+   has been broken before and the owner had to repeat it.
 
 Why this shape: Anthropic's orchestrator-worker research (strong lead, cheaper
 workers) found it beats a single strong agent, but multi-agent setups burn
@@ -55,6 +60,10 @@ Practical rules that came out of the first session:
   work first, so nothing half-built is left behind.
 - When reporting back, say plainly that nothing has been tested yet, so the
   owner knows to check the preview.
+- The Builder must message the orchestrator when a task finishes (going idle
+  is not a report), and the orchestrator should create it with
+  `notify_on_idle: "always"` so a missed message is still noticed. Once,
+  neither happened and the owner had to ask why nothing was said.
 
 ## Local preview
 
