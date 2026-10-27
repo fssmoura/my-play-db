@@ -65,6 +65,23 @@ Checked against Apple's own pages (Oct 2026):
 
 Summary of rules already applied (Apple's guidance, adapted).
 
+- **Search pill:** tapping Search in the top-right pill splits a second glass
+  pill off its left end (8px gap) that stretches left into a text field, the
+  icon travelling with it; the main pill shrinks to Profile and More. Search
+  mode (pill, results screen, Back circle) is one state; it ends only via Back,
+  Escape or the browser's back, never by clicking away. One continuous, springy morph (~300ms, slight
+  overshoot); instant under `prefers-reduced-motion`. Same glass as the main
+  pill, no browser search-field chrome. A clear button (xmark in a filled circle, secondary tone) appears at the right end only while there is text. Focus rings are keyboard-only (`:focus-visible`): a mouse or touch user never sees one on a pill button.
+- **Results screen:** clicking Search switches the page to a results
+  screen at once (no typing needed), showing a draft grid of result cards
+  (placeholders for now): a plain cover tile with a faint static stroke (1px, white at the top-left and bottom-right corners, nothing between), then
+  title (white, semibold, ellipsis) and a dimmer smaller "type · year" line. While loading, the same grid shows quiet skeleton cards with a soft diagonal shimmer (a slow pulse under reduced motion). A card with no cover shows the dark gray tile. A Back glass circle (the pill's margins mirrored,
+  top left) slides in with it. Typing, clearing and clicking away change
+  nothing except the type filter: a glass circle with a funnel icon left of the search pill opens a pull-down of types (no icons, trailing checkmark, stays open, fixed width, "See more" grows the list with a spring, "Clear all" in red below a divider): Main Game, DLC, Remaster, Remake, Bundle and "See more", which shows all 15. Once results are showing, each type shows its count in brackets after the label, same size but dimmer, e.g. "Main Game (39)". None selected means all types; a white count badge sits on the button's rim when any are. Only Back, Escape or the browser's back leave, restoring the
+  previous page (one history entry, no stray ones). The
+  look will be designed later; the behaviour sits in `search-state.js` and
+  `app-shell.js`, apart from the looks (see frontend.md).
+
 ## Colour
 
 Five colours, defined once as variables in `public/css/tokens.css`: white

@@ -1,0 +1,70 @@
+/* =========================================================================
+   my-play-db - overlay scroll indicator (public/js/overlay-scroll.js).
+   Native scrollbars are hidden in the new app so content never shifts
+   sideways when it starts to scroll; the indicator floats over the margin.
+   Scoped to the new app: the lab does not load this file.
+   ========================================================================= */
+
+html,
+.overlay-scroll-host {
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+.overlay-scroll-host::-webkit-scrollbar {
+  display: none;
+}
+
+.overlay-scroll {
+  position: fixed;
+  top: var(--os-top, 0);
+  right: 8px;
+  z-index: 40;
+  width: 14px;
+  height: var(--os-length, 0);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 250ms ease;
+}
+
+.overlay-scroll.is-element {
+  position: absolute;
+  right: 3px;
+  width: 12px;
+  z-index: 3;
+}
+
+.overlay-scroll[hidden] {
+  display: none;
+}
+
+.overlay-scroll.is-active {
+  opacity: 1;
+}
+
+.overlay-scroll-thumb {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: var(--os-size, 36px);
+  transform: translateY(var(--os-y, 0));
+  border-radius: 999px;
+  background: rgba(244, 244, 244, 0.35);
+  pointer-events: auto;
+  touch-action: none;
+  transition: width 150ms ease;
+}
+
+.overlay-scroll:hover .overlay-scroll-thumb,
+.overlay-scroll.is-dragging .overlay-scroll-thumb {
+  width: 10px;
+  background: rgba(244, 244, 244, 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-scroll,
+  .overlay-scroll-thumb {
+    transition: none;
+  }
+}

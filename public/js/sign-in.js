@@ -5,7 +5,7 @@ import {
   signInWithPassword,
   readAuthErrorFromUrl,
 } from "/js/session.js";
-import { mountMenu, unmountMenu } from "/js/menu.js";
+import { mountApp, unmountApp } from "/js/app-shell.js";
 
 const ICON_EYE =
   '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" />';
@@ -40,7 +40,7 @@ function nextPath() {
 
 function applySession(session) {
   if (!session) {
-    unmountMenu();
+    unmountApp();
     show("gate");
     return;
   }
@@ -52,7 +52,7 @@ function applySession(session) {
   }
   // Signed in with nowhere to go: the new app is a blank canvas, plus the menu.
   show("none");
-  mountMenu();
+  mountApp();
 }
 
 // Plain-language messages; never a bare "Error".
