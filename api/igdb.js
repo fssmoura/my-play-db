@@ -236,13 +236,30 @@ const GAME_FIELDS = [
   "version_parent.name,version_parent.slug,version_parent.game_type",
 ].join(",");
 
+/**
+ * `type` is one game_type or an array of them. Returns a sorted, de-duplicated
+ * list of integers 0-14, or null for "no filter". Anything else throws.
+ */
+function parseTypes(type) {
+  if (type == null || type === "") return null;
+  const list = Array.isArray(type) ? type : [type];
+  if (!list.length) return null;
+  for (const value of list) {
+    if (!Number.isInteger(value) || value < 0 || value > 14) {
+      throw new Error("type must be an integer 0-14, or an array of them");
+    }
+  }
+  return [...new Set(list)].sort((a, b) => a - b);
+}
+
 async function gameSearch({ query, type, limit, offset = 0 }) {
-  const key = `${query}|${type ?? ""}|${limit}|${offset}`;
+  const types = parseTypes(type);
+  const key = `${query}|${types ? types.join(",") : ""}|${limit}|${offset}`;
   const cached = readCache(searchCache, key, SEARCH_TTL);
   if (cached) return cached;
 
   const sanitized = query.replace(/"/g, '\\"');
-  const typeClause = type != null ? `; where game_type = ${type}` : "";
+  const typeClause = types ? `; where game_type = (${types.join(",")})` : "";
 
   const games = await igdbFetch(
     "games",

@@ -34,6 +34,19 @@ export function createFilterState() {
       if (!selected.delete(value)) selected.add(value);
       emit();
     },
+    // Replaces the selected types (e.g. restoring them from the address).
+    set(values) {
+      const next = new Set(values);
+      if (
+        next.size === selected.size &&
+        [...next].every((value) => selected.has(value))
+      ) {
+        return;
+      }
+      selected.clear();
+      for (const value of next) selected.add(value);
+      emit();
+    },
     toggleInLibrary() {
       inLibrary = !inLibrary;
       emit();
@@ -44,12 +57,11 @@ export function createFilterState() {
       inLibrary = false;
       emit();
     },
-    // Does a result of this type (and library status) pass the filter?
-    matches: (value, owned = false) =>
-      (selected.size === 0 || selected.has(value)) && (!inLibrary || owned),
-    // How many results there are of each type ({ [value]: n }, plus
-    // `inLibrary`), or null while there are none to count. Set by the results
-    // page, shown by the menu.
+    // Does a result of this type pass the type filter? (In Library is not a
+    // result filter yet.)
+    matches: (value) => selected.size === 0 || selected.has(value),
+    // How many results there are of each type ({ [value]: n }), or null while
+    // there are none to count. Set by the search session, shown by the menu.
     get counts() {
       return counts;
     },

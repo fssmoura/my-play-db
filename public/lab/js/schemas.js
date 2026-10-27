@@ -245,9 +245,9 @@ export const SCHEMAS = {
       { name: "offset", type: "number", hint: "Skip this many results." },
       {
         name: "type",
-        type: "number",
-        hint: "Filter by game_type. 0 = main game, 1 = DLC, 2 = expansion, 3 = bundle.",
-        placeholder: "0",
+        type: "json",
+        hint: "Filter by game_type: one number or an array of them (integers 0-14). 0 = main game, 1 = DLC, 2 = expansion, 3 = bundle.",
+        placeholder: "0 or [0,1]",
       },
     ],
     game: [

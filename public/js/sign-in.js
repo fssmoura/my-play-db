@@ -38,6 +38,17 @@ function nextPath() {
   return null;
 }
 
+// Where to return after Google sign-in. A signed-out visit to a search link
+// (/?q=zelda&types=0) must come back to that same search, so it keeps the
+// query string; it is only used for the round trip to Google, never for
+// redirecting an already signed-in page (that would loop).
+function returnPath() {
+  const next = nextPath();
+  if (next) return next;
+  const params = new URLSearchParams(location.search);
+  return params.has("q") ? `${location.pathname}${location.search}` : null;
+}
+
 function applySession(session) {
   if (!session) {
     unmountApp();
@@ -106,7 +117,7 @@ function boot() {
     setError("");
     const done = setBusy(el.google, "Opening Google…");
     try {
-      await signInWithGoogle(nextPath());
+      await signInWithGoogle(returnPath());
       // The page is about to leave for Google; keep the busy state.
     } catch (err) {
       done();

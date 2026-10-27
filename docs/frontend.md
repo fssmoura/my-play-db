@@ -25,9 +25,12 @@ screen): `public/js/menu.js` (`PILL_ITEMS` for the pill's buttons - Search, Prof
 stylesheets; the lab doesn't use it. Reuse it on a new page by importing
 `mountApp()` (which mounts the menu) and linking `menu.css`.
 
-**Search flow and the results screen (new app only; the lab's search is not
-touched or migrated yet).** Four pieces with one job each, wired together only
-in `public/js/app-shell.js` (`mountApp()` / `unmountApp()`, called by `sign-in.js`
+**Search flow and the results screen (new app only).** The new app has its own
+copy of the lab's search engine (`ranking.js`, `api.js`, `games-cache.js`,
+`search.js` in `public/js/`, each with a one-line note saying where it came
+from; the lab and the new app are now independent - never import across, fix
+bugs in both). Pieces with one job each, wired together only in
+`public/js/app-shell.js` (`mountApp()` / `unmountApp()`, called by `sign-in.js`
 once signed in):
 
 - `search-state.js` - owns whether search mode is on (search pill open, results
@@ -42,33 +45,57 @@ once signed in):
   elements; switching _hides_ the one being left (never destroys it, so it keeps
   its state) and `back()` returns to the previous. Today's only page is the
   blank "home". Styles in `public/css/pages.css`.
-- `results-page.js` - renders a grid of result cards from plain
-  `{ title, year, type }` objects (`renderCard`, `renderResults`), with a
-  skeleton loading state (`renderLoading` / `showLoading()`; real search calls
-  `showLoading()`, then `renderResults(items, pending)` - ready cards first,
-  then `pending` skeletons for what's still on its way, so a lazy-loaded list
-  fills in piece by piece). `createResultsPage(state, { loader, batch, filter })` takes
-  a pluggable `loader(offset, limit, { types }) -> Promise<{ items, hasMore }>`
-  (default: the sample one, which ignores `types`; real search applies them in
-  its request). One "page" is one batch (20, the lab's page size); pages load
-  silently on scroll, and if a batch doesn't fill the screen the next loads
-  automatically behind skeletons. Each entry into search scrolls to the top,
-  shows skeletons, loads the first batch, then keeps a trailing set of 12 skeletons while
-  `hasMore`; an IntersectionObserver on the first of them (rootMargin one
-  screen below the viewport) fetches the next batch when it nears the screen.
-  Batches are appended (existing cards aren't rebuilt), one fetch at a time,
-  observer off when everything is loaded. A batch arriving after leaving (or
-  re-entering) is ignored (run counter) and the observer is disconnected on
-  exit/destroy. The TEMPORARY `sample-results.js` has 60 placeholder cards
-  with a fake delay (1.5s first batch, 0.8s later ones); delete it when real
-  search plugs in. liquidGL recaptures its snapshot (debounced 250ms) whenever
-  the page's size changes, so each appended batch triggers one recapture.
+- `search-session.js` - the live-search brain, no DOM: listens to the search
+  state and the filter and drives an injected engine (`search.js`). Exposes
+  `status` (blank / loading / partial / done / error), `visible` (the list to
+  draw), `bakedTypes`, `generation` and a `change` event. Typing is debounced
+  300ms (to go easy on the API); an empty query is blank (no skeletons, no cards). **Baking:** when a
+  search starts from an empty query, the types selected at that moment are
+  "baked" in. Further keystrokes keep them. With a baked set, any type change
+  re-runs the search with the new set (clearing re-runs unfiltered, and that
+  search is unbaked); with none baked, type changes only hide or show drawn
+  cards client-side. Emptying the query resets baking. In Library is ignored
+  (not wired to results yet: it toggles and counts in the badge only, is never
+  sent to the API and has no count). Counts describe the current pool (a
+  filtered search just shows 0 for unselected types).
+- `search.js` (engine, no DOM; copy of the lab's) - `search(query, { types })`:
+  re-ranks the last results with no network call while typing (`narrowLast`),
+  runs the `games` cache lookup and one IGDB `search` (limit 200) in
+  parallel, merges by id (`mergeById`), ranks (`rankGames`), keeps a 60-entry
+  memory cache and in-flight dedupe keyed `query|types`, drops superseded
+  answers, keeps the head-start (database) copy's cover - the FIRST `cover` entry, the owner's chosen image - for any game we hold while IGDB's copy wins for everything else (IGDB-only games keep IGDB's cover; no extra query), and writes the top 50 back
+  through `cache_search_games` without awaiting (a failed write never fails a
+  search). **Ranking rule:** the cached head start is painted in the grid as soon as it lands (stored results are quicker than IGDB, which is why they are stored). A game it painted is ranked in the final list using its head-start copy's ranking fields (`rankBasis`, a non-enumerable property read by `ranking.js`), while the fresh copy is what's displayed and written back, so cards on screen never reshuffle when IGDB's newer popularity arrives; IGDB-only games slot in by their own score; narrowing uses the same basis. If a narrowed list is already showing for the current query, a head start doesn't replace it (unless that list is empty). `search-session.js` bumps its run counter on every
+  keystroke so an older in-flight search can never paint over the current
+  query. `games-cache.js` has the database side, `api.js` the `/api/*` caller.
+- `url-state.js` - search text and types live in the address
+  (`/?q=zelda&types=0,1`), written with `replaceState` while typing or
+  filtering (the single pushed history entry is untouched). Loading a URL with
+  `q` enters search with the field filled and the types applied (so baked).
+  When the page was loaded straight into search there is no entry of ours to
+  pop, so leaving does `replaceState` to `/` instead of `history.back()`.
+  `sign-in.js` keeps `?q=` through the Google round trip (`returnPath()`).
+- `results-page.js` - only renders the session: cards from the 200-result pool,
+  20 revealed at a time (`PAGE_SIZE`); while more remain, 12 trailing
+  skeletons, and an IntersectionObserver on the first (rootMargin one screen)
+  reveals the next 20. Before IGDB answers, the cache head start (or a narrowed list) shows with trailing skeletons, plain skeletons if neither; skeleton nodes already on screen are kept (never rebuilt, so the shimmer doesn't restart on each keystroke) and new ones are synced to a shared shimmer clock via the Web Animations API. When the final list lands cards are reconciled by `data-id` so existing cards and images aren't
+  rebuilt. A new search (generation change) resets reveal and scrolls to top.
+  "No results" and "Couldn't search. Try again." are one dim centred line
+  (`.results-message`). If IGDB fails after cached or narrowed results were already showing, they are kept as the final list (status `done` with `failed`, nothing written back) and one small grey line, "IGDB search failed" (`.results-note`), sits under the last card. Cards carry `data-id` and do nothing when tapped.
+  Card text is the name, then "type · year" (`releaseYear` from `ranking.js`,
+  labels from `result-types.js`). Covers: `<img loading="lazy">` with
+  `.is-cover-loading` shimmer until loaded; IGDB URLs are swapped to
+  `t_cover_big_2x` for the grid (other hosts untouched); `object-fit: cover`;
+  `crossOrigin="anonymous"` is set before `src` so liquidGL can snapshot, with
+  one retry without it on error (SteamGridDB and PlayStation hosts send no
+  CORS); a 120ms-coalesced `refreshGlass()` runs after loads. No cover (or an image that fails after the retry) shows
+  the no-cover tile (see Card). liquidGL recaptures its snapshot (debounced 250ms)
+  whenever the page's size changes.
   **Type filter:** `result-types.js` exports `TYPES` (the 15 IGDB categories,
   value 0-14 + label; no "All types" - none selected means all).
   `filter-state.js` is the DOM-free selection (`toggle`, `clear`, `values`,
-  `count`, `matches`, `on("change")`), cleared when search exits. Cards carry
-  `data-category`; a change hides non-matching drawn cards (`hidden`, no
-  reload) and the same rule applies to later batches. In `menu.js` a glass
+  `count`, `matches` (type only), `set`, `on("change")`), cleared when search exits. Cards carry
+  `data-id`; with no baked set a change hides non-matching drawn cards (see the session above). In `menu.js` a glass
   circle (funnel icon, `#app-filter`) sits left of the search pill and
   grows/shrinks with it (`--search-t`); a white badge with the count shows
   while the filter count is 1+ (types selected + 1 if In Library is on),
@@ -93,13 +120,10 @@ once signed in):
   click closes both. Types: the short list (Main Game, DLC, Remaster,
   Remake, Bundle - `COMMON_TYPES`) plus See more, which grows the height with
   a second spring. Instant under reduced motion. Each panel's width is
-  measured once (`--filter-w`, min 220px) so neither changes. The loader gets
-  `{ types, inLibrary }`. Once results have loaded each
-  counts, min 220px) into `--filter-w`, so it never changes. The loader gets
-  `{ types, inLibrary }`. Once results have loaded each
-  row shows its count after the label in brackets, dimmer, e.g. "Main Game (39)": the loader may return `counts` ({ type: n, inLibrary: n }, whole
-  set) with a batch, else loaded items are counted; `filter-state.js` holds
-  them (`setCounts`, `on("counts")`) and they reset on exit. Escape closes the
+  measured once (`--filter-w`, min 220px) so neither changes. Once results
+  have loaded each type row shows its count after the label in brackets,
+  dimmer, e.g. "Main Game (39)"; the session publishes per-type counts of the
+  pool (`filter.setCounts`, `on("counts")`) and they reset on exit. Escape closes the
   pull-down before leaving search. At narrow widths the search pill shrinks
   to make room (about 132px at 390).
   **Overlay scrollbar:** the new app hides native scrollbars
@@ -120,11 +144,10 @@ once signed in):
   file has no public recapture call.
   Card looks are in `pages.css`; it assumes nothing about the lab's search code.
   **Skeleton:** same grid and card shape; a quiet cover tile plus two rounded
-  bars (70% and 45% wide) with a soft diagonal shimmer (1.5s, pure CSS, all in
+  bars (70% and 45% wide) with a soft diagonal shimmer (1.4s sweep that fully leaves the tile, then a 0.6s rest; pure CSS, all in
   sync, no stroke); `prefers-reduced-motion` gets a slow opacity pulse instead.
   `.is-cover-loading` on a real card gives just its cover the same shimmer
-  (unused until real images exist). A card with no cover shows the plain
-  dark gray tile.
+  until its image loads. A card with no cover (.is-no-cover) shows #151516 with a crossed-out picture icon centred in #272727, about 28% of the tile width, drawn with a CSS mask (no inline styles); its edge stroke is fainter (10% instead of 25%).
   **Card:** a plain dark cover tile (2:3, e.g. 600x900 art; 10px corners, nothing on top)
   with a static CSS stroke (1px inside on all sides, a 135deg gradient: #F4F4F4
   at 25% at the top-left corner, transparent through the middle, back to 25% at

@@ -184,8 +184,13 @@ my-play-db/
       glass-refresh.js     # asks liquidGL to retake its snapshot after page changes
       overlay-scroll.js    # thin overlay scroll indicator (native scrollbar hidden)
       pages.js             # page switcher for the content area (hides, never destroys)
-      results-page.js      # results page: card grid, skeletons, scroll loading, type filter
-      sample-results.js    # TEMPORARY placeholder cards, delete when real search plugs in
+      results-page.js      # results page: renders the search session (cards, skeletons, scroll reveal, covers)
+      search-session.js    # live search brain: debounce, baked filter rules, status (no DOM)
+      search.js            # new-app search engine (copy of the lab's, independent): cache + IGDB + rank
+      games-cache.js       # `games` table reads/writes for search + covers (copy, independent)
+      api.js               # /api/* caller with bearer token (copy, independent)
+      ranking.js           # search ranking/merging (copy of the lab's, independent)
+      url-state.js         # search text + types in the address (?q=&types=)
       spring.js            # small spring used to animate lens CSS variables
       dev-reload.js        # localhost-only auto-reload when files change
     css/

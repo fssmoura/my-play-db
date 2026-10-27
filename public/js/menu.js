@@ -634,9 +634,10 @@ function wireFilter({
   function fixWidth() {
     if (widthFixed) return;
     widthFixed = true;
-    const counts = [...rows.values(), library].map((r) =>
-      r.querySelector(".menu-panel-count"),
-    );
+    const counts = [
+      ...[...rows.values()].map((r) => r.querySelector(".menu-panel-count")),
+      library.querySelector(".menu-panel-count"),
+    ];
     counts.forEach((c) => (c.textContent = " (999)"));
     panel.classList.add("is-measuring");
     const parentW = Math.ceil(panel.getBoundingClientRect().width);
@@ -665,8 +666,9 @@ function wireFilter({
         counts?.[value],
       );
     }
+    // Not wired to results yet, so the session never reports it: always 0.
     library.querySelector(".menu-panel-count").textContent = text(
-      counts?.inLibrary,
+      counts?.inLibrary ?? 0,
     );
   }
 
@@ -880,7 +882,7 @@ function wireSearch({
   function open(byKeyboard) {
     if (target === 1) return;
     closePullDown();
-    input.value = "";
+    input.value = search.query;
     syncText();
     target = 1;
     restoreFocus = false;
@@ -942,6 +944,13 @@ function wireSearch({
   };
 
   const offEnter = search.on("enter", () => open(enterByKeyboard));
+  // The query set from outside (e.g. restored from the address) shows in the
+  // field.
+  const offQuery = search.on("query", (query) => {
+    if (input.value === query) return;
+    input.value = query;
+    syncText();
+  });
   // Back, Escape or browser back left search mode: discard the text, close.
   // Close first, then blur, so nothing reacts to the blur.
   const offExit = search.on("exit", ({ source }) => {
@@ -959,6 +968,7 @@ function wireSearch({
   return () => {
     spring.destroy();
     offEnter();
+    offQuery();
     offExit();
     trigger.removeEventListener("click", onTrigger);
     input.removeEventListener("input", onInput);
