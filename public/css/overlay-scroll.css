@@ -15,6 +15,15 @@ html::-webkit-scrollbar,
   display: none;
 }
 
+/* No rubber-band past the page's edges (pulling down at the top, up at the
+   bottom) and no scroll chaining from inner scroll areas such as the filter
+   panel's list into the page. */
+html,
+body,
+.overlay-scroll-host {
+  overscroll-behavior: none;
+}
+
 .overlay-scroll {
   position: fixed;
   top: var(--os-top, 0);

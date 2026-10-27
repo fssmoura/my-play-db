@@ -127,7 +127,10 @@ once signed in):
   to make room (about 132px at 390).
   **Overlay scrollbar:** the new app hides native scrollbars
   (`css/overlay-scroll.css`, not loaded by the lab) so content never shifts
-  sideways when it starts to scroll. `overlay-scroll.js` draws a thin 6px
+  sideways when it starts to scroll. The same file sets `overscroll-behavior:
+  none` on the page and inner scroll areas, so phones don't rubber-band past
+  the top or bottom edge and an inner list never drags the page.
+  `overlay-scroll.js` draws a thin 6px
   indicator in the 25px side margin instead (fixed, starts below the top bar):
   it fades in while scrolling, out after ~1s, widens on hover, can be dragged,
   and hides when nothing scrolls. It follows scroll, resize and a
