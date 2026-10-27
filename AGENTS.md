@@ -232,7 +232,7 @@ my-play-db/
           media.js             # artwork picker tab (?media=<igdb id>)
   .env.local               # local env (managed by `vercel env pull`)
   package.json
-  vercel.json              # outputDirectory + cron schedule
+  vercel.json              # outputDirectory + cron schedule + /img/* image rewrites
 ```
 
 ## Gotchas
@@ -348,6 +348,12 @@ the linked doc - this list exists so they cannot be missed.
 
 **Frontend**
 
+- **Every cover host must either send CORS or have a same-origin `/img`
+  rewrite in `vercel.json`, or its covers show grey under the glass** (liquidGL
+  can't read them). IGDB sends CORS; PlayStation and SteamGridDB are rewritten.
+  The grid logs one `console.warn` per host that needs one. Steps for
+  diagnosing and adding a new host: docs/frontend.md ("Fixing a grey card
+  under the glass").
 - **Apple's Human Interface Guidelines are the design authority for the new
   app at `/` (not the lab).** Before designing or changing any UI there, look up
   the relevant HIG page through the `sosumi` MCP (or a `sosumi.ai` URL) instead
