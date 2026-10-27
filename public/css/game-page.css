@@ -1,0 +1,80 @@
+/* =========================================================================
+   my-play-db - the game page (public/js/game-page.js): a sheet that slides up
+   from the bottom over the search results. Looks only; the behaviour drives
+   one number, --game-t (0 hidden, 1 open), on .game-layer. The page behind
+   fades out in step (see pages.css, #app-content).
+   The edge stroke is shared with the result cards (see pages.css).
+   ========================================================================= */
+
+/* The page behind can't scroll while the sheet is open. */
+html.is-game-open {
+  overflow: hidden;
+}
+
+/* The page's own scroll indicator has nothing to show while it is covered. */
+html.is-game-open .overlay-scroll.is-page {
+  opacity: 0;
+}
+
+/* Fixed over the page, under the top bar (menu stage is z-index 100). It also
+   stops taps reaching the results behind. */
+.game-layer {
+  --game-t: 0;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  touch-action: none;
+}
+
+.game-layer.is-closing {
+  pointer-events: none;
+}
+
+/* Starts at 85px, where the results grid starts, with the grid's side inset,
+   and runs off the bottom of the screen (full width on phones). Slides up
+   from below the viewport; min() keeps the spring's overshoot from lifting it
+   off the bottom. */
+.game-sheet {
+  position: absolute;
+  top: 85px;
+  left: 25px;
+  right: 25px;
+  bottom: 0;
+  box-sizing: border-box;
+  border-radius: 24px 24px 0 0;
+  background: var(--sheet);
+  overflow: hidden;
+  outline: none;
+  transform: translateY(calc((1 - min(var(--game-t), 1)) * 100dvh));
+  /* The page-wide edge stroke is much too bright over a surface this big. */
+  --edge-alpha: 0.14;
+}
+
+/* Its own scroll area (empty for now). */
+.game-sheet.is-dragging {
+  user-select: none;
+}
+
+@media (max-width: 640px) {
+  .game-sheet {
+    left: 0;
+    right: 0;
+  }
+}
+
+.game-sheet-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  touch-action: pan-y;
+}
+
+.game-sheet-body {
+  min-height: 100%;
+}
+
+/* Over the scroll area, not under it. */
+.game-sheet::after {
+  z-index: 2;
+}

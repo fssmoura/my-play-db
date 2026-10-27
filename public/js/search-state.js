@@ -9,10 +9,14 @@
 //   "query"  (query) every change of the query; typing only ever does this
 //   "exit"   ({ source }) search mode ended; the query is reset to "".
 //            source says how: "back", "back-key", "escape" or "history".
+//   "cover" / "uncover"  something (the game page) sits on top of search mode.
+//            Search stays active and keeps its query; only its controls step
+//            aside. Nothing is discarded, unlike "exit".
 
 export function createSearchState() {
   let query = "";
   let active = false;
+  let covered = false;
   const listeners = new Map();
 
   function emit(event, detail) {
@@ -38,9 +42,22 @@ export function createSearchState() {
     emit("query", query);
   }
 
+  function cover() {
+    if (!active || covered) return;
+    covered = true;
+    emit("cover");
+  }
+
+  function uncover() {
+    if (!covered) return;
+    covered = false;
+    emit("uncover");
+  }
+
   function exit(source = "exit") {
     if (!active) return;
     active = false;
+    covered = false;
     setQuery("");
     emit("exit", { source });
   }
@@ -52,7 +69,12 @@ export function createSearchState() {
     get active() {
       return active;
     },
+    get covered() {
+      return covered;
+    },
     enter,
+    cover,
+    uncover,
     setQuery,
     exit,
     on,

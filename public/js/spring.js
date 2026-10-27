@@ -56,8 +56,18 @@ export function createSpring({
     frame = requestAnimationFrame(step);
   }
 
+  // Put the value somewhere right now (a finger dragging), stopping any motion.
+  function set(next) {
+    cancelAnimationFrame(frame);
+    frame = 0;
+    value = Math.max(0, next);
+    velocity = 0;
+    onUpdate(value);
+  }
+
   return {
     to,
+    set,
     destroy: () => cancelAnimationFrame(frame),
   };
 }

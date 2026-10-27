@@ -179,6 +179,8 @@ my-play-db/
       menu.js              # top-right app menu (glass pill via liquidGL, Search / Profile / More pull-down, Back circle)
       app-shell.js         # new app wiring: search state + pages + results page + history + menu
       search-state.js      # search mode + query state, emits events (no DOM)
+      game-state.js        # which game page is open, emits events (no DOM)
+      game-page.js         # the game page sheet: slides up over the results, empty for now
       filter-state.js      # filter: selected types + In Library, emits change (no DOM)
       result-types.js      # the 15 IGDB game types (value + label) + the short list
       glass-refresh.js     # asks liquidGL to retake its snapshot after page changes
@@ -190,7 +192,7 @@ my-play-db/
       games-cache.js       # `games` table reads/writes for search + covers (copy, independent)
       api.js               # /api/* caller with bearer token (copy, independent)
       ranking.js           # search ranking/merging (copy of the lab's, independent)
-      url-state.js         # search text + types in the address (?q=&types=)
+      url-state.js         # search text + types (+ open game) in the address (?q=&types=&game=)
       spring.js            # small spring used to animate lens CSS variables
       dev-reload.js        # localhost-only auto-reload when files change
     css/
@@ -198,6 +200,7 @@ my-play-db/
       sign-in.css          # styling for the sign-in screen
       menu.css             # styling for the app menu
       pages.css            # content area + results grid, cards, skeletons
+      game-page.css        # the game page sheet (looks only)
       overlay-scroll.css   # hides native scrollbars, styles the overlay indicator
     vendor/
       liquidGL.js          # liquid glass library, vendored and PATCHED (see Gotchas)

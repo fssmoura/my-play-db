@@ -46,7 +46,9 @@ function returnPath() {
   const next = nextPath();
   if (next) return next;
   const params = new URLSearchParams(location.search);
-  return params.has("q") ? `${location.pathname}${location.search}` : null;
+  return params.has("q") || params.has("game")
+    ? `${location.pathname}${location.search}`
+    : null;
 }
 
 function applySession(session) {

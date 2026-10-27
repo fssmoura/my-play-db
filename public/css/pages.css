@@ -3,6 +3,14 @@
    One page is visible at a time; the others are hidden, not destroyed.
    ========================================================================= */
 
+/* The rule for every page: when something covers the content (a sheet today,
+   anything later), the content fades out instead of dimming, and fades back in
+   on return. pages.js drives --page-t (1 showing, 0 covered) from the cover's
+   own progress, so they move together. min/max keep a spring's overshoot out. */
+#app-content {
+  opacity: clamp(0, var(--page-t, 1), 1);
+}
+
 .page[hidden] {
   display: none;
 }
@@ -35,7 +43,31 @@
 }
 
 .result-card {
+  position: relative;
   min-width: 0;
+}
+
+/* An invisible button over the whole card: it opens the game page. The focus
+   ring shows for the keyboard only. */
+.result-open {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.result-open:focus {
+  outline: none;
+}
+
+.result-open:focus-visible {
+  outline: 2px solid var(--light-gray);
+  outline-offset: 2px;
 }
 
 .result-cover {
@@ -49,7 +81,8 @@
 /* The stroke: 1px inside on all sides, white at the top-left corner, fading to
    nothing through the middle and back to white at the bottom-right corner.
    Static, pure CSS, drawn over the cover. */
-.result-cover::after {
+.result-cover::after,
+.game-sheet::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -58,10 +91,10 @@
   padding: 1px;
   background: linear-gradient(
     135deg,
-    rgba(244, 244, 244, 0.25) 0%,
+    rgba(244, 244, 244, var(--edge-alpha, 0.25)) 0%,
     rgba(244, 244, 244, 0) 40%,
     rgba(244, 244, 244, 0) 60%,
-    rgba(244, 244, 244, 0.25) 100%
+    rgba(244, 244, 244, var(--edge-alpha, 0.25)) 100%
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -125,14 +158,8 @@
 }
 
 /* The edge stroke is fainter on the dark no-cover tile. */
-.result-card.is-no-cover .result-cover::after {
-  background: linear-gradient(
-    135deg,
-    rgba(244, 244, 244, 0.1) 0%,
-    rgba(244, 244, 244, 0) 40%,
-    rgba(244, 244, 244, 0) 60%,
-    rgba(244, 244, 244, 0.1) 100%
-  );
+.result-card.is-no-cover .result-cover {
+  --edge-alpha: 0.1;
 }
 
 /* "No results" / "Couldn't search": one short dim line, centred in the area. */

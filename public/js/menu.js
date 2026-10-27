@@ -779,6 +779,7 @@ function wireFilter({
   const offChange = filter.on("change", sync);
   const offCounts = filter.on("counts", syncCounts);
   const offExit = search.on("exit", closePanel);
+  const offCover = search.on("cover", closePanel);
   sync();
   syncCounts();
   return {
@@ -800,14 +801,16 @@ function wireFilter({
       offChange();
       offCounts();
       offExit();
+      offCover();
     },
   };
 }
 
 // Slides the Back circle in and out with --back-t (0 hidden, 1 shown) on the
 // stage, driven by the same kind of spring as the search pill. Clicking it
-// leaves search mode.
-function wireBack({ stage, circle, button, search }) {
+// closes the game page if one is open, otherwise leaves search mode. It shows
+// whenever there is something to go back from.
+function wireBack({ stage, circle, button, search, game }) {
   const reducedMotion = () =>
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const spring = createSpring({
@@ -825,17 +828,24 @@ function wireBack({ stage, circle, button, search }) {
     spring.to(visible ? 1 : 0, { instant: reducedMotion() });
   }
 
-  const onClick = (event) =>
-    search.exit(event.detail === 0 ? "back-key" : "back");
+  const onClick = (event) => {
+    const source = event.detail === 0 ? "back-key" : "back";
+    if (game.isOpen) game.close(source);
+    else search.exit(source);
+  };
   const offOpen = search.on("enter", () => show(true));
   const offClose = search.on("exit", () => show(false));
+  const offGameOpen = game.on("open", () => show(true));
+  const offGameClose = game.on("close", () => show(search.active));
   button.addEventListener("click", onClick);
-  show(search.active);
+  show(search.active || game.isOpen);
 
   return () => {
     spring.destroy();
     offOpen();
     offClose();
+    offGameOpen();
+    offGameClose();
     button.removeEventListener("click", onClick);
   };
 }
@@ -853,11 +863,13 @@ function wireSearch({
   clear,
   closePullDown,
   search,
+  game,
 }) {
   let target = 0;
   let restoreFocus = false;
   let openedByKeyboard = false;
   let enterByKeyboard = false;
+  let resumeByKeyboard = false;
 
   const reducedMotion = () =>
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -917,17 +929,27 @@ function wireSearch({
   };
 
   // Clicking Search starts search mode; this pill opens in response to the
-  // state's "enter", like everything else that shows with it.
+  // state's "enter", like everything else that shows with it. With a game page
+  // open it closes that first, which brings the covered search back.
   const onTrigger = (event) => {
     enterByKeyboard = event.detail === 0;
+    if (game.isOpen) {
+      resumeByKeyboard = enterByKeyboard;
+      game.close("search");
+    }
     search.enter();
   };
-  // Escape leaves search mode from anywhere, even when focus is elsewhere. An
-  // open pull-down takes Escape first (it marks it handled).
+  // Escape closes the game page if one is open, otherwise leaves search mode,
+  // from anywhere, even when focus is elsewhere. An open pull-down takes Escape
+  // first (it marks it handled).
   const onKeydown = (event) => {
-    if (event.key !== "Escape" || event.defaultPrevented || !search.active) {
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    if (game.isOpen) {
+      event.preventDefault();
+      game.close("escape");
       return;
     }
+    if (!search.active) return;
     event.preventDefault();
     search.exit("escape");
   };
@@ -953,6 +975,18 @@ function wireSearch({
   });
   // Back, Escape or browser back left search mode: discard the text, close.
   // Close first, then blur, so nothing reacts to the blur.
+  // A game page covers search: the pill folds away but keeps the query, so
+  // uncovering opens it again with the same text (focused only when Search was
+  // pressed from the keyboard, so a phone keyboard never pops up on its own).
+  const offCover = search.on("cover", () => {
+    close(false);
+    if (pill.contains(document.activeElement)) document.activeElement.blur();
+  });
+  const offUncover = search.on("uncover", () => {
+    const byKeyboard = resumeByKeyboard;
+    resumeByKeyboard = false;
+    open(byKeyboard);
+  });
   const offExit = search.on("exit", ({ source }) => {
     input.value = "";
     syncText();
@@ -969,6 +1003,8 @@ function wireSearch({
     spring.destroy();
     offEnter();
     offQuery();
+    offCover();
+    offUncover();
     offExit();
     trigger.removeEventListener("click", onTrigger);
     input.removeEventListener("input", onInput);
@@ -1088,7 +1124,7 @@ function wirePullDown(
   };
 }
 
-export async function mountMenu({ search, filter }) {
+export async function mountMenu({ search, filter, game }) {
   if (document.getElementById("app-menu-stage")) return;
 
   const nav = document.createElement("nav");
@@ -1176,7 +1212,7 @@ export async function mountMenu({ search, filter }) {
     filterWiring.cleanup,
   );
   cleanups.push(
-    wireBack({ stage, circle: backCircle, button: backButton, search }),
+    wireBack({ stage, circle: backCircle, button: backButton, search, game }),
   );
   const searchTrigger = row.querySelector('[data-opens="search"]');
   if (searchTrigger) {
@@ -1188,6 +1224,7 @@ export async function mountMenu({ search, filter }) {
         pill: searchPill,
         input: searchInput,
         clear: searchClear,
+        game,
         closePullDown() {
           panel.classList.remove("is-open");
           trigger?.setAttribute("aria-expanded", "false");
