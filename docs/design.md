@@ -80,6 +80,19 @@ Summary of rules already applied (Apple's guidance, adapted).
   previous page (one history entry, no stray ones). The
   look will be designed later; the behaviour sits in `search-state.js` and
   `app-shell.js`, apart from the looks (see frontend.md).
+- **Game page:** tapping a result card opens an empty sheet that slides up from
+  the bottom (HIG Sheets/Modality: the parent steps back - here it fades out - obvious way out, one at a
+  time). It starts 85px from the top with the grid's 25px side inset (full width on phones), 24px top
+  corners only, fill `--sheet` `#111113` (a touch lighter than the page), and the
+  result cards' light edge stroke scaled up and kept subtle. The search pill and
+  filter circle fold away while it is open but search is kept intact; the main
+  pill and the Back circle stay. Back, Escape and the browser's back close it
+  and return to the results as they were (same text, filter and scroll
+  position); Search in the main pill does too; dragging it down dismisses it
+  (past a quarter of its height or a quick flick). The game page is its own page:
+  its address is `/?game=<id>` alone. **Leaving a page fades its content out
+  (not a dim), and returning fades it back in**, smoothly, in step with whatever
+  covers it; this is the rule for every future page. No content yet.
 
 ## Colour
 

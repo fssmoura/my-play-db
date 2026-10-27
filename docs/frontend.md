@@ -37,10 +37,50 @@ once signed in):
   screen showing, Back circle visible - one state) and the query; no DOM.
   `enter()`, `exit(source)`, `setQuery(text)`, `on(event, fn)`. Events: `enter`,
   `query` (every change; typing only ever does this), `exit` (`source`: back /
-  back-key / escape / history; the query resets to empty).
+  back-key / escape / history; the query resets to empty). `cover()` /
+  `uncover()` (events `cover`, `uncover`, flag `covered`) are for something
+  sitting on top of search - the game page: search stays active and keeps its
+  query, results and filter, and only its controls step aside. Nothing is
+  discarded, unlike `exit`.
+- `game-state.js` - which game page is open (`id`, `isOpen`), no DOM. `open(id)`
+  (positive integers only), `close(source)` (back / back-key / escape / search
+  / history), events `open` and `close`. `app-shell.js` makes opening cover
+  search and closing uncover it.
+- `game-page.js` + `css/game-page.css` - the game page, an empty sheet that
+  slides up over the results (behaviour in JS, looks in CSS, one number
+  `--game-t` between them). Fixed layer at z-index 50 (under the top bar, over
+  the page and its scroll indicator): the sheet - top 85px (where the grid
+  starts), 25px side inset (none at 640px and below: full width, corners kept), 24px top corners, fill
+  `--sheet: #111113`, the card's edge stroke (shared with `.result-cover::after`
+  through `--edge-alpha`, 0.14 here), its own scroll area (overlay-scroll,
+  `overscroll-behavior: none`). It springs up with `createSpring` (instant under
+  `prefers-reduced-motion`; `min(--game-t, 1)` keeps the overshoot off the
+  bottom edge). While open the results page stays mounted (scroll position
+  kept) but is `inert` and the page can't scroll (`html.is-game-open`).
+  Closing slides it down, removes it, and focuses the card that opened it
+  (`:focus-visible` ring only). `refreshGlass()` runs after it settles either
+  way. **The page behind fades out, not dims:** `createGamePage` reports its
+  progress every frame (`onProgress`), which `app-shell.js` hands to
+  `pages.setCovered(t)` (`pages.js`); that sets `--page-t` on `#app-content`
+  and `pages.css` turns it into opacity. The rule is general - anything that
+  covers the content later gets the same fade-out and fade-in by calling
+  `setCovered` - and nothing of the results shows around the sheet's corners.
+  **Swipe down to dismiss:** dragging the sheet down (touch events for touch,
+  pointer events with capture for mouse and pen) follows the finger through the
+  same `--game-t` (`spring.set`), only when the sheet's scroll is at the top
+  and the movement is downward (upward drags are ignored, so it never fights
+  scrolling). Release: past 25% of the visible height, or a flick faster than
+  0.5px/ms over the last 100ms, closes it as `game.close("swipe")` (same as
+  Back); otherwise it springs back open. Per Apple's Sheets/Modality HIG it has an obvious way
+  out (the Back circle, also Escape) and is one sheet at a time; swipe-down to
+  dismiss is not built yet.
 - `menu.js` - the search pill only reports the field's text (`setQuery`) and
   the Search click (`enter()`), and reacts to the state: the pill opens on
   `enter` and closes on `exit`, and the Back circle shows and hides with them.
+  With a game page open the pill and the filter circle fold away on `cover`
+  (query kept; they come back on `uncover`, unfocused unless Search was pressed
+  from the keyboard), the Back circle stays, Back / Escape close the game page
+  instead of leaving search, and Search closes it and returns to search.
 - `pages.js` - the page switcher for `<main id="app-content">`. Pages are
   elements; switching _hides_ the one being left (never destroys it, so it keeps
   its state) and `back()` returns to the previous. Today's only page is the
@@ -74,12 +114,20 @@ once signed in):
   `q` enters search with the field filled and the types applied (so baked).
   When the page was loaded straight into search there is no entry of ours to
   pop, so leaving does `replaceState` to `/` instead of `history.back()`.
-  `sign-in.js` keeps `?q=` through the Google round trip (`returnPath()`).
+  `sign-in.js` keeps `?q=` and `?game=` through the Google round trip
+  (`returnPath()`). **The game page is its own page:** its address is just
+  `/?game=1234` (a positive integer, otherwise ignored), never mixed with the
+  search params; the search entry beneath keeps its own `/?q=hades`, and
+  nothing here writes the address while a game page is open. Loading
+  `/?game=1234` opens the game page alone (any `q` in the link is ignored and
+  the address is normalised to `/?game=1234`); closing it goes home.
 - `results-page.js` - only renders the session: cards from the 200-result pool,
   20 revealed at a time (`PAGE_SIZE`); while more remain, 12 trailing
   skeletons, and an IntersectionObserver on the first (rootMargin one screen)
   reveals the next 20. Before IGDB answers, the cache head start (or a narrowed list) shows with trailing skeletons, plain skeletons if neither; skeleton nodes already on screen are kept (never rebuilt, so the shimmer doesn't restart on each keystroke) and new ones are synced to a shared shimmer clock via the Web Animations API. When the final list lands cards are reconciled by `data-id` so existing cards and images aren't
   rebuilt. A new search (generation change) resets reveal and scrolls to top.
+  Each card carries an invisible `<button class="result-open">` over the whole
+  card (aria-label = title); a click reports the id through `onOpen`.
   "No results" and "Couldn't search. Try again." are one dim centred line
   (`.results-message`). If IGDB fails after cached or narrowed results were already showing, they are kept as the final list (status `done` with `failed`, nothing written back) and one small grey line, "IGDB search failed" (`.results-note`), sits under the last card. Cards carry `data-id` and do nothing when tapped.
   Card text is the name, then "type · year" (`releaseYear` from `ranking.js`,
@@ -181,8 +229,13 @@ phone it makes the search pill 52px narrower (`--search-w`) so they never
 overlap. **History:** entering search mode pushes exactly one history entry
 (`app-shell.js`, `wireHistory`); every exit route removes it (`history.back()`
 when the exit didn't come from the browser), so there is never a stray entry.
-An enter that happens while a `back()` is still in flight waits for it. No
-query is put in the URL yet.
+An enter that happens while a `back()` is still in flight waits for it. **Game
+page:** opening pushes one more entry, `/?game=<id>` only, closing by Back,
+Escape or swipe pops it with `history.back()` (so the address shows the search
+again), browser back closes
+the sheet, and an open that arrives while a `back()` is in flight waits for it,
+exactly like search. When the page was loaded straight onto a game there is no
+entry to pop, so closing rewrites the address to `/` (home). Home, search and game are one handler (`wireHistory`).
 
 - **Connections** - one row per platform: status dot, account name, expiry
   state, and buttons for connect / refresh / edit / delete. `edit` expands the

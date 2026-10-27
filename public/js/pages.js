@@ -1,6 +1,10 @@
 // Page switcher for the new app's content area. A "page" is just an element.
 // Switching hides the page being left (it is not destroyed, so it keeps its
 // state) and show()/back() bring pages back. Looks live in /css/pages.css.
+//
+// Covering: when something sits on top of the content (the game page sheet),
+// setCovered(t) fades the content out as t goes 0 -> 1 and back in as it
+// returns to 0, whatever page is showing. Every future page gets this for free.
 
 export function createPageSwitcher(container) {
   const pages = new Map();
@@ -33,8 +37,13 @@ export function createPageSwitcher(container) {
     if (previous) display(previous);
   }
 
+  function setCovered(t) {
+    container.style.setProperty("--page-t", (1 - Math.min(t, 1)).toFixed(4));
+  }
+
   return {
     register,
+    setCovered,
     show,
     back,
     get current() {

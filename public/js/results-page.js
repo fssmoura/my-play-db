@@ -124,8 +124,9 @@ function cardText(game) {
   };
 }
 
-// One card: a cover tile, then title, then "type · year". Tapping does nothing
-// yet; the card just carries its game id.
+// One card: a cover tile, then title, then "type · year", and an invisible
+// button over the whole card that opens the game page (a real button, so Tab,
+// Enter and Space work). The card carries its game id.
 export function renderCard(game) {
   const card = document.createElement("li");
   card.className = "result-card";
@@ -137,14 +138,20 @@ export function renderCard(game) {
   name.className = "result-title";
   const meta = document.createElement("p");
   meta.className = "result-meta";
-  card.append(art, name, meta);
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "result-open";
+  card.append(art, name, meta, open);
   updateCard(card, game);
   return card;
 }
 
 function updateCard(card, game) {
   const { title, meta } = cardText(game);
-  const [art, name, metaLine] = card.children;
+  const [art, name, metaLine, open] = card.children;
+  if (open.getAttribute("aria-label") !== title) {
+    open.setAttribute("aria-label", title);
+  }
   if (name.textContent !== title) name.textContent = title;
   if (metaLine.textContent !== meta) metaLine.textContent = meta;
   setCover(card, art, game.cover?.url);
@@ -220,7 +227,7 @@ function syncShimmer(node) {
 }
 // `session` is a search session (see search-session.js): { status, visible,
 // generation, on("change") }. Nothing here knows how results are found.
-export function createResultsPage(session) {
+export function createResultsPage(session, { onOpen } = {}) {
   const element = document.createElement("section");
   element.className = "results";
   element.setAttribute("aria-label", "Results");
@@ -297,6 +304,14 @@ export function createResultsPage(session) {
     refreshGlass();
   }
 
+  const onClick = (event) => {
+    const card = event.target.closest?.(".result-card[data-id]");
+    if (card && event.target.closest(".result-open")) {
+      onOpen?.(Number(card.dataset.id));
+    }
+  };
+  list.addEventListener("click", onClick);
+
   const off = session.on("change", render);
   render();
 
@@ -304,6 +319,7 @@ export function createResultsPage(session) {
     element,
     destroy: () => {
       observer?.disconnect();
+      list.removeEventListener("click", onClick);
       off();
     },
   };
