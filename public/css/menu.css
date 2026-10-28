@@ -672,8 +672,9 @@ button.menu-panel-item {
 /* ---------- bottom toolbar (game page; see public/js/bottom-bar.js) ----------
    A third glass pill, floating bottom centre over the game sheet. Two looks
    joined by --bar-t (1 expanded: icon over label, 0 compact: small icon only);
-   --bar-show (0..1) is the sheet's progress, so it rises and fades in with the
-   sheet. Size is plain arithmetic on those two numbers because liquidGL forces
+   --bar-show (0..1) is its entrance: its own spring starts once the sheet has
+   settled and loading has ended (never more than the sheet's progress, so it
+   leaves with the sheet). Size is plain arithmetic on those two numbers because liquidGL forces
    transition: none and follows the element's box every frame. */
 .menu.menu-bottom {
   position: absolute;
@@ -681,7 +682,7 @@ button.menu-panel-item {
   right: 0;
   margin: 0 auto;
   bottom: calc(
-    25px + env(safe-area-inset-bottom, 0px) - 40px * (1 - var(--bar-show))
+    25px + env(safe-area-inset-bottom, 0px) - 100px * (1 - var(--bar-show))
   );
   display: none;
   width: calc(8px + (44px + 56px * var(--bar-t)) * var(--bar-n));

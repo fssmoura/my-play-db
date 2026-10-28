@@ -10,6 +10,28 @@
     <link rel="stylesheet" href="/css/pages.css" />
     <link rel="stylesheet" href="/css/game-page.css" />
     <link rel="stylesheet" href="/css/overlay-scroll.css" />
+    <!-- Flattens the module waterfall: the browser would otherwise find these
+         one import level at a time. Keep in step with the import graph from
+         sign-in.js (only a hint; a missing entry just loads late). -->
+    <link rel="preconnect" href="https://esm.sh" crossorigin />
+    <link rel="modulepreload" href="/js/supabase.js" />
+    <link rel="modulepreload" href="/js/config.js" />
+    <link rel="modulepreload" href="/js/session.js" />
+    <link rel="modulepreload" href="/js/app-shell.js" />
+    <link rel="modulepreload" href="/js/menu.js" />
+    <link rel="modulepreload" href="/js/game-page.js" />
+    <link rel="modulepreload" href="/js/search.js" />
+    <link rel="modulepreload" href="/js/results-page.js" />
+    <link rel="modulepreload" href="/js/search-session.js" />
+    <link rel="modulepreload" href="/js/api.js" />
+    <link rel="modulepreload" href="/js/ranking.js" />
+    <link rel="modulepreload" href="/js/games-cache.js" />
+    <link rel="modulepreload" href="/js/game-art.js" />
+    <link rel="modulepreload" href="/js/bottom-bar.js" />
+    <link rel="modulepreload" href="/js/image-url.js" />
+    <link rel="modulepreload" href="/js/overlay-scroll.js" />
+    <link rel="modulepreload" href="/js/spring.js" />
+    <link rel="modulepreload" href="/js/glass-refresh.js" />
   </head>
 
   <body>

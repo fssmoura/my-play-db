@@ -195,7 +195,10 @@ my-play-db/
     results-page.js      # results page: renders the search session (cards, skeletons, scroll reveal, covers)
       search-session.js    # live search brain: debounce, baked filter rules, status (no DOM)
       search.js            # new-app search engine (copy of the lab's, independent): cache + IGDB + rank
-      games-cache.js       # `games` table: search reads/writes + game art (banner) (copy, independent)
+      games-cache.js       # `games` table: search reads/writes + game page row, detail save, art/sgdb_id rpcs (copy, independent)
+      game-art.js          # resolves a game's art on page open: detail pull, SGDB match, art rule (no DOM)
+      sgdb.js              # SteamGridDB lookup (copy of the lab's; throws on failures instead of swallowing)
+      sgdb-match.js        # pure IGDB->SteamGridDB matching rules (copy of the lab's, unchanged)
       api.js               # /api/* caller with bearer token (copy, independent)
       ranking.js           # search ranking/merging (copy of the lab's, independent)
       url-state.js         # search text + types (+ open game) in the address (?q=&types=&game=)
@@ -344,6 +347,12 @@ the linked doc - this list exists so they cannot be missed.
 - **The first entry of `cover`, `logo` and `banner` is the user's chosen
   image.** There is no flag and no second column - position is the choice, and
   it survives because `merge_image_array()` preserves order and only appends.
+  **The new app's game page uses a different rule** (`set_game_art()`): at most
+  one IGDB image plus one other, replacing rather than appending. A choice goes
+  first; the automatic SteamGridDB cover goes behind IGDB's as its backup.
+  Don't mix the two writers' expectations. `games.sgdb_id`: NULL = never tried,
+  **0 = tried, nothing found (never retried)**, above 0 = matched. A failed
+  lookup must write nothing, so `resolveSgdb` throws on non-404 failures.
   **Anything that rebuilds one of those arrays instead of merging into it
   silently throws the choice away.** Where a URL came from is readable from its
   host (`images.igdb.com`, `image.api.playstation.com`,

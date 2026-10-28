@@ -13,7 +13,8 @@
 //   frame, including while a finger drags it, so the page behind can fade in
 //   step (pages.js `setCovered`).
 //
-// The sheet is empty apart from the game's banner, when it has one. Closing hands focus back to the card that opened
+// The sheet is empty apart from the game's banner, when it has one, and shows a
+// whole-sheet shimmer (.is-loading) while the game's art resolves. Closing hands focus back to the card that opened
 // it. Dragging it down (touch, pen or mouse) dismisses it like Back.
 
 import { createSpring } from "/js/spring.js";
@@ -22,7 +23,7 @@ import {
   refreshGlass,
   refreshGlassWhileScrolling,
 } from "/js/glass-refresh.js";
-import { loadGameArt } from "/js/games-cache.js";
+import { resolveGameArt } from "/js/game-art.js";
 import { displayImageUrl, loadImageForGlass } from "/js/image-url.js";
 
 const reducedMotion = () =>
@@ -49,7 +50,12 @@ function buildLayer() {
 
   const body = document.createElement("div");
   body.className = "game-sheet-body";
-  sheet.append(body);
+  // Sheet-level loading shimmer (shown while the sheet has is-loading).
+  const skeleton = document.createElement("div");
+  skeleton.className = "game-skeleton";
+  skeleton.setAttribute("aria-hidden", "true");
+  sheet.classList.add("is-loading");
+  sheet.append(body, skeleton);
   scroller.append(spacer, sheet);
 
   layer.append(scroller);
@@ -91,36 +97,61 @@ export function createGamePage({ game, content, onProgress }) {
     },
   });
 
-  // The banner, when the game has one: nothing is drawn until we know, then the
-  // box is reserved and the image fades in. An answer for a game that is no
-  // longer the open one is dropped.
+  // Art for the open game. The whole sheet shows a loading state (is-loading)
+  // while its art resolves (game-art.js: row read, IGDB detail pull,
+  // SteamGridDB lookup); when that ends the content - the banner, if there is
+  // one - fades in and the shimmer fades out. The banner box is only created
+  // once we know a banner exists. An answer for a game that is no longer the
+  // open one is dropped (it touches no UI state).
   let artRun = 0;
-  async function showBanner(id) {
+  function setLoading(on) {
+    parts?.sheet.classList.toggle("is-loading", on);
+    game.reportLoading(on);
+  }
+  async function loadArt(id) {
     const run = ++artRun;
     parts?.body.querySelector(".game-banner")?.remove();
-    const { banner } = await loadGameArt(id);
-    if (run !== artRun || !parts || !banner) return;
-    const url = displayImageUrl(banner, "banner");
-    if (!url) return;
+    setLoading(true);
+    let banner = null;
+    try {
+      ({ banner } = await resolveGameArt(id));
+    } catch {
+      // resolveGameArt does not throw; stay defensive so loading always ends.
+    }
+    if (run !== artRun || !parts) return;
+    const url = banner ? displayImageUrl(banner, "banner") : null;
+    if (!url) return finishLoading(run);
     const box = document.createElement("div");
     box.className = "game-banner";
     const img = document.createElement("img");
     img.alt = "";
     img.decoding = "async";
+    // A drag on the banner is the sheet's swipe-down, not an image drag.
+    img.draggable = false;
     loadImageForGlass(img, url, {
       onLoad() {
         if (run !== artRun) return;
         box.classList.add("is-loaded");
-        refreshGlass();
+        finishLoading(run);
       },
       onError() {
+        if (run !== artRun) return;
         box.remove();
         overlay?.update();
+        finishLoading(run);
       },
     });
     box.append(img);
     parts.body.prepend(box);
     overlay?.update();
+  }
+
+  // Waits for the fade to finish before the lenses retake their picture.
+  function finishLoading(run) {
+    if (run !== artRun || !parts) return;
+    setLoading(false);
+    overlay?.update();
+    setTimeout(() => run === artRun && refreshGlass(), reducedMotion() ? 0 : 350);
   }
 
   // Reports scrolling to the toolbar, and keeps the glass current: the lenses
@@ -171,7 +202,7 @@ export function createGamePage({ game, content, onProgress }) {
     parts.layer.inert = false;
     content.inert = true;
     parts.sheet.focus({ preventScroll: true });
-    showBanner(id);
+    loadArt(id);
     spring.to(1, { instant: reducedMotion() });
   }
 

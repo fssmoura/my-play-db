@@ -14,6 +14,7 @@
 // - Every open of the sheet starts expanded.
 
 import { createSpring } from "/js/spring.js";
+import { refreshGlass } from "/js/glass-refresh.js";
 
 // TODO: Customize does nothing yet.
 export const BAR_ITEMS = [
@@ -83,17 +84,54 @@ export function wireBottomBar({ stage, bar, items, buttons, game }) {
     }
   });
 
-  const offProgress = game.on("progress", (v) => {
-    const show = Math.min(Math.max(v, 0), 1);
+  // The bar waits for the sheet to settle and for loading to end, then rises
+  // on its own spring (--bar-show). It leaves with the sheet: the visible
+  // amount is never more than the sheet's progress.
+  const SETTLED = 0.98;
+  let loading = true;
+  let sheet = 0;
+  let enter = 0;
+  const showSpring = createSpring({
+    onUpdate: (v) => {
+      enter = v;
+      render();
+    },
+    onRest: (target) => {
+      if (target === 1) refreshGlass();
+    },
+  });
+  function render() {
+    const show = Math.min(Math.max(Math.min(enter, sheet), 0), 1);
     stage.style.setProperty("--bar-show", show.toFixed(4));
-    stage.classList.toggle("is-bar-active", v > 0.001);
+    stage.classList.toggle("is-bar-active", show > 0.001);
+  }
+  function sync() {
+    if (!game.isOpen) return;
+    const ready = !loading && sheet >= SETTLED;
+    showSpring.to(ready ? 1 : 0, { instant: ready && reducedMotion() });
+  }
+
+  const offProgress = game.on("progress", (v) => {
+    sheet = v;
+    render();
+    sync();
+  });
+  const offLoading = game.on("loading", (on) => {
+    loading = on;
+    sync();
   });
 
   const offOpen = game.on("open", () => {
     moved = 0;
     expanded = true;
+    loading = true;
     bar.classList.remove("is-compact");
     spring.set(1);
+    showSpring.set(0);
+  });
+  const offClose = game.on("close", () => {
+    showSpring.set(0);
+    render();
   });
 
   // Capture phase: while compact, a tap only expands, whatever it hit.
@@ -112,7 +150,10 @@ export function wireBottomBar({ stage, bar, items, buttons, game }) {
   return () => {
     offScroll();
     offProgress();
+    offLoading();
+    offClose();
     offOpen();
+    showSpring.destroy();
     bar.removeEventListener("click", onClickCapture, true);
     spring.destroy();
   };
