@@ -80,10 +80,10 @@ Summary of rules already applied (Apple's guidance, adapted).
   previous page (one history entry, no stray ones). The
   look will be designed later; the behaviour sits in `search-state.js` and
   `app-shell.js`, apart from the looks (see frontend.md).
-- **Game page:** tapping a result card opens an empty sheet that slides up from
+- **Game page:** tapping a result card opens a sheet that slides up from
   the bottom (HIG Sheets/Modality: the parent steps back - here it fades out - obvious way out, one at a
   time). It starts 85px from the top with the grid's 25px side inset (full width on phones), 24px top
-  corners only, fill `--sheet` `#111113` (a touch lighter than the page), and the
+  corners only, fill the page black `--black` `#09090B`, and the
   result cards' light edge stroke scaled up and kept subtle. The search pill and
   filter circle fold away while it is open but search is kept intact; the main
   pill and the Back circle stay. Back, Escape and the browser's back close it
@@ -92,8 +92,9 @@ Summary of rules already applied (Apple's guidance, adapted).
   (past a quarter of its height or a quick flick). The game page is its own page:
   its address is `/?game=<id>` alone. **Leaving a page fades its content out
   (not a dim), and returning fades it back in**, smoothly, in step with whatever
-  covers it; this is the rule for every future page. No content yet.
-
+  covers it; this is the rule for every future page. The only content is the game's banner, when it has one (nothing at all otherwise): full width, Figma ratio 439/238 (capped at 420px tall on wide desktop sheets - a judgement call), a radial `--black` gradient over it (centre 50% / 10%, radii 75% x 102%, plus a linear fade over the last 12% so the bottom edge is solid black) so it dissolves into the sheet.
+    The page scrolls as one: the sheet first rises from 85px to the top of the screen, then its content scrolls; the banner is sticky at the top, so content dissolves under its gradient. The sheet's 250dvh body is **TEMPORARY** filler so there is something to scroll; remove it when real content exists.
+  - **Bottom toolbar (game page only):** a floating glass capsule, centred, 25px above the bottom (plus the safe area), rising and fading with the sheet. Items are icon over a small label (data-driven list, one item "Customize" that does nothing yet). **Expanded** (icon + label) when the sheet opens; **compact** (smaller icons only, smaller capsule) after scrolling either way (more than 8px). HIG (Tab bars): a minimised bar is restored by tapping it or scrolling back to the top - scrolling up alone does not restore it, so that is what we do. Expanded, the label has 22px of padding each side and 3px sits between icon and label. Tapping a compact bar only expands it; it does not trigger the item.
 ## Colour
 
 Five colours, defined once as variables in `public/css/tokens.css`: white

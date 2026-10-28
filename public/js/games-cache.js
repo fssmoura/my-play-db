@@ -24,6 +24,24 @@ export function clearCache() {
   lookups.clear();
 }
 
+/**
+ * What the game page needs of a game's art: { banner } - the chosen banner
+ * (first entry of `banner`) or null. Never throws; no row means no banner.
+ */
+export async function loadGameArt(id) {
+  try {
+    const { data, error } = await supabase
+      .from("games")
+      .select("banner")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) return { banner: null };
+    return { banner: data?.banner?.[0] ?? null };
+  } catch {
+    return { banner: null };
+  }
+}
+
 /** DB row -> the shape IGDB search returns. */
 export function fromDbRow(row) {
   if (!row) return null;

@@ -46,6 +46,9 @@ suggestions below and got walked past anyway, so it lives up here now.
   only after a clear instruction from the owner - a finished build is not
   one. See docs/copilot-app.md.
 - Check the diff for keys and tokens before committing.
+- **Never open, read, print or copy `%USERPROFILE%\.my-play-db\dev-signin.env`.**
+  It holds the owner's password for the local preview's auto sign-in
+  (docs/auth.md). Not even to check it exists or is filled in - ask the owner.
 - Interrupt for anything risking security, data loss or money, even unasked.
   Where it's urgent, act first and explain after.
 
@@ -161,6 +164,7 @@ my-play-db/
     _auth.js               # Supabase JWT gate - every handler requires the owner
     _platform-refresh.js   # server-side token refresh (psn/epic/xbox)
     cron-refresh.js        # nightly Vercel Cron job
+    dev-signin.js          # DEV ONLY auto sign-in for the local preview (404 everywhere else)
     psn.js                 # PSN handler - 7 actions
     steam.js               # Steam handler - 7 actions (incl. openid_verify)
     epic.js                # Epic handler - 5 actions
@@ -180,16 +184,18 @@ my-play-db/
       app-shell.js         # new app wiring: search state + pages + results page + history + menu
       search-state.js      # search mode + query state, emits events (no DOM)
       game-state.js        # which game page is open, emits events (no DOM)
-      game-page.js         # the game page sheet: slides up over the results, empty for now
+      game-page.js         # the game page sheet: slides up over the results (banner only)
+      bottom-bar.js        # game page floating bottom toolbar (compact/expanded, items list)
       filter-state.js      # filter: selected types + In Library, emits change (no DOM)
       result-types.js      # the 15 IGDB game types (value + label) + the short list
       glass-refresh.js     # asks liquidGL to retake its snapshot after page changes
       overlay-scroll.js    # thin overlay scroll indicator (native scrollbar hidden)
       pages.js             # page switcher for the content area (hides, never destroys)
-      results-page.js      # results page: renders the search session (cards, skeletons, scroll reveal, covers)
+      image-url.js           # display image URLs (IGDB size, /img rewrites) + CORS-safe loading, shared
+    results-page.js      # results page: renders the search session (cards, skeletons, scroll reveal, covers)
       search-session.js    # live search brain: debounce, baked filter rules, status (no DOM)
       search.js            # new-app search engine (copy of the lab's, independent): cache + IGDB + rank
-      games-cache.js       # `games` table reads/writes for search + covers (copy, independent)
+      games-cache.js       # `games` table: search reads/writes + game art (banner) (copy, independent)
       api.js               # /api/* caller with bearer token (copy, independent)
       ranking.js           # search ranking/merging (copy of the lab's, independent)
       url-state.js         # search text + types (+ open game) in the address (?q=&types=&game=)

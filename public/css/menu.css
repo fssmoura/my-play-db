@@ -25,6 +25,9 @@
   /* Text size shared by the pull-down labels and the search field, so they
      cannot drift apart. Unitless (px) so the iOS fix below can do sums with it. */
   --menu-font-px: 14;
+  /* Bottom toolbar (bottom-bar.js): 1 expanded, 0 compact; and how far the game sheet is open. */
+  --bar-t: 1;
+  --bar-show: 0;
 }
 
 /* Holds the search pill and the main pill side by side, anchored top-right. */
@@ -664,4 +667,59 @@ button.menu-panel-item {
   .menu-panel-item {
     height: 44px;
   }
+}
+
+/* ---------- bottom toolbar (game page; see public/js/bottom-bar.js) ----------
+   A third glass pill, floating bottom centre over the game sheet. Two looks
+   joined by --bar-t (1 expanded: icon over label, 0 compact: small icon only);
+   --bar-show (0..1) is the sheet's progress, so it rises and fades in with the
+   sheet. Size is plain arithmetic on those two numbers because liquidGL forces
+   transition: none and follows the element's box every frame. */
+.menu.menu-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  bottom: calc(
+    25px + env(safe-area-inset-bottom, 0px) - 40px * (1 - var(--bar-show))
+  );
+  display: none;
+  width: calc(8px + (44px + 56px * var(--bar-t)) * var(--bar-n));
+  height: calc(44px + 14px * var(--bar-t));
+  border-radius: calc(22px + 7px * var(--bar-t));
+  opacity: var(--bar-show);
+}
+
+.menu-stage.is-bar-active .menu-bottom {
+  display: flex;
+}
+
+.menu-bottom .menu-bottom-row {
+  height: 100%;
+}
+
+.menu .menu-bottom-item {
+  flex-direction: column;
+  gap: calc(3px * var(--bar-t));
+  width: calc(44px + 56px * var(--bar-t));
+  height: 100%;
+  border-radius: calc(22px + 7px * var(--bar-t));
+  font: inherit;
+  overflow: hidden;
+}
+
+.menu .menu-bottom-item .menu-icon {
+  width: calc(20px + 4px * var(--bar-t));
+  height: calc(20px + 4px * var(--bar-t));
+}
+
+.menu-bottom-label {
+  display: block;
+  height: calc(14px * var(--bar-t));
+  line-height: 14px;
+  font-size: calc(var(--menu-font-px) * 0.8px);
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: min(1, var(--bar-t));
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
 }
