@@ -9,6 +9,8 @@
 //            "history" (browser back).
 //   "progress" (t) how far the sheet is open, 0 hidden to 1 open, every frame
 //            (reported by the page through reportProgress()).
+//   "loading" (on) the open page started (true) or finished (false) loading its
+//            content (reportLoading()).
 //   "scroll" ({ top, delta }) the open page scrolled (reportScroll()); top is
 //            the scroll position in px, delta the change since the last one.
 
@@ -56,5 +58,6 @@ export function createGameState() {
     on,
     reportProgress: (t) => emit("progress", t),
     reportScroll: (detail) => emit("scroll", detail),
+    reportLoading: (on) => emit("loading", on),
   };
 }
