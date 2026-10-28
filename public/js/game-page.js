@@ -115,10 +115,12 @@ export function createGamePage({ game, content, onProgress }) {
       },
       onError() {
         box.remove();
+        overlay?.update();
       },
     });
     box.append(img);
     parts.body.prepend(box);
+    overlay?.update();
   }
 
   // Reports scrolling to the toolbar, and keeps the glass current: the lenses
@@ -128,7 +130,19 @@ export function createGamePage({ game, content, onProgress }) {
     const top = parts.scroller.scrollTop;
     game.reportScroll({ top, delta: top - lastTop });
     lastTop = top;
-    refreshGlassWhileScrolling();
+    // Only the rise changes what is under the top bar's lenses; past it the
+    // pinned banner (or nothing) is there. See glass-refresh.js for the cost.
+    refreshGlassWhileScrolling({ live: top <= REST_TOP });
+  }
+
+  // The scroll indicator starts below the banner (where the scrolling content
+  // is), or just under the top bar when there is none.
+  const TRACK_TOP = 24;
+  function trackTop() {
+    const banner = parts?.body.querySelector(".game-banner");
+    if (!banner) return TRACK_TOP;
+    const sheetTop = Math.max(0, REST_TOP - parts.scroller.scrollTop);
+    return Math.max(TRACK_TOP, sheetTop + banner.offsetHeight + 6);
   }
 
   function onOpen({ id }) {
@@ -145,7 +159,7 @@ export function createGamePage({ game, content, onProgress }) {
         scroller: parts.scroller,
         content: parts.body,
         host: parts.layer,
-        top: 24,
+        top: trackTop,
         bottom: 12,
       });
       lastTop = 0;
