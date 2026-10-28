@@ -51,9 +51,7 @@ once signed in):
   `--game-t` between them). Fixed layer at z-index 50 (under the top bar, over
   the page and its scroll indicator): the sheet - top 85px (where the grid
   starts), 25px side inset (none at 640px and below: full width, corners kept), 24px top corners, fill
-  `--black` (the page black, so the banner fades into it), the card's edge stroke (shared with `.result-cover::after`
-  through `--edge-alpha`, 0.22 here, and `--edge-alpha-end: 0` so only the
-  top-left corner is lit), its own scroll area (overlay-scroll,
+  `--black` (the page black, so the banner fades into it), its own edge stroke (the sheet's `::after`, game page only: a radial gradient from the top centre, #F4F4F4 at `--edge-alpha` 0.4 to transparent, 85% x 85% of the visible sheet, 1px on left/top/right and none at the bottom, from the Figma frame; the result cards keep their diagonal stroke. Figma's drop shadow has no visible values and is not added), its own scroll area (overlay-scroll,
   `overscroll-behavior: none`). It springs up with `createSpring` (instant under
   `prefers-reduced-motion`; `min(--game-t, 1)` keeps the overshoot off the
   bottom edge). While open the results page stays mounted (scroll position
@@ -482,3 +480,5 @@ liquidGL quirk: it sets `pointer-events: none` on its targets (pill and pull-dow
 - `game-art.js` loads `sgdb.js` only when a lookup is needed.
 - Not done, recommended: `/js` and `/css` cache headers in `vercel.json` (no file hashing, so max-age would serve stale code); smaller cover size for the search grid (visual risk).
 
+
+- **Game page logo.** The first entry of `games.logo` is drawn in `.game-head`, the sticky header that now holds the banner and the logo (the banner is no longer sticky itself). Centred, 64% of the sheet wide, height `clamp(64px, 22vw, 120px)`, `object-fit: contain`, not draggable, `alt` empty. With a banner its middle sits on the banner's bottom edge (hangs below it; the head is not clipped); without one it sits at the top with 32px of space. No logo, nothing drawn. Loading ends when the banner and logo have loaded or failed, but waits at most 3s for the logo (`LOGO_WAIT`). It pins with the banner, so future content scrolls under both. SGDB logos go through `/img/sgdb` via `displayImageUrl(url, 'logo')`.
