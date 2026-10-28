@@ -16,6 +16,7 @@ const PROXIED_HOSTS = {
 const SIZES = {
   cover: { igdb: "t_cover_big_2x", psn: "528" },
   banner: { igdb: "t_1080p", psn: "1320" },
+  logo: { igdb: "t_1080p", psn: "528" },
 };
 
 export function displayImageUrl(url, kind = "cover") {

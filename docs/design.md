@@ -173,3 +173,5 @@ Apple HIG: [selection and input](https://developer.apple.com/design/human-interf
 [menus and actions](https://developer.apple.com/design/human-interface-guidelines/menus-and-actions),
 [Sign in with Apple](https://developer.apple.com/design/human-interface-guidelines/sign-in-with-apple).
 Google's sign-in branding guidelines cover the button and G.
+
+  - **Game page logo and edge glimmer:** the game's logo (first `games.logo` entry) is centred, 64% of the sheet wide, centred on the banner's bottom edge and nudged 8px up, with no shadow (top 32px of the sheet if there is no banner) and pins with the banner. The sheet's edge stroke is the Figma one: radial from the top centre, #F4F4F4 40% to 0%, 1px on left/top/right and none at the bottom, so the top corners are lit and it fades evenly down the sides (game page only).

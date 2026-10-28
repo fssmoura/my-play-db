@@ -66,8 +66,7 @@ html.is-game-open .overlay-scroll.is-page {
   outline: none;
   /* The page-wide edge stroke is much too bright over a surface this big, and
      the sheet only lights its top-left corner (nothing at the bottom right). */
-  --edge-alpha: 0.22;
-  --edge-alpha-end: 0;
+  --edge-alpha: 0.4;
 }
 
 @media (max-width: 640px) {
@@ -84,10 +83,20 @@ html.is-game-open .overlay-scroll.is-page {
    corners stay bright). Stops are fractions of those radii, so it scales with
    the box. On wide desktop sheets the height is capped (judgement call), and
    cover keeps the image filling the box. */
-.game-banner {
+.game-head {
   position: sticky;
   top: 0;
   z-index: 1;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.game-head:not(.has-banner) {
+  padding-top: 32px;
+}
+
+.game-banner {
+  position: relative;
   width: 100%;
   aspect-ratio: 439 / 238;
   max-height: 420px;
@@ -95,6 +104,41 @@ html.is-game-open .overlay-scroll.is-page {
   /* Behind the fading image: the sheet's black, so content scrolling under
      the pinned banner disappears into it. */
   background: var(--black);
+}
+
+/* The logo (SteamGridDB's, usually): centred, about 64% of the sheet wide,
+   fitted without cropping. Over a banner its middle sits on the banner's
+   bottom edge (the head isn't clipped, so it hangs below); with no banner it
+   sits at the top with 32px of space. It pins with the banner. */
+.game-logo {
+  position: relative;
+  width: 64%;
+  height: clamp(64px, 22vw, 120px);
+  margin: 0 auto;
+  opacity: 0;
+  transition: opacity 0.25s ease-out;
+}
+
+.game-head.has-banner .game-logo {
+  position: absolute;
+  top: 100%;
+  left: 18%;
+  margin: 0;
+  transform: translateY(calc(-50% - 8px));
+}
+
+.game-logo.is-loaded {
+  opacity: 1;
+}
+
+.game-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .game-banner img {
@@ -213,6 +257,7 @@ html.is-game-open .overlay-scroll.is-page {
 
 @media (prefers-reduced-motion: reduce) {
   .game-banner img,
+  .game-logo,
   .game-sheet-body,
   .game-skeleton {
     transition: none;
@@ -224,9 +269,19 @@ html.is-game-open .overlay-scroll.is-page {
   }
 }
 
-/* Over the banner, not under it. The sheet is much taller than the screen, so the stroke is drawn over its first screenful only, where the lit corner is. */
-.game-sheet::after {
+/* Over the banner, not under it. The sheet is much taller than the screen, so the stroke is drawn over its first screenful only. Unlike the cards' diagonal, the sheet's glimmer is brightest along the whole top edge (both corners) and fades evenly down both sides (Figma). */
+.game-layer .game-sheet::after {
   z-index: 2;
   bottom: auto;
-  height: 100dvh;
+  /* The visible sheet (viewport minus the resting top), which is what the
+     Figma frame's gradient is sized against. */
+  height: calc(100dvh - 85px);
+  /* Figma: stroke inside, left/top/right 1px, bottom 0. */
+  padding: 1px 1px 0;
+  /* Figma: radial from the top centre, #F4F4F4 40% to #48484D 0%. */
+  background: radial-gradient(
+    85% 85% at 50% 0%,
+    rgba(244, 244, 244, var(--edge-alpha)) 0%,
+    rgba(72, 72, 77, 0) 100%
+  );
 }

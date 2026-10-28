@@ -69,6 +69,8 @@ const FLICK = 0.5;
 const SLOP = 8;
 // The sheet's resting top, px from the viewport top (css: .game-spacer).
 const REST_TOP = 85;
+// The longest the sheet waits for the logo image before showing without it.
+const LOGO_WAIT = 3000;
 
 export function createGamePage({ game, content, onProgress }) {
   let parts = null;
@@ -110,40 +112,66 @@ export function createGamePage({ game, content, onProgress }) {
   }
   async function loadArt(id) {
     const run = ++artRun;
-    parts?.body.querySelector(".game-banner")?.remove();
+    parts?.body.querySelector(".game-head")?.remove();
     setLoading(true);
     let banner = null;
+    let logo = null;
     try {
-      ({ banner } = await resolveGameArt(id));
+      ({ banner, logo } = await resolveGameArt(id));
     } catch {
       // resolveGameArt does not throw; stay defensive so loading always ends.
     }
     if (run !== artRun || !parts) return;
-    const url = banner ? displayImageUrl(banner, "banner") : null;
-    if (!url) return finishLoading(run);
-    const box = document.createElement("div");
-    box.className = "game-banner";
-    const img = document.createElement("img");
-    img.alt = "";
-    img.decoding = "async";
-    // A drag on the banner is the sheet's swipe-down, not an image drag.
-    img.draggable = false;
-    loadImageForGlass(img, url, {
-      onLoad() {
-        if (run !== artRun) return;
-        box.classList.add("is-loaded");
-        finishLoading(run);
-      },
-      onError() {
-        if (run !== artRun) return;
-        box.remove();
-        overlay?.update();
-        finishLoading(run);
-      },
-    });
-    box.append(img);
-    parts.body.prepend(box);
+    const bannerUrl = banner ? displayImageUrl(banner, "banner") : null;
+    const logoUrl = logo ? displayImageUrl(logo, "logo") : null;
+    if (!bannerUrl && !logoUrl) return finishLoading(run);
+
+    // The sticky header: the banner and the logo pin together. Either part is
+    // only added once its image has loaded; the header is dropped if neither.
+    const head = document.createElement("div");
+    head.className = "game-head";
+    parts.body.prepend(head);
+
+    const addImage = (cls, url) =>
+      new Promise((resolve) => {
+        const box = document.createElement("div");
+        box.className = cls;
+        const img = document.createElement("img");
+        img.alt = "";
+        img.decoding = "async";
+        // A drag here is the sheet's swipe-down, not an image drag.
+        img.draggable = false;
+        const done = (ok) => {
+          if (run !== artRun) return resolve();
+          if (ok) {
+            box.classList.add("is-loaded");
+          } else {
+            box.remove();
+          }
+          resolve(ok ? box : null);
+        };
+        loadImageForGlass(img, url, {
+          onLoad: () => done(true),
+          onError: () => done(false),
+        });
+        box.append(img);
+        if (cls === "game-banner") head.prepend(box);
+        else head.append(box);
+      });
+
+    const logoBox = logoUrl
+      ? Promise.race([
+          addImage("game-logo", logoUrl),
+          // A slow logo must not hold the page hostage.
+          new Promise((r) => setTimeout(r, LOGO_WAIT)),
+        ])
+      : null;
+    await Promise.all([bannerUrl && addImage("game-banner", bannerUrl), logoBox]);
+    if (run !== artRun || !parts) return;
+    head.classList.toggle("has-banner", !!head.querySelector(".game-banner"));
+    if (!head.children.length) head.remove();
     overlay?.update();
+    finishLoading(run);
   }
 
   // Waits for the fade to finish before the lenses retake their picture.
