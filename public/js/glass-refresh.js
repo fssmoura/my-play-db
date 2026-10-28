@@ -39,39 +39,25 @@ export function refreshGlass() {
 
 // For content that scrolls inside an element (the game page): the glass tracks
 // only the document's own scroll, so it would keep showing the page as it was.
-// Call this on every scroll event. It retakes the snapshot back to back while
-// scrolling continues (one capture at a time, never discarding one in flight,
-// so it can't starve itself), and once more shortly after scrolling stops.
-let chasing = false;
-let wantMore = false;
+// Call this on every scroll event. Every capture photographs the whole page
+// once per glass layer, which is by far the most expensive thing on the page
+// (measured ~28ms per frame at 4x CPU slowdown when done every frame), so live
+// recaptures are rate-limited to one per LIVE_GAP_MS; `live: false` skips them
+// and leaves only the final capture shortly after scrolling stops.
 let settleTimer = 0;
+let liveTimer = 0;
+let lastLive = 0;
 const SETTLE_MS = 120;
+const LIVE_GAP_MS = 150;
 
-export function refreshGlassWhileScrolling() {
+export function refreshGlassWhileScrolling({ live = true } = {}) {
   clearTimeout(settleTimer);
   settleTimer = setTimeout(refreshGlass, SETTLE_MS);
-  wantMore = true;
-  if (!chasing) chase();
-}
-
-async function chase() {
-  chasing = true;
-  let guard = 0;
-  while (wantMore && guard++ < 400) {
-    const list = renderers();
-    if (!list.length) break;
-    wantMore = false;
-    if (list.some((r) => r._capturing)) {
-      wantMore = true;
-      await new Promise((r) => setTimeout(r, 30));
-      continue;
-    }
-    try {
-      await Promise.all(list.map((r) => r.captureSnapshot()));
-    } catch {
-      // The next scroll tick tries again.
-    }
-  }
-  wantMore = false;
-  chasing = false;
+  if (!live || liveTimer) return;
+  const wait = Math.max(0, lastLive + LIVE_GAP_MS - performance.now());
+  liveTimer = setTimeout(() => {
+    liveTimer = 0;
+    lastLive = performance.now();
+    refreshGlass();
+  }, wait);
 }

@@ -10,7 +10,9 @@
 //   (observed, coalesced to one update per frame).
 // - host: where the indicator is appended (default: document.body for the
 //   page, the scroller's parent for an element - it must be positioned).
-// - top / bottom: space kept free at either end of the track, in px.
+// - top / bottom: space kept free at either end of the track, in px. `top` may
+//   be a function returning px, read on every update (the game page's track
+//   starts under its banner, which moves while the sheet rises).
 //
 // Returns { update, destroy }. Decoration only, so it is aria-hidden.
 
@@ -49,10 +51,11 @@ export function createOverlayScroll({
   function measure() {
     const client = page ? window.innerHeight : el.clientHeight;
     const total = el.scrollHeight;
+    const topPx = typeof top === "function" ? top() : top;
     // For an element the track sits over the scroller; offsets are relative to
     // the host.
-    const start = page ? top : el.offsetTop + top;
-    const length = client - top - bottom;
+    const start = page ? topPx : el.offsetTop + topPx;
+    const length = client - topPx - bottom;
     return { client, total, start, length };
   }
 
