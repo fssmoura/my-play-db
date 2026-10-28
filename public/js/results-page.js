@@ -11,57 +11,13 @@
 import { refreshGlass } from "/js/glass-refresh.js";
 import { TYPES } from "/js/result-types.js";
 import { releaseYear } from "/js/ranking.js";
+import { displayImageUrl, loadImageForGlass } from "/js/image-url.js";
 
 const PAGE_SIZE = 20;
 const TRAILING = 12;
 const TYPE_LABELS = new Map(TYPES.map((type) => [type.value, type.label]));
 
-// IGDB serves covers at a size segment like t_1080p; the grid only needs
-// t_cover_big_2x. PlayStation and SteamGridDB send no CORS headers, so
-// liquidGL couldn't read them into its snapshot; they are shown through
-// same-origin rewrites (vercel.json). Display only: stored URLs are unchanged.
-const PROXIED_HOSTS = {
-  "image.api.playstation.com": "/img/psn",
-  "cdn2.steamgriddb.com": "/img/sgdb",
-};
-
-export function displayCoverUrl(url) {
-  if (!url) return "";
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname === "images.igdb.com") {
-      return url.replace(/\/t_[a-z0-9_]+\//i, "/t_cover_big_2x/");
-    }
-    const prefix = PROXIED_HOSTS[parsed.hostname];
-    if (prefix) {
-      // Sony's image API resizes with ?w=; 528 matches IGDB's t_cover_big_2x.
-      if (parsed.hostname === "image.api.playstation.com") {
-        parsed.searchParams.set("w", "528");
-      }
-      return prefix + parsed.pathname + parsed.search;
-    }
-    return url;
-  } catch {
-    return url;
-  }
-}
-
-// One warning per host whose cover only loaded without CORS: liquidGL can't read
-// it, so it shows grey under the glass until vercel.json gets a rewrite for it.
-const warnedHosts = new Set();
-function warnNoCors(url) {
-  let host = "";
-  try {
-    host = new URL(url, location.href).hostname;
-  } catch {
-    return;
-  }
-  if (!host || warnedHosts.has(host)) return;
-  warnedHosts.add(host);
-  console.warn(
-    `Cover host ${host} sends no CORS headers: add a same-origin /img rewrite for it in vercel.json, or it shows grey under the glass.`,
-  );
-}
+export const displayCoverUrl = (url) => displayImageUrl(url, "cover");
 
 // Image loads can arrive in a burst; ask liquidGL to retake its snapshot once
 // the burst settles rather than per image.
@@ -93,26 +49,18 @@ function setCover(card, art, url) {
   img.dataset.src = wanted;
   card.classList.add("is-cover-loading");
 
-  let retried = false;
-  img.addEventListener("load", () => {
-    if (retried) warnNoCors(wanted);
-    card.classList.remove("is-cover-loading");
-    refreshGlassSoon();
+  loadImageForGlass(img, wanted, {
+    onLoad() {
+      card.classList.remove("is-cover-loading");
+      refreshGlassSoon();
+    },
+    onError() {
+      img.remove();
+      card.classList.remove("is-cover-loading");
+      card.classList.add("is-no-cover");
+    },
   });
-  img.addEventListener("error", () => {
-    if (!retried && img.crossOrigin) {
-      retried = true;
-      img.removeAttribute("crossorigin");
-      img.src = wanted;
-      return;
-    }
-    img.remove();
-    card.classList.remove("is-cover-loading");
-    card.classList.add("is-no-cover");
-  });
-  img.crossOrigin = "anonymous";
   art.append(img);
-  img.src = wanted;
 }
 
 function cardText(game) {

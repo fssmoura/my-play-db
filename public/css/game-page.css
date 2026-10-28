@@ -16,53 +16,31 @@ html.is-game-open .overlay-scroll.is-page {
   opacity: 0;
 }
 
-/* Fixed over the page, under the top bar (menu stage is z-index 100). It also
-   stops taps reaching the results behind. */
+/* Fixed over the page, under the top bar (menu stage is z-index 100), and
+   under the bottom toolbar (also in the menu stage). It slides up from below
+   the viewport with --game-t; min() keeps the spring's overshoot from lifting
+   it off the bottom. It also stops taps reaching the results behind. */
 .game-layer {
   --game-t: 0;
   position: fixed;
   inset: 0;
   z-index: 50;
   touch-action: none;
+  transform: translateY(calc((1 - min(var(--game-t), 1)) * 100dvh));
 }
 
 .game-layer.is-closing {
   pointer-events: none;
 }
 
-/* Starts at 85px, where the results grid starts, with the grid's side inset,
-   and runs off the bottom of the screen (full width on phones). Slides up
-   from below the viewport; min() keeps the spring's overshoot from lifting it
-   off the bottom. */
-.game-sheet {
-  position: absolute;
-  top: 85px;
-  left: 25px;
-  right: 25px;
-  bottom: 0;
-  box-sizing: border-box;
-  border-radius: 24px 24px 0 0;
-  background: var(--sheet);
-  overflow: hidden;
-  outline: none;
-  transform: translateY(calc((1 - min(var(--game-t), 1)) * 100dvh));
-  /* The page-wide edge stroke is much too bright over a surface this big. */
-  --edge-alpha: 0.14;
-}
-
-/* Its own scroll area (empty for now). */
-.game-sheet.is-dragging {
+.game-layer.is-dragging {
   user-select: none;
 }
 
-@media (max-width: 640px) {
-  .game-sheet {
-    left: 0;
-    right: 0;
-  }
-}
-
-.game-sheet-scroll {
+/* The one scroller. Scrolling first lifts the sheet from its resting top (the
+   spacer, 85px, where the results grid starts) to the top of the viewport, and
+   only then scrolls the sheet's content. */
+.game-scroll {
   position: absolute;
   inset: 0;
   overflow-y: auto;
@@ -70,11 +48,100 @@ html.is-game-open .overlay-scroll.is-page {
   touch-action: pan-y;
 }
 
-.game-sheet-body {
-  min-height: 100%;
+.game-spacer {
+  height: 85px;
 }
 
-/* Over the scroll area, not under it. */
+/* At least a screen tall, with the grid's side inset (full width on phones).
+   overflow: clip rounds the corners without making the sheet a scroll
+   container (which would stop the banner sticking to the viewport). */
+.game-sheet {
+  position: relative;
+  box-sizing: border-box;
+  min-height: 100dvh;
+  margin: 0 25px;
+  border-radius: 24px 24px 0 0;
+  background: var(--black);
+  overflow: clip;
+  outline: none;
+  /* The page-wide edge stroke is much too bright over a surface this big, and
+     the sheet only lights its top-left corner (nothing at the bottom right). */
+  --edge-alpha: 0.14;
+  --edge-alpha-end: 0;
+}
+
+@media (max-width: 640px) {
+  .game-sheet {
+    margin: 0;
+  }
+}
+
+/* TEMPORARY: filler so the empty sheet is tall enough to scroll, to build the
+   rising sheet, the sticky banner and the bottom toolbar. Remove when the page
+   has real content. */
+.game-sheet-body {
+  min-height: 250dvh;
+}
+/* The banner (only when the game has one): the Figma frame's 439x238 image at
+   the top of the sheet's scroll content, full sheet width. A radial gradient of
+   the page black sits on top, centred 10% down, with a vertical radius just
+   past the image's height (so its bottom edge is solid black, seamless with the
+   sheet) and a horizontal radius of ~75% of the width (lower sides darken, top
+   corners stay bright). Stops are fractions of those radii, so it scales with
+   the box. On wide desktop sheets the height is capped (judgement call), and
+   cover keeps the image filling the box. */
+.game-banner {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  width: 100%;
+  aspect-ratio: 439 / 238;
+  max-height: 420px;
+  overflow: hidden;
+}
+
+.game-banner img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.25s ease-out;
+}
+
+.game-banner.is-loaded img {
+  opacity: 1;
+}
+
+.game-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* The radial (owner's Figma stops) leaves the bottom centre at ~89%, so a
+     thin linear fade on top finishes the last 12% to solid black without
+     changing the clear look above it. */
+  background:
+    linear-gradient(to bottom, rgba(9, 9, 11, 0) 88%, #09090b 100%),
+    radial-gradient(
+      75% 102% at 50% 10%,
+      rgba(9, 9, 11, 0) 0%,
+      rgba(9, 9, 11, 0.1) 51%,
+      rgba(9, 9, 11, 0.63) 70%,
+      rgba(9, 9, 11, 0.89) 88%,
+      #09090b 100%
+    );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-banner img {
+    transition: none;
+  }
+}
+
+/* Over the banner, not under it. The sheet is much taller than the screen, so the stroke is drawn over its first screenful only, where the lit corner is. */
 .game-sheet::after {
   z-index: 2;
+  bottom: auto;
+  height: 100dvh;
 }

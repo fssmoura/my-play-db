@@ -11,6 +11,8 @@ import { signOut } from "/js/session.js";
 import { createSpring } from "/js/spring.js";
 import { createOverlayScroll } from "/js/overlay-scroll.js";
 import { TYPES, COMMON_TYPES } from "/js/result-types.js";
+import { BAR_ITEMS, buildBottomBar, wireBottomBar } from "/js/bottom-bar.js";
+import { trackGlassLenses } from "/js/glass-refresh.js";
 
 const LIQUID_GL_URL = "/vendor/liquidGL.js";
 const LIQUID_GL_HELPER_URL =
@@ -94,6 +96,14 @@ const ICONS = {
     style: "fill",
     markup:
       '<path fill-rule="evenodd" d="M2 12a2 2 0 1 1 4 0a2 2 0 0 1-4 0m8 0a2 2 0 1 1 4 0a2 2 0 0 1-4 0m8 0a2 2 0 1 1 4 0a2 2 0 0 1-4 0" clip-rule="evenodd" />',
+  },
+  // Bottom toolbar (game page). Draws its own 1.5 stroke, so it ignores
+  // --icon-stroke.
+  customize: {
+    viewBox: "0 0 24 24",
+    style: "stroke",
+    markup:
+      '<g fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"><path d="M21.82 10.413c.242 1.439.363 2.159-.578 3.52c-.096.14-.345.438-.465.558c-1.167 1.168-2.346 1.168-4.705 1.168h-1.933c-.63 0-.946 0-1.175.055a2.023 2.023 0 0 0-1.511 2.262c.034.236.151.533.386 1.126c.095.243.143.364.175.628c.115.978-.927 2.22-1.898 2.263c-.262.01-.28.007-.313 0a9.93 9.93 0 0 1-5.62-3.55C.738 14.08 1.432 7.712 5.736 4.22S16.323 1.43 19.77 5.793a10.14 10.14 0 0 1 2.05 4.62Z" clip-rule="evenodd" /><path stroke-linecap="round" d="M7.367 7.75h-.125m.25 0a.25.25 0 1 1-.5 0a.25.25 0 0 1 .5 0m-.125 8h-.125m.25 0a.25.25 0 1 1-.5 0a.25.25 0 0 1 .5 0m4.375-10h-.125m.25 0a.25.25 0 1 1-.5 0a.25.25 0 0 1 .5 0m4.375 2h-.125m.25 0a.25.25 0 1 1-.5 0a.25.25 0 0 1 .5 0m1.875 4h-.125m.25 0a.25.25 0 1 1-.5 0a.25.25 0 0 1 .5 0m-12.625 0h-.125m.25 0a.25.25 0 1 1-.5 0a.25.25 0 0 1 .5 0" /></g>',
   },
   signOut: {
     viewBox: "0 0 24 24",
@@ -1178,7 +1188,11 @@ export async function mountMenu({ search, filter, game }) {
   } = buildFilterPanel();
   bar.append(filterWrap, searchPill, nav);
   const { circle: backCircle, button: backButton } = buildBackButton();
-  stage.append(backCircle, bar, panel, filterPanel, filterSub);
+  const { bar: bottomBar, buttons: bottomButtons } = buildBottomBar(
+    BAR_ITEMS,
+    iconSvg,
+  );
+  stage.append(backCircle, bar, bottomBar, panel, filterPanel, filterSub);
   document.body.append(stage);
 
   const trigger = row.querySelector('[data-opens="pull-down"]');
@@ -1213,6 +1227,15 @@ export async function mountMenu({ search, filter, game }) {
   );
   cleanups.push(
     wireBack({ stage, circle: backCircle, button: backButton, search, game }),
+  );
+  cleanups.push(
+    wireBottomBar({
+      stage,
+      bar: bottomBar,
+      items: BAR_ITEMS,
+      buttons: bottomButtons,
+      game,
+    }),
   );
   const searchTrigger = row.querySelector('[data-opens="search"]');
   if (searchTrigger) {
@@ -1258,6 +1281,12 @@ export async function mountMenu({ search, filter, game }) {
       }),
       liquidGL({
         ...GLASS_CONFIG,
+        target: "#app-bottom",
+        content: false,
+        zIndex: 1,
+      }),
+      liquidGL({
+        ...GLASS_CONFIG,
         target: "#app-search",
         content: false,
         zIndex: 2,
@@ -1292,6 +1321,7 @@ export async function mountMenu({ search, filter, game }) {
       .flat()
       .filter(Boolean);
     for (const lens of glass) fitBevel(lens);
+    trackGlassLenses(glass);
   } catch (err) {
     console.warn("Liquid glass unavailable, using a plain pill.", err);
   }

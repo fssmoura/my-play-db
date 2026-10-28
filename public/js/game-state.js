@@ -7,6 +7,10 @@
 //   "close"  ({ id, source }) it closed. source says how: "back", "back-key",
 //            "escape", "search" (Search was tapped), "swipe" (dragged down) or
 //            "history" (browser back).
+//   "progress" (t) how far the sheet is open, 0 hidden to 1 open, every frame
+//            (reported by the page through reportProgress()).
+//   "scroll" ({ top, delta }) the open page scrolled (reportScroll()); top is
+//            the scroll position in px, delta the change since the last one.
 
 export function isGameId(value) {
   return Number.isSafeInteger(value) && value > 0;
@@ -50,5 +54,7 @@ export function createGameState() {
     open,
     close,
     on,
+    reportProgress: (t) => emit("progress", t),
+    reportScroll: (detail) => emit("scroll", detail),
   };
 }

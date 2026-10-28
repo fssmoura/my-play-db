@@ -13,12 +13,17 @@
 //   frame, including while a finger drags it, so the page behind can fade in
 //   step (pages.js `setCovered`).
 //
-// The sheet is empty for now. Closing hands focus back to the card that opened
+// The sheet is empty apart from the game's banner, when it has one. Closing hands focus back to the card that opened
 // it. Dragging it down (touch, pen or mouse) dismisses it like Back.
 
 import { createSpring } from "/js/spring.js";
 import { createOverlayScroll } from "/js/overlay-scroll.js";
-import { refreshGlass } from "/js/glass-refresh.js";
+import {
+  refreshGlass,
+  refreshGlassWhileScrolling,
+} from "/js/glass-refresh.js";
+import { loadGameArt } from "/js/games-cache.js";
+import { displayImageUrl, loadImageForGlass } from "/js/image-url.js";
 
 const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -27,6 +32,14 @@ function buildLayer() {
   const layer = document.createElement("div");
   layer.className = "game-layer";
 
+  // The layer slides in; inside it one scroller holds an 85px spacer and the
+  // sheet, so scrolling first lifts the sheet to the top of the viewport and
+  // then scrolls its content (one continuous scroll, one indicator).
+  const scroller = document.createElement("div");
+  scroller.className = "game-scroll overlay-scroll-host";
+  const spacer = document.createElement("div");
+  spacer.className = "game-spacer";
+
   const sheet = document.createElement("section");
   sheet.className = "game-sheet";
   sheet.setAttribute("role", "dialog");
@@ -34,14 +47,12 @@ function buildLayer() {
   sheet.setAttribute("aria-label", "Game");
   sheet.tabIndex = -1;
 
-  const scroller = document.createElement("div");
-  scroller.className = "game-sheet-scroll overlay-scroll-host";
   const body = document.createElement("div");
   body.className = "game-sheet-body";
-  scroller.append(body);
-  sheet.append(scroller);
+  sheet.append(body);
+  scroller.append(spacer, sheet);
 
-  layer.append(sheet);
+  layer.append(scroller);
   return { layer, sheet, scroller, body };
 }
 
@@ -50,6 +61,8 @@ function buildLayer() {
 const CLOSE_FRACTION = 0.25;
 const FLICK = 0.5;
 const SLOP = 8;
+// The sheet's resting top, px from the viewport top (css: .game-spacer).
+const REST_TOP = 85;
 
 export function createGamePage({ game, content, onProgress }) {
   let parts = null;
@@ -60,6 +73,7 @@ export function createGamePage({ game, content, onProgress }) {
     onUpdate: (v) => {
       parts?.layer.style.setProperty("--game-t", v.toFixed(4));
       onProgress?.(v);
+      game.reportProgress(v);
     },
     onRest: (target) => {
       if (target === 1) {
@@ -77,7 +91,47 @@ export function createGamePage({ game, content, onProgress }) {
     },
   });
 
-  function onOpen() {
+  // The banner, when the game has one: nothing is drawn until we know, then the
+  // box is reserved and the image fades in. An answer for a game that is no
+  // longer the open one is dropped.
+  let artRun = 0;
+  async function showBanner(id) {
+    const run = ++artRun;
+    parts?.body.querySelector(".game-banner")?.remove();
+    const { banner } = await loadGameArt(id);
+    if (run !== artRun || !parts || !banner) return;
+    const url = displayImageUrl(banner, "banner");
+    if (!url) return;
+    const box = document.createElement("div");
+    box.className = "game-banner";
+    const img = document.createElement("img");
+    img.alt = "";
+    img.decoding = "async";
+    loadImageForGlass(img, url, {
+      onLoad() {
+        if (run !== artRun) return;
+        box.classList.add("is-loaded");
+        refreshGlass();
+      },
+      onError() {
+        box.remove();
+      },
+    });
+    box.append(img);
+    parts.body.prepend(box);
+  }
+
+  // Reports scrolling to the toolbar, and keeps the glass current: the lenses
+  // photograph the page, and an inner scroller is not something they track.
+  let lastTop = 0;
+  function onScroll() {
+    const top = parts.scroller.scrollTop;
+    game.reportScroll({ top, delta: top - lastTop });
+    lastTop = top;
+    refreshGlassWhileScrolling();
+  }
+
+  function onOpen({ id }) {
     // Rapid close then open: the sheet is still there, just reverse it.
     if (!parts) {
       // The card that opened it, for focus on the way back (none when the
@@ -90,10 +144,12 @@ export function createGamePage({ game, content, onProgress }) {
       overlay = createOverlayScroll({
         scroller: parts.scroller,
         content: parts.body,
-        host: parts.sheet,
+        host: parts.layer,
         top: 24,
         bottom: 12,
       });
+      lastTop = 0;
+      parts.scroller.addEventListener("scroll", onScroll, { passive: true });
       document.documentElement.classList.add("is-game-open");
       wireDrag(parts);
     }
@@ -101,11 +157,13 @@ export function createGamePage({ game, content, onProgress }) {
     parts.layer.inert = false;
     content.inert = true;
     parts.sheet.focus({ preventScroll: true });
+    showBanner(id);
     spring.to(1, { instant: reducedMotion() });
   }
 
   function onClose({ id }) {
     if (!parts) return;
+    artRun++;
     unwireDrag?.();
     parts.layer.classList.add("is-closing");
     parts.layer.inert = true;
@@ -126,12 +184,12 @@ export function createGamePage({ game, content, onProgress }) {
   // browser taking the gesture over as a pan (which cancels the pointer).
   let unwireDrag = null;
 
-  function wireDrag({ sheet, scroller }) {
+  function wireDrag({ layer: sheet, scroller }) {
     let start = null; // { y, id } while a press might become a drag
     let dragging = false;
     let samples = []; // [time, y] of the last few moves, for the flick speed
 
-    const height = () => Math.max(1, window.innerHeight - sheet.offsetTop);
+    const height = () => Math.max(1, window.innerHeight - REST_TOP);
     const reset = () => {
       start = null;
       dragging = false;

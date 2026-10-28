@@ -6,8 +6,6 @@
   --gray: #7b7b7b;
   --dark-gray: #48484d;
   --black: #09090b;
-  /* The game page sheet: a touch lighter than the page. */
-  --sheet: #111113;
   /* Not part of the palette: Apple's dark-mode systemRed, for critical
      actions only. */
   --destructive: #ff453a;

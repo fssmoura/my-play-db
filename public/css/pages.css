@@ -94,7 +94,7 @@
     rgba(244, 244, 244, var(--edge-alpha, 0.25)) 0%,
     rgba(244, 244, 244, 0) 40%,
     rgba(244, 244, 244, 0) 60%,
-    rgba(244, 244, 244, var(--edge-alpha, 0.25)) 100%
+    rgba(244, 244, 244, var(--edge-alpha-end, var(--edge-alpha, 0.25))) 100%
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
