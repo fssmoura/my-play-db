@@ -25,21 +25,139 @@ export function clearCache() {
 }
 
 /**
- * What the game page needs of a game's art: { banner } - the chosen banner
- * (first entry of `banner`) or null. Never throws; no row means no banner.
+ * The whole stored row for a game, or null when we hold nothing. Throws on a
+ * real failure, so "no row" and "lookup broke" stay distinct.
  */
-export async function loadGameArt(id) {
-  try {
-    const { data, error } = await supabase
-      .from("games")
-      .select("banner")
-      .eq("id", id)
-      .maybeSingle();
-    if (error) return { banner: null };
-    return { banner: data?.banner?.[0] ?? null };
-  } catch {
-    return { banner: null };
+export async function loadGameRow(id) {
+  const { data, error } = await supabase
+    .from("games")
+    .select("*")
+    .eq("id", Number(id))
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+}
+
+/* ---- detail write (adapted from public/lab/js/games-cache.js; independent) -- */
+
+function companyNames(game, role) {
+  const names = (game.involved_companies ?? [])
+    .filter((entry) => entry?.[role] && entry.company?.name)
+    .map((entry) => entry.company.name);
+  return names.length ? [...new Set(names)] : null;
+}
+
+function urls(list) {
+  const out = (list ?? []).map((item) => item?.url).filter(Boolean);
+  return out.length ? out : null;
+}
+
+function ids(list) {
+  const out = (list ?? [])
+    .map((item) => (typeof item === "object" ? item?.id : item))
+    .filter((value) => Number.isFinite(Number(value)))
+    .map(Number);
+  return out.length ? out : null;
+}
+
+function refId(value) {
+  if (value == null) return null;
+  const id = typeof value === "object" ? value.id : value;
+  return Number.isFinite(Number(id)) ? Number(id) : null;
+}
+
+/** IGDB game -> the payload `cache_game_details` expects (null if unusable). */
+export function toDetailRow(game) {
+  if (!game?.id || !game?.name || !game?.slug) return null;
+
+  const externalIds = {};
+  for (const entry of game.external_games ?? []) {
+    if (!entry?.source || !entry?.uid) continue;
+    (externalIds[entry.source] ??= []).push(String(entry.uid));
   }
+
+  const popularity = game.popularity;
+  const hasPopularity =
+    popularity && typeof popularity === "object"
+      ? Object.keys(popularity).length > 0
+      : false;
+  const genres = (game.genres ?? []).map((g) => g?.name).filter(Boolean);
+
+  return {
+    id: game.id,
+    name: game.name,
+    slug: game.slug,
+    name_normalized: normalizeName(game.name),
+    summary: game.summary ?? null,
+    storyline: game.storyline ?? null,
+    genres: genres.length ? genres : null,
+    cover: game.cover?.url ? [game.cover.url] : null,
+    screenshots: urls(game.screenshots),
+    artworks: urls(game.artworks),
+    developer: companyNames(game, "developer"),
+    publisher: companyNames(game, "publisher"),
+    game_type: game.game_type ?? null,
+    release_dates: game.release_dates ?? null,
+    platforms: game.platforms ?? null,
+    rating: game.total_rating ?? null,
+    rating_count: game.total_rating_count ?? null,
+    videos: game.videos ?? null,
+    websites: game.websites ?? null,
+    collections: game.collections ?? null,
+    franchises: game.franchises ?? null,
+    dlcs: ids(game.dlcs),
+    bundles: ids(game.bundles),
+    standalone_expansions: ids(game.standalone_expansions),
+    remasters: ids(game.remasters),
+    remakes: ids(game.remakes),
+    expansions: ids(game.expansions),
+    expanded_games: ids(game.expanded_games),
+    similar_games: ids(game.similar_games),
+    parent_game: refId(game.parent_game),
+    version_title: game.version_title ?? null,
+    version_parent: refId(game.version_parent),
+    external_ids: Object.keys(externalIds).length ? externalIds : null,
+    alternative_names: game.alternative_names ?? null,
+    popularity: hasPopularity ? popularity : null,
+    hypes: game.hypes ?? null,
+    first_release_date: game.first_release_date ?? null,
+  };
+}
+
+/** Writes one full IGDB record (cache_game_details). Throws on failure. */
+export async function saveGameDetails(game) {
+  const payload = toDetailRow(game);
+  if (!payload) throw new Error("IGDB returned a game with no id, name or slug");
+  const { data, error } = await supabase.rpc("cache_game_details", { payload });
+  if (error) throw error;
+  lookups.clear();
+  return data ?? 0;
+}
+
+/**
+ * Art rule (new app): a cover/banner/logo array is at most [chosen non-IGDB
+ * image, IGDB image]. `set_game_art` (SQL) builds it; returns the new array,
+ * or null when the game has no row. Throws on failure.
+ */
+export async function setGameArt(id, kind, url, { asBackup = false } = {}) {
+  const { data, error } = await supabase.rpc("set_game_art", {
+    game_id: Number(id),
+    kind,
+    url,
+    as_backup: asBackup,
+  });
+  if (error) throw error;
+  lookups.clear();
+  return data ?? null;
+}
+
+/** sgdb_id: null never tried, 0 tried and nothing found, >0 matched. Throws. */
+export async function setSgdbId(id, value) {
+  const { error } = await supabase.rpc("set_sgdb_id", {
+    game_id: Number(id),
+    value: Number(value),
+  });
+  if (error) throw error;
 }
 
 /** DB row -> the shape IGDB search returns. */
