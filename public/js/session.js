@@ -28,8 +28,35 @@ export async function signInWithGoogle(next = null) {
   if (error) throw error;
 }
 
+// Local preview only: an explicit sign-out stops auto sign-in for this tab.
+export const NO_DEV_SIGNIN_KEY = "no-dev-signin";
+
 export async function signOut() {
+  try {
+    sessionStorage.setItem(NO_DEV_SIGNIN_KEY, "1");
+  } catch {}
   await supabase.auth.signOut();
+}
+
+// Local preview only (localhost): asks /api/dev-signin, which 404s anywhere
+// else, for tokens and adopts them. Resolves false on any failure, silently.
+export async function tryDevSignIn() {
+  const local = ["localhost", "127.0.0.1"].includes(location.hostname);
+  if (!local) return false;
+  try {
+    if (sessionStorage.getItem(NO_DEV_SIGNIN_KEY)) return false;
+    const response = await fetch("/api/dev-signin", { method: "POST" });
+    if (!response.ok) return false;
+    const { access_token, refresh_token } = await response.json();
+    if (!access_token || !refresh_token) return false;
+    const { error } = await supabase.auth.setSession({
+      access_token,
+      refresh_token,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
 }
 
 export async function signInWithPassword(email, password) {

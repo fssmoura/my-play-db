@@ -4,6 +4,7 @@ import {
   signInWithGoogle,
   signInWithPassword,
   readAuthErrorFromUrl,
+  tryDevSignIn,
 } from "/js/session.js";
 import { mountApp, unmountApp } from "/js/app-shell.js";
 
@@ -51,7 +52,12 @@ function returnPath() {
     : null;
 }
 
+// True while the local-only auto sign-in is being tried, so the sign-in
+// screen does not flash before it answers.
+let devPending = false;
+
 function applySession(session) {
+  if (!session && devPending) return;
   if (!session) {
     unmountApp();
     show("gate");
@@ -174,7 +180,15 @@ function boot() {
   onAuthChange(applySession);
 
   getSession()
-    .then(applySession)
+    .then(async (session) => {
+      if (!session) {
+        devPending = true;
+        const ok = await tryDevSignIn();
+        devPending = false;
+        if (ok) return; // onAuthChange delivers the new session
+      }
+      applySession(session);
+    })
     .catch((err) => {
       setError(friendlyError(err));
       show("gate");

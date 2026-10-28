@@ -88,6 +88,13 @@ the default browser or a popup were tried and dropped - a session lives in the
 browser it was created in, so it can't be carried across. See
 [auth.md](auth.md#gate-1---who-can-sign-in).
 
+**Local auto sign-in.** The preview signs itself in if the owner has filled in
+`%USERPROFILE%\.my-play-db\dev-signin.env` (outside every checkout, so every
+worktree's preview uses it and it can never be committed - email and password,
+one per line). Delete the file to turn it off. **Agents must never open, read,
+print or copy that file**, not even to check it. Details in
+[auth.md](auth.md#gate-1---who-can-sign-in).
+
 ## Supabase MCP
 
 Configured in `~/.copilot/mcp-config.json` (outside the repo; the app reads
