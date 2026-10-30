@@ -1,27 +1,21 @@
-# my-play-db
+# Agent instructions
 
-Personal game library - pulls PSN (and eventually other platforms) data into one place.
+This file is only about how an AI agent works on this repo and with its owner,
+and about the agent tooling in use (the GitHub Copilot app, MCP servers).
+Nothing about the project itself lives here: that is in [README.md](README.md)
+and `docs/`. When switching tools, rewrite or delete this file; the project
+docs stay as they are.
 
-This is not a public service. It's a private data pipe. The API layer has zero business logic, no database, no merging. It maps 1:1 to what the source provides so a sync script or frontend can decide what to store and how.
+**Read this file in full at the start of every conversation, then
+[README.md](README.md).** Don't pull in all of `docs/` upfront, but read the
+relevant doc before working in an area (the table in the README says which
+covers what). If unsure whether one applies, read it; guessing at something a
+doc already answers is the expensive mistake, not the reading.
 
-**Read this file in full at the start of every conversation.** In the GitHub Copilot app, also read [docs/copilot-app.md](docs/copilot-app.md) at the start - it covers the orchestrator/Builder setup, the local preview and signing in to it. The detail lives in `docs/` - don't pull it all in upfront, but know it's there and read the relevant one before working in that area (see [Reference docs](#reference-docs)). If you're unsure whether one applies, read it; guessing at something a doc already answers is the expensive mistake, not the reading.
-
-**Two frontends.** The real app is being built fresh at `/` from a blank page (`public/index.html`) with its own sign-in (see below). The old tabbed app lives at `/lab/` (`public/lab/`) as a lab / test bench for every feature. Keep the lab working, don't redesign it, and new app work must not change it. They share the same API, sign-in and database.
-
-## Ways of working
-
-Notes on how this project has gone well - not a checklist, and not rules to
-follow mechanically. If following one would make the work worse, don't.
-
-**Use your judgement.** Don't ask permission for decisions you can make, don't
-clarify what you can reasonably infer, and don't pad answers with things nobody
-asked about. Ask when there's a real fork in the road or a genuine blocker.
-
-**How to answer. This one is not optional.**
+## How to answer. This one is not optional.
 
 The owner is not a programmer and has said, more than once, that the replies
-here are overwhelming. A softer version of this rule was buried in the list of
-suggestions below and got walked past anyway, so it lives up here now.
+here are overwhelming.
 
 - Plain English. Explain the idea simply rather than avoiding it.
 - Lead with the answer, in a sentence or two. Stop there unless more is asked
@@ -34,23 +28,31 @@ suggestions below and got walked past anyway, so it lives up here now.
 - Don't narrate the investigation. Give what it concluded.
 - If it needs to be long, it belongs in `docs/`, not in a reply.
 
+## Ways of working
+
+Notes on how this project has gone well - not a checklist, and not rules to
+follow mechanically. If following one would make the work worse, don't.
+
+**Use your judgement.** Don't ask permission for decisions you can make, don't
+clarify what you can reasonably infer, and don't pad answers with things nobody
+asked about. Ask when there's a real fork in the road or a genuine blocker.
+
 **Worth being firm about:**
 
+- Do what was asked, nothing extra. Suggest more if it's worth it, but don't
+  build it. When undoing something, touch only that.
 - Don't commit, push or open a PR unless asked. Building something isn't
-  permission to ship it. Do mention when work is piling up uncommitted.
+  permission to ship it. Do mention when work is piling up uncommitted. Before
+  any commit, follow the checks in
+  [docs/development.md](docs/development.md#deploying-and-git) and make sure
+  the docs are current.
 - Don't say something works because you wrote it. Be clear about what hasn't
   been tested.
-- In the GitHub Copilot app, the Builder reviews its own UI work before
-  reporting done, and the orchestrator reviews the Builder's code when it
-  reports. Beyond that code review, the orchestrator tests or screenshots
-  only after a clear instruction from the owner - a finished build is not
-  one. See docs/copilot-app.md.
-- Check the diff for keys and tokens before committing.
-- **Never open, read, print or copy `%USERPROFILE%\.my-play-db\dev-signin.env`.**
-  It holds the owner's password for the local preview's auto sign-in
-  (docs/auth.md). Not even to check it exists or is filled in - ask the owner.
-- Interrupt for anything risking security, data loss or money, even unasked.
-  Where it's urgent, act first and explain after.
+- **Never open, read, print or copy `%USERPROFILE%\.my-play-db\dev-signin.env`**,
+  not even to check it exists or is filled in - ask the owner. It holds the
+  owner's real password ([docs/auth.md](docs/auth.md#gate-1---who-can-sign-in)).
+- Stop and ask before anything that risks security, data loss or money, and
+  flag it even when not asked.
 
 **Things that have worked well:**
 
@@ -58,364 +60,96 @@ suggestions below and got walked past anyway, so it lives up here now.
 - If earlier advice turns out wrong, say so and move on.
 - Stop grinding. Two failed attempts at the same thing means step back and say
   what you'd try next.
-- Look things up rather than recalling them.
+- Look things up rather than recalling them. In particular, before designing or
+  changing any UI in the app at `/`, look up the relevant Apple HIG page
+  ([docs/design.md](docs/design.md#which-page-for-what) says which) rather than
+  recalling it.
 - When asking the owner to click something, give the exact path and check it
   exists first.
 - Match effort to the request.
 - Functionality before design; when asked about behaviour, answer about
   behaviour.
-- Simple and practical now, modular enough to be redesigned later. The look will
-  be rebuilt by hand from a real design, so keep behaviour independent of
-  presentation - a different UI, on different pages, should be able to reuse the
-  logic without rewriting it.
-- Functional still has to be usable. Wireframe means unstyled, not awkward.
 - Run independent work in parallel rather than one thing at a time.
 - Context isn't free. Read what the task needs rather than everything, and
   don't redo reading, testing or verification already done earlier in the same
   conversation. This is about not repeating work - never about skipping it.
-  Anything you actually changed still gets tested.
+  Anything you actually changed still gets a quick check where one is
+  practical ([Checking](#splitting-work-to-save-cost)).
 - Keep the docs current as things change, including deleting what stopped being
-  true.
+  true. Follow [docs/development.md](docs/development.md#writing-docs): agents
+  tend to document what they just built, which repeats the code. Write only what
+  the code can't say. Project knowledge goes in `docs/`, never in this file.
 - Prefer deleting to leaving something half-working.
 - Clean up after yourself.
 
-## Dev
+## Checking an API endpoint with the owner
 
-- **`vercel dev`** - local server at localhost:3000 (only way to test API functions). Do NOT use VS Code Live Server.
-- **`npx prettier --write <file>`** - formatting. No linter, no test framework, no build step configured.
+1. The owner confirms `vercel dev` is running.
+2. Build the GET URL(s) with query params
+   ([docs/development.md](docs/development.md#testing)), show them to the owner,
+   and ask them to open each one in the browser to see the JSON.
+3. Also fetch it yourself with `curl.exe -s "<url>"`.
+4. Only when the owner has confirmed they saw the JSON AND you have the curl
+   output, call the endpoint verified.
 
-### MCP servers (agent tooling, not part of the app)
+## Splitting work to save cost
 
-Two MCP servers are configured in the owner's opencode setup. They are tools
-for the assistant, **not dependencies of my-play-db** - the app reaches
-Supabase through `public/js/supabase.js` and IGDB through `api/igdb.js`, and
-neither knows MCP exists. Config lives in `~/.config/opencode/opencode.json`,
-outside this repo; credentials are Windows user env vars, never in a file here.
-The GitHub Copilot app has its own config (`supabase` and `sosumi`) - see
-[docs/copilot-app.md](docs/copilot-app.md#supabase-mcp).
+Strong models plan and judge well but are expensive; cheaper models write
+well-scoped code fine. Where the tool allows, keep the thinking (talking to the
+owner, reading docs, planning, reasoning, harder tasks, reviewing) on the
+strong side and hand self-contained coding tasks to a cheaper worker. If the
+tool already picks models automatically, still follow the reasoning: split the
+work, and keep each piece small. Don't split for the sake of it: coding
+parallelises poorly, and a vague handoff gets redone and costs more than doing
+it directly.
 
-| Server     | Use it for                                                                                           |
-| ---------- | ---------------------------------------------------------------------------------------------------- |
-| `supabase` | Inspecting schema, running SQL, applying migrations, checking advisors and logs                      |
-| `igdb`     | IGDB schema and data questions - `get_schema`, `query`, `aggregate`, `search`                        |
-| `sosumi`   | Apple Human Interface Guidelines as Markdown (Copilot app config, not opencode) - see docs/design.md |
+When handing work off:
 
-**Prefer these over guessing or scraping docs.** The IGDB one in particular
-answers in seconds what otherwise means reading api-docs.igdb.com end to end.
+- Make each task standalone and fully specified: the owner's words verbatim,
+  the decided design, and what "done" looks like. The worker can't see the
+  conversation.
+- The worker reports what changed when it finishes. Where the change is
+  non-trivial, the strong side reviews its diff before telling the owner: look
+  for clear errors, gaps against the task, and things done poorly, not for
+  things merely done differently. Send real problems back.
+- When the owner changes direction, revert the abandoned work first so nothing
+  half-built is left behind.
+- Tell the owner plainly what was checked and what wasn't.
 
-Caveat worth remembering: an MCP query hits IGDB's _live_ database, which is
-not necessarily what `api/igdb.js` returns - the handler reshapes images, renames
-fields and merges popularity. Use MCP to learn what IGDB has; use the harness or
-`vercel dev` to check what our API actually returns.
+Checking:
 
-Testing notes:
+Whether to test depends on whether a check is quick and practical for the
+change, not on how many tokens it uses.
 
-- Handlers can be invoked directly with a mocked `req`/`res` instead of going
-  through `vercel dev` - faster and far more reliable.
-- **Two `vercel dev` instances in the same folder corrupt each other's build
-  cache** and produce phantom 404s. Run one.
-- `vercel dev` reads env vars once at startup, and lazily builds each function
-  on its first request. Restart it after changing env vars; a first-hit 404 is
-  usually just the build.
-- After a deploy, endpoints can 404 for a minute or two while Vercel's edge
-  propagates. Wait before declaring it broken.
-- When a test fails, first check whether the test is wrong.
+1. **Quick checks.** Run a check when it is quick and practical (a direct
+   handler call, a small script, a syntax check). Skip anything slow or
+   involved and say what wasn't checked.
+2. **The preview is the owner's.** The owner checks UI changes in the shared
+   preview, so they can point at something on the page you can also see.
+   Browser testing, screenshots and clicking through the preview happen only
+   when the owner asks, and the owner says what to check. Finishing a task is
+   not that request.
 
-### API testing protocol (MUST follow every time)
+## The shared preview
 
-1. User confirms `vercel dev` is running.
-2. Construct the GET URL(s) with query params, show them to the user, and tell them to open in browser to see the JSON response.
-3. Also call `curl.exe -s "<url>"` in this terminal to read the response myself.
-4. Only after BOTH the user confirms they saw the JSON AND I have curl output, declare the endpoint verified.
+- `vercel dev --listen 3000` runs in a terminal the owner can see, from the
+  checkout where the code is being changed, so edits appear without a restart.
+  Only one instance ([why](docs/development.md#vercel-dev-quirks)). A fresh
+  checkout needs the one-time setup in
+  [docs/development.md](docs/development.md#local-preview).
+- The owner views it in the tool's built-in browser at `localhost:3000` (the
+  app) or `localhost:3000/lab/` (the lab).
+- Sign in with the local auto sign-in or email + password. The owner doesn't
+  want to type Google credentials into an embedded browser.
 
-Example flow:
+## MCP servers
 
-```
-# I tell the user:
-Open this in your browser: http://localhost:3000/api/epic?action=auth&options={"..."}
-(I also run curl myself behind the scenes)
-
-# Then after both confirm:
-auth  - returns access_token, refresh_token, account_id
-```
-
-## Stack
-
-- **CommonJS** everywhere (api/). `require()`, not `import`. package.json has no `"type": "module"` - psn-api is CJS.
-- **Vanilla JS frontend** (public/) - ES modules in browser, no bundler, no framework, no TypeScript. The blank new app is at `/`; the lab is at `/lab/`.
-- **Dependencies**: `psn-api` ^2.14.0. Steam, Epic, and IGDB handlers use raw `fetch`.
-
-## Architecture
-
-```
-Browser (ES module)  POST /api/psn    Vercel serverless  psn-api  PlayStation Network
-                     POST /api/steam  Vercel serverless  fetch    Steam Web API
-                     POST /api/epic   Vercel serverless  https    Epic internal APIs
-                     POST /api/ea     Vercel serverless  https    EA GraphQL + REST APIs
-                      POST /api/igdb   Vercel serverless  https    IGDB v4 (Twitch-backed)
-                      POST /api/sgdb  Vercel serverless  https    SteamGridDB v2 (community game art)
-                      POST /api/hltb  Vercel serverless  https    HowLongToBeat (undocumented, scraped)
-```
-
-```
-my-play-db/
-  api/
-    _cors.js               # CORS allow-list + preflight
-    _auth.js               # Supabase JWT gate - every handler requires the owner
-    _platform-refresh.js   # server-side token refresh (psn/epic/xbox)
-    cron-refresh.js        # nightly Vercel Cron job
-    dev-signin.js          # DEV ONLY auto sign-in for the local preview (404 everywhere else)
-    psn.js                 # PSN handler - 7 actions
-    steam.js               # Steam handler - 7 actions (incl. openid_verify)
-    epic.js                # Epic handler - 5 actions
-    xbox.js                # Xbox handler - 4 actions
-    ea.js                  # EA handler - 3 actions
-    igdb.js                # IGDB handler - 4 actions
-    sgdb.js                # SteamGridDB handler - 5 actions
-    hltb.js                # HowLongToBeat handler - 4 actions (scraped, fragile)
-  public/
-    index.html             # NEW APP - the app's sign-in screen, then a blank page (served at /)
-    js/
-      config.js            # Supabase URL + publishable key (browser-safe)
-      supabase.js          # supabase-js client (ESM from esm.sh)
-      session.js           # Google OAuth sign in/out, JWT access
-      sign-in.js           # sign-in screen wiring + `next` redirect
-      menu.js              # top-right app menu (glass pill via liquidGL, Search / Profile / More pull-down, Back circle)
-      app-shell.js         # new app wiring: search state + pages + results page + history + menu
-      search-state.js      # search mode + query state, emits events (no DOM)
-      game-state.js        # which game page is open, emits events (no DOM)
-      game-page.js         # the game page sheet: slides up over the results (banner only)
-      bottom-bar.js        # game page floating bottom toolbar (compact/expanded, items list)
-      filter-state.js      # filter: selected types + In Library, emits change (no DOM)
-      result-types.js      # the 15 IGDB game types (value + label) + the short list
-      glass-refresh.js     # asks liquidGL to retake its snapshot after page changes
-      overlay-scroll.js    # thin overlay scroll indicator (native scrollbar hidden)
-      pages.js             # page switcher for the content area (hides, never destroys)
-      image-url.js           # display image URLs (IGDB size, /img rewrites) + CORS-safe loading, shared
-    results-page.js      # results page: renders the search session (cards, skeletons, scroll reveal, covers)
-      search-session.js    # live search brain: debounce, baked filter rules, status (no DOM)
-      search.js            # new-app search engine (copy of the lab's, independent): cache + IGDB + rank
-      games-cache.js       # `games` table: search reads/writes + game page row, detail save, art/sgdb_id rpcs (copy, independent)
-      game-art.js          # resolves a game's art on page open: detail pull, SGDB match, art rule (no DOM)
-      sgdb.js              # SteamGridDB lookup (copy of the lab's; throws on failures instead of swallowing)
-      sgdb-match.js        # pure IGDB->SteamGridDB matching rules (copy of the lab's, unchanged)
-      api.js               # /api/* caller with bearer token (copy, independent)
-      ranking.js           # search ranking/merging (copy of the lab's, independent)
-      url-state.js         # search text + types (+ open game) in the address (?q=&types=&game=)
-      spring.js            # small spring used to animate lens CSS variables
-      dev-reload.js        # localhost-only auto-reload when files change
-    css/
-      tokens.css           # colour palette variables (new app only)
-      sign-in.css          # styling for the sign-in screen
-      menu.css             # styling for the app menu
-      pages.css            # content area + results grid, cards, skeletons
-      game-page.css        # the game page sheet (looks only)
-      overlay-scroll.css   # hides native scrollbars, styles the overlay indicator
-    vendor/
-      liquidGL.js          # liquid glass library, vendored and PATCHED (see Gotchas)
-    lab/                   # the lab / test bench for every feature (served at /lab/); no sign-in of its own
-      index.html             # lab shell: tabs (redirects to / when signed out)
-      steam-callback.html    # bare Steam OpenID return target
-      css/
-        app.css              # ALL styling, 10 numbered sections
-      js/
-        api.js                 # single /api/* caller, injects bearer token
-        navigate.js            # tab-to-tab navigation (pushState + subscribers)
-        vault.js             # platform_credentials CRUD
-        platforms.js         # per-platform connect/refresh + expiry normalization
-        credentials.js         # pure credential extractors (no imports, testable)
-        connect.js             # popup / redirect / clipboard capture
-        refresh.js             # in-tab auto-refresh scheduler
-        schemas.js             # per-action parameter definitions for the console
-        ranking.js             # pure search ranking/merging/paging logic
-        sgdb-match.js          # pure IGDB->SteamGridDB matching rules
-        sgdb.js                # SteamGridDB lookup orchestration (used by views/media.js)
-        hltb-match.js          # pure IGDB->HowLongToBeat matching rules
-        hltb.js                # HowLongToBeat lookup + weekly playtime refresh
-        games-cache.js         # `games` table: search cache + single-game read/write
-        search.js              # search orchestration: DB head start + IGDB, cached
-        game.js                # one game: daily freshness rule + IGDB pull
-        app.js                 # boot, tab routing (redirects to / when signed out)
-        views/
-          connections.js       # platform list + connect/edit/delete
-          console.js           # generic action runner
-          search.js            # IGDB search tab (typeahead + full results)
-          game.js              # game detail tab (?game=<igdb id>)
-          media.js             # artwork picker tab (?media=<igdb id>)
-  .env.local               # local env (managed by `vercel env pull`)
-  package.json
-  vercel.json              # outputDirectory + cron schedule + /img/* image rewrites
-```
-
-## Gotchas
-
-Short list of things that have already caused bugs here. Each is explained in
-the linked doc - this list exists so they cannot be missed.
-
-**API handlers**
-
-- **`psn.js` reads credentials from the TOP LEVEL of the body. Every other
-  handler expects them nested inside `options`.** `public/lab/js/api.js` absorbs
-  this; don't reintroduce it elsewhere.
-- **`psn.js` handles the `auth` action before the generic authorization path.**
-  Do not reorder.
-- GET query params are `JSON.parse`d per key. An all-numeric string becomes a
-  number.
-- Per-action validation errors return **500**, not 400.
-- `_cors.js` must keep allowing the `Authorization` request header, or every
-  browser call fails preflight.
-
-**Tokens**
-
-- **Xbox refresh rotates `xstsToken` AND `userHash`**, not just the token.
-  Re-persist the whole tuple or the next call 401s.
-- **Epic burns a token refresh** resolving the account id when `epicAccountId`
-  is omitted. Always send it.
-- **EA needs `prompt=none` AND a two-step login.** `ORIGIN_JS_SDK` can only
-  mint a token from an existing ea.com session; an interactive login through it
-  fails with "Service limitations apply".
-- **EA renews from a rotating cookie SET, not a refresh token.** The measured
-  minimum EA accepts is **`sid` + `_nx_mpcid` together** - `remid` alone, `sid`
-  alone, or `remid` + `_nx_mpcid` all return `login_required`. Missing
-  `_nx_mpcid` is what broke the first build of this. EA may return replacement
-  cookies, and whatever comes back must be persisted or EA locks itself out
-  until reconnected by hand. **The EA connect dialog must not open any EA page**
-  - loading one makes EA re-issue the cookies mid-copy. Never run EA's `refresh`
-    action from the API console for the same reason. See docs/auth.md.
-- **`identity` is never rewritten by a refresh.** The credential vault is about
-  access only; profile data belongs in a future `platform_profiles` table.
-- `api/_platform-refresh.js` duplicates the token mapping from
-  `psn.js`/`epic.js`/`xbox.js`/`ea.js`. Change one, change the other.
-
-**HowLongToBeat**
-
-- **HLTB has no API. `api/hltb.js` is a scraper, and it will break.** Ported
-  from the HLTB for Deck plugin (MIT), which is the only implementation still
-  maintained against HLTB's defences. When it breaks, read that project's
-  recent commits first - they have almost certainly already fixed it.
-- **Never hardcode HLTB's endpoint path.** It has moved four times in three
-  years and is discovered at runtime from HLTB's own homepage. Hardcoding is
-  how every dead HLTB library on npm died, including the abandoned original of
-  the plugin this is ported from.
-- **If `/init` returns an `hpKey`/`hpVal` pair (it doesn't today - since Oct
-  2026 it returns only `token`), the search body must repeat the value under a
-  field named by `hpKey`'s VALUE** (literally `ign_5adbe3f6`, not `"hpKey"`).
-  Getting that name wrong returns **404, not 403** - which looks exactly like a
-  moved route and sends you re-discovering a path that was never wrong.
-- **The token is bound to the requesting IP and User-Agent**, both encoded
-  inside it. `USER_AGENT` must stay a fixed constant across the init and search
-  calls, and sending none at all is a 403.
-- **`profile_steam` is null in search results** - it only exists on the detail
-  page, which is why proving a match costs an extra request per candidate.
-- **`release_world` is a year from `search` and a full date from `game`.**
-  Mixing them is an invisible bug; `candidateYear()` handles both.
-- Times are **seconds**. Hours are a rendering concern.
-
-**Database**
-
-- **New tables need an explicit `grant ... to authenticated`.** This project has
-  no default privileges, and Postgres checks privileges _before_ RLS policies,
-  so policies alone produce `42501 permission denied`. Functions need
-  `grant execute` for the same reason, and **`service_role` has no table
-  privileges either** - anything the nightly cron touches needs granting, or a
-  `security definer` function to go through. This has already shipped broken
-  once: the cron ran for weeks returning 500 on its first read because
-  `service_role` lacked `select` on `platform_credentials`, and nobody noticed
-  because the in-tab refresh scheduler was covering for it. **Changing what the
-  cron touches means checking its grants.**
-- **`games` is a cache of IGDB records, not a list of games owned.** Ownership
-  is `player_games`. A search write touches only search-grade columns, which is
-  what stops it thinning out a fully synced row - there is no completeness flag
-  to check.
-- **Two writers, two clocks.** `cache_search_games()` stamps `synced_at`;
-  `cache_game_details()` stamps `fully_synced_at`. Neither reads the other's,
-  and that is the point - `synced_at` is rewritten by every search, so it can
-  never say whether the detail columns are current.
-- **`cache_game_details()` also writes the three fields search ranks on**
-  (`alternative_names`, `popularity`, `hypes`). That is only safe because
-  `igdb.js`'s `game` action is a strict superset of its `search` action. Break
-  that superset and opening a detail page silently degrades that game's search
-  ranking.
-- **IGDB's `updated_at` and `checksum` are not change signals - don't rebuild
-  this.** Measured: ~76% of cached games have `updated_at` move within 24 hours
-  while the content is byte-identical, and `checksum` moves with it. Hence a
-  plain 24-hour timer, no cron sweep, no webhook. See docs/api.md.
-- **`games` self-prunes after 30 days.** `prune_games_cache()` runs from the
-  nightly cron and deletes cached rows nothing has searched lately. A
-  `player_games` row is the _only_ thing that makes a `games` row permanent -
-  being fully detail-synced does not protect it.
-- **The first entry of `cover`, `logo` and `banner` is the user's chosen
-  image.** There is no flag and no second column - position is the choice, and
-  it survives because `merge_image_array()` preserves order and only appends.
-  **The new app's game page uses a different rule** (`set_game_art()`): at most
-  one IGDB image plus one other, replacing rather than appending. A choice goes
-  first; the automatic SteamGridDB cover goes behind IGDB's as its backup.
-  Don't mix the two writers' expectations. `games.sgdb_id`: NULL = never tried,
-  **0 = tried, nothing found (never retried)**, above 0 = matched. A failed
-  lookup must write nothing, so `resolveSgdb` throws on non-404 failures.
-  **Anything that rebuilds one of those arrays instead of merging into it
-  silently throws the choice away.** Where a URL came from is readable from its
-  host (`images.igdb.com`, `image.api.playstation.com`,
-  `cdn2.steamgriddb.com`), so provenance never needs storing either.
-- **Cached games store `alternative_names`, `popularity`, `hypes` and
-  `first_release_date` purely so they score identically to the same game from
-  IGDB.** Search paints the cache first and merges IGDB over it; equal scores
-  are the only reason that merge doesn't visibly reshuffle. Drop one of those
-  fields from the write and the bug comes back looking like a rendering
-  problem.
-
-**Frontend**
-
-- **Every cover host must either send CORS or have a same-origin `/img`
-  rewrite in `vercel.json`, or its covers show grey under the glass** (liquidGL
-  can't read them). IGDB sends CORS; PlayStation and SteamGridDB are rewritten.
-  The grid logs one `console.warn` per host that needs one. Steps for
-  diagnosing and adding a new host: docs/frontend.md ("Fixing a grey card
-  under the glass").
-- **Apple's Human Interface Guidelines are the design authority for the new
-  app at `/` (not the lab).** Before designing or changing any UI there, look up
-  the relevant HIG page through the `sosumi` MCP (or a `sosumi.ai` URL) instead
-  of recalling it, and follow it unless the owner says otherwise. How, and which
-  pages: docs/design.md.
-- **`public/vendor/liquidGL.js` is a patched copy, not the npm package.** Six
-  changes marked `my-play-db patch` are what make the glass look right (fixed
-  rim width, smooth blur, no drifting glow, readable on bright backgrounds and
-  more). Never swap it for a CDN or npm copy, and re-apply every patch if
-  upgrading. The approved look is in docs/design.md; how it works in
-  docs/frontend.md.
-- **No inline styles (in the lab).** JavaScript writes class names only; all CSS lives in
-  `public/lab/css/app.css`.
-- **`public/lab/js/schemas.js` must be kept in step with the handlers.** A new
-  action or option that isn't there is unreachable from the API console.
-- **SteamGridDB matching may return nothing, and that is correct.** One IGDB
-  game maps to one SteamGridDB entry or to none. A DLC must never inherit its
-  base game's artwork and an edition must never inherit the base game's -
-  they are separate entries with separate art. Loosening the matching to raise
-  the hit rate is how the wrong cover ends up on a page.
-- **The same applies to HowLongToBeat, and harder.** A blank playtime is
-  honest; a wrong one is indistinguishable from a right one. The plugin this
-  is ported from always returns its nearest guess - ours deliberately does not.
-- **A missing playtime must render as a blank space, never an error.** HLTB
-  will be down periodically and `getPlaytimes()` never throws; anything that
-  turns a null into a visible failure defeats the point.
-
-## Reference docs
-
-`AGENTS.md` is loaded every conversation and stays short. Detail lives in
-`docs/`. Read the relevant one _before_ changing that area.
-
-| Doc                                            | Read it before                                                   |
-| ---------------------------------------------- | ---------------------------------------------------------------- |
-| [docs/api.md](docs/api.md)                     | changing a handler or adding an action                           |
-| [docs/auth.md](docs/auth.md)                   | touching sign-in, the credential vault, connect flows or refresh |
-| [docs/database.md](docs/database.md)           | adding a table or column, or writing a sync script               |
-| [docs/frontend.md](docs/frontend.md)           | changing anything under `public/` (lab, sign-in screen, glass menu) |
-| [docs/api-responses.md](docs/api-responses.md) | you need a real captured response or field observation           |
-| [docs/copilot-app.md](docs/copilot-app.md)     | every conversation in the GitHub Copilot app                     |
-| [docs/design.md](docs/design.md)               | changing anything visual in the new app (not the lab)            |
-
-## Git
-
-- `main` = production (auto-deploys to Vercel), `feat/*` = active dev
-- Rebase feature branches (no merge commits)
-- Conventional Commits: `feat:`, `chore:`, `refactor:`, etc. - lowercase after prefix, present tense imperative
+**Supabase** - for inspecting schema, running SQL, applying migrations, and
+checking advisors and logs. Configured in `~/.copilot/mcp-config.json` (outside
+the repo; there is no `copilot` command on this machine). The owner authorises
+it once through the app. **Its tools only appear in sessions started after it
+was added.** It cannot change Auth settings, which are dashboard-only
+(`https://supabase.com/dashboard/project/bcqodvutikcetnxtzigr/auth/providers`
+and Authentication > URL Configuration; see
+[docs/auth.md](docs/auth.md#gate-1---who-can-sign-in)); look up dashboard paths
+with its `search_docs` tool before sending the owner there.
