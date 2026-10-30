@@ -1,43 +1,84 @@
 # API contracts
 
 Request/response shape for every `/api/*` handler. Read this before changing a
-handler or adding an action.
+handler or adding an action. Real captured responses, field observations and
+data flows live in [api-responses.md](api-responses.md).
 
-Every handler takes `{ action, options }` by POST or GET, is CORS-restricted to
-`localhost:3000` and `my-play-db.vercel.app`, and is gated by the owner check in
-`api/_auth.js` (see [auth.md](auth.md)).
+## Rules every handler shares
 
-Errors are always `{ "error": "message" }`. Note that per-action validation
-failures surface as **500**, not 400 - a 500 here usually means a missing option
-or an expired token, not a broken server.
+- **Shape.** Every handler takes `{ action, options }` by POST or GET, and is
+  gated by the owner check in `api/_auth.js` (see [auth.md](auth.md)). The
+  exception to the shape is `psn.js` - see below.
+- **CORS** (`api/_cors.js`) allows only `http://localhost:3000` and
+  `https://my-play-db.vercel.app`, methods `GET, POST, OPTIONS`, and the request
+  headers `Content-Type, Authorization`. **`Authorization` must stay allowed**,
+  or every browser call fails preflight - the owner's bearer token travels in it.
+- **GET query params are `JSON.parse`d per key**, falling back to the raw string
+  when that fails. So numbers, booleans, arrays and objects in a query string
+  must be valid JSON, and **an all-numeric string becomes a number**.
+- **Errors** are always `{ "error": "message" }`. A missing or unknown `action`
+  is a **400**, but **per-action validation failures surface as 500**, not 400 -
+  a 500 here usually means a missing option or an expired token, not a broken
+  server. The sign-in gate returns 401 (no or invalid session), 403 only when
+  `OWNER_USER_ID` is set and the user isn't it (otherwise any valid Supabase
+  user passes), and 500 if its Supabase env vars are missing; `psn.js` returns
+  400 for missing credentials and, on non-`auth` actions, 401 when exchanging
+  the `npsso` fails (inside `auth` that failure is a 500).
+- **`psn.js` is the odd one out.** It reads its credentials (`npsso`,
+  `accessToken`, `refreshToken`) from the **top level** of the body; every other
+  handler expects them nested inside `options`. `public/lab/js/api.js` absorbs
+  this; don't reintroduce the difference anywhere else.
+- **HTTP clients.** `epic.js`, `ea.js` and `xbox.js` use Node's `https`
+  module; `steam.js`, `igdb.js`, `sgdb.js`, `hltb.js`, `cron-refresh.js`,
+  `_auth.js` and `dev-signin.js` use
+  `fetch`; `psn.js` goes through the `psn-api` package. `_platform-refresh.js`
+  uses `psn-api` for PSN and `https` for the rest.
+- **`api/_platform-refresh.js` duplicates the handlers' token-refresh
+  mapping** - see
+  [auth.md](auth.md#scheduled-refresh-the-thing-that-survives-the-app-being-closed).
 
-GET query params are parsed with `JSON.parse` per key, so numbers, booleans,
-arrays and objects in a query string must be valid JSON. Plain strings pass
-through unchanged.
+### Env vars
 
-Real captured responses live in [api-responses.md](api-responses.md).
+Values live in Vercel; how to get them locally is in
+[development.md](development.md).
+
+| Used by                             | Env vars                                                                                                         |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| every handler (`_auth.js`)          | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `OWNER_USER_ID`                                                             |
+| `steam.js`                          | `STEAM_API_KEY`                                                                                                  |
+| `igdb.js`                           | `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`                                                                       |
+| `sgdb.js`                           | `STEAMGRIDDB_API_KEY`                                                                                            |
+| `cron-refresh.js`                   | `CRON_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`                                                       |
+| `psn`, `epic`, `xbox`, `ea`, `hltb` | none - PSN uses the user's tokens; Epic, Xbox and EA use public client ids embedded in the code; HLTB has no key |
+
+### Non-action endpoints
+
+- **`api/cron-refresh.js`** - Vercel Cron, daily at 03:00 UTC (`vercel.json`).
+  Refreshes platform tokens through `_platform-refresh.js`, then runs
+  `prune_games_cache()`. Authenticated by `CRON_SECRET`, not the owner check.
+  See [auth.md](auth.md#scheduled-refresh-the-thing-that-survives-the-app-being-closed)
+  and, for the database grants it needs,
+  [database.md](database.md#grants-read-before-adding-a-table-or-function).
+- **`api/dev-signin.js`** - local preview only: auto sign-in for `vercel dev`,
+  a plain 404 everywhere else. See [auth.md](auth.md#gate-1---who-can-sign-in).
 
 ## API (api/psn.js)
 
-POST or GET with `{ npsso, accessToken, refreshToken, action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+POST or GET with `{ npsso, accessToken, refreshToken, action, options }` - the odd shape is explained under [Rules every handler shares](#rules-every-handler-shares).
 
-GET query params are parsed with `JSON.parse` where possible - numbers, booleans, arrays, and objects in query strings must be valid JSON. Plain strings pass through as-is.
+| Action      | What it needs                                   | Returns                                                                                                                                                     |
+| ----------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`      | npsso or refreshToken                           | accessToken + refreshToken + expiry                                                                                                                         |
+| `profile`   | accessToken                                     | profile + presence + trophy summary                                                                                                                         |
+| `games`     | accessToken [+ limit/offset]                    | played games (auto-paginates in pages of 100, ps4/ps5/pspc). `limit` returns N most recent                                                                  |
+| `titles`    | accessToken [+ limit/offset]                    | trophy-focused title list (auto-paginates, page size 800). npCommunicationId + lastUpdatedDateTime + progress per title                                     |
+| `recent`    | accessToken [+ limit/categories]                | recently played games (lightweight GraphQL, no pagination). Defaults are `psn-api`'s: limit 50, categories `ps4_game` + `ps5_native_game`.                  |
+| `trophymap` | accessToken + titleIds[]                        | `{ resolved: { npTitleId: { npCommunicationId, npServiceName } }, unresolved: [npTitleId] }`. Falls back to proxy account for titles the user never synced. |
+| `trophies`  | accessToken + npCommunicationId + npServiceName | full trophy details for one game. If the user hasn't synced the game, returns definitions with all `earned: false`.                                         |
 
-| Action      | What it needs                                   | Returns                                                                                                                 |
-| ----------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `auth`      | npsso or refreshToken                           | accessToken + refreshToken + expiry                                                                                     |
-| `profile`   | accessToken                                     | profile + presence + trophy summary                                                                                     |
-| `games`     | accessToken [+ limit/offset]                    | played games (auto-paginates, ps4/ps5/pspc). `limit` returns N most recent                                              |
-| `titles`    | accessToken [+ limit/offset]                    | trophy-focused title list (auto-paginates, page size 800). npCommunicationId + lastUpdatedDateTime + progress per title |
-| `recent`    | accessToken [+ limit/categories]                | recently played games (lightweight GraphQL, no pagination). Default limit 50.                                           |
-| `trophymap` | accessToken + titleIds[]                        | npTitleId { npCommunicationId, npServiceName }. Falls back to proxy account for titles the user never synced.           |
-| `trophies`  | accessToken + npCommunicationId + npServiceName | full trophy details for one game. If the user hasn't synced the game, returns definitions with all `earned: false`.     |
-
-Auth order: NPSSO exchangeNpssoForAccessCode exchangeAccessCodeForAuthTokens. The `auth` action is handled before the generic authorization path - do not change this order.
+Auth order: NPSSO -> `exchangeNpssoForAccessCode` -> `exchangeAccessCodeForAuthTokens` (or `refreshToken` -> `exchangeRefreshTokenForAuthTokens`). **The `auth` action is handled before the generic authorization path - do not reorder.** Every other action needs `accessToken` (or `npsso`, which is exchanged on the fly); `auth` is the only one that takes `refreshToken`.
 
 ## API (api/steam.js)
-
-POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
 
 | Action          | What it needs      | Returns                                                               |
 | --------------- | ------------------ | --------------------------------------------------------------------- |
@@ -49,7 +90,7 @@ POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and m
 | `achievements`  | steamId + appid    | Earned achievements per game                                          |
 | `openid_verify` | params (openid.\*) | `{ steamId, profile }` after Steam's `check_authentication` handshake |
 
-Steam API key is in server-side env var (`STEAM_API_KEY`), never sent from client. `steamId` is passed as option (public info).
+The Steam API key is the server-side `STEAM_API_KEY`, never sent from the client. `steamId` is passed as option (public info).
 
 `openid_verify` backs the one-click "Sign in through Steam" flow. It re-posts the
 `openid.*` params to Steam with `openid.mode=check_authentication` and only trusts
@@ -58,13 +99,11 @@ directly, they are trivially forged.
 
 ## API (api/epic.js)
 
-POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
-
 Uses Epic's undocumented internal REST APIs (same endpoints as Legendary/Playnite). Auth via OAuth authorization code flow with Epic's launcher client credentials embedded in the handler.
 
 | Action         | What it needs                                                               | Returns                                                                                                                                                                                                                                                                      |
 | -------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth`         | authorizationCode or refreshToken                                           | accessToken + refreshToken + accountId + displayName + expiry                                                                                                                                                                                                                |
+| `auth`         | authorizationCode or refreshToken                                           | Epic's raw OAuth response, not renamed: `access_token`, `refresh_token`, `account_id`, `displayName`, `expires_at`, `refresh_expires_at`, etc.                                                                                                                               |
 | `library`      | accessToken [+ epicAccountId] [+ resolveNames]                              | Owned games (auto-paginates) with playtime merged. Each record: `namespace`, `catalogItemId`, `sandboxName`, `appName`, `productId`, `sandboxType`, `acquisitionDate`, `playtime`, `platforms`. `resolveNames: true` calls catalog to replace generic names with real titles |
 | `catalog`      | accessToken + items[] ({ namespace, catalogItemId })                        | Store metadata per game: `id`, `title`, `description`, `keyImages`, `developer`, `releaseInfo`, `categories`, `mainGameItem`                                                                                                                                                 |
 | `progress`     | accessToken [+ epicAccountId] [+ sandboxIds[]] [+ names{}] [+ resolveNames] | Achievement progress per game: `sandboxId`, `productId`, `sandboxName`, `catalogItemId`, `totalAchievements`, `totalXP`, `totalUnlocked`, `earnedXP`, `achievementSets[]`                                                                                                    |
@@ -85,9 +124,9 @@ All Epic identifiers are returned by `library`. Use them as-is - no guessing nee
 **Example flow** - call once, use everywhere:
 
 ```
-library  records[0].namespace = "jackal"      progress sandboxId: "jackal"
-         records[0].catalogItemId = "..."       catalog items: [{ namespace: "jackal", catalogItemId: "..." }]
-         records[0].sandboxName = "Dauntless"    pass to progress/achievements via names{} or sandboxName param
+library -> records[0].namespace = "jackal"     -> progress sandboxId: "jackal"
+           records[0].catalogItemId = "..."     -> catalog items: [{ namespace: "jackal", catalogItemId: "..." }]
+           records[0].sandboxName = "Dauntless" -> pass to progress/achievements via names{} or sandboxName param
 ```
 
 ### `progress` additional options
@@ -102,15 +141,13 @@ library  records[0].namespace = "jackal"      progress sandboxId: "jackal"
 
 Achievement data via `launcher.store.epicgames.com/graphql` (POST only, requires `User-Agent: Mozilla/5.0 (...EpicGamesLauncher)` header). Schema queries are public; player unlock data requires an auth token. Games use Epic's internal codename as their sandboxId (e.g. `jackal` = Dauntless, `9773aa1aa54f4f7b80e44bef04986cea`/Sugar = Rocket League, `50118b7f954e450f8823df1614b24e80` = Fall Guys).
 
-**Auth flow**: User visits `https://www.epicgames.com/id/api/redirect?clientId=34a02cf8f4414e29b15921876da36f9a&responseType=code` while logged into Epic in their browser gets a JSON response with an `authorizationCode` (short-lived). Pass that code to the `auth` action. The handler exchanges it for access+refresh tokens using Epic's OAuth endpoint.
+**Auth flow**: User visits `https://www.epicgames.com/id/api/redirect?clientId=34a02cf8f4414e29b15921876da36f9a&responseType=code` while logged into Epic in their browser -> gets a JSON response with an `authorizationCode` (short-lived). Pass that code to the `auth` action. The handler exchanges it for access+refresh tokens using Epic's OAuth endpoint.
 
-No env vars needed - the launcher client id/secret are public (same ones embedded in the Epic Games Launcher binary).
+No env vars needed - the launcher client id/secret are public (the same ones embedded in the Epic Games Launcher binary) and hardcoded in both `epic.js` and `_platform-refresh.js`.
 
 ## API (api/xbox.js)
 
-POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
-
-Uses Xbox Live REST APIs via OAuth 2.0 through Microsoft account authentication. Auth flow: user visits Microsoft OAuth URL gets authorization code handler exchanges for MSA token Xbox User Token XSTS token. The Xbox app's consumer client ID (`38cd2fa8-66fd-4760-afb2-405eb65d5b0c`) is hardcoded - no Azure app registration needed.
+Uses Xbox Live REST APIs via OAuth 2.0 through Microsoft account authentication. Auth flow: user visits the Microsoft OAuth URL -> gets an authorization code -> the handler exchanges it for an MSA token -> Xbox User Token -> XSTS token. The Xbox app's consumer client ID (`38cd2fa8-66fd-4760-afb2-405eb65d5b0c`) is hardcoded - no Azure app registration needed.
 
 **Auth URL** (user must visit while logged into their Microsoft account):
 
@@ -120,20 +157,18 @@ https://login.live.com/oauth20_authorize.srf?client_id=38cd2fa8-66fd-4760-afb2-4
 
 After authorizing, they're redirected to `oauth20_desktop.srf?code=...`. Pass the `code` param value to the `auth` action.
 
-| Action         | What it needs                         | Returns                                                                                                                                          |
-| -------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `auth`         | authorizationCode or refreshToken     | xuid + gamertag + userHash + xstsToken + accessToken + refreshToken + expiresIn                                                                  |
-| `profile`      | xuid + userHash + xstsToken           | Xbox profile settings (gamertag, gamerscore, avatar)                                                                                             |
-| `games`        | xuid + userHash + xstsToken           | Title history - played games with name, titleId, devices, lastTimePlayed, developer, publisher. Playtime (minutesPlayed) merged from userstats.  |
-| `achievements` | xuid + userHash + xstsToken + titleId | Full achievement list per titleId (name, description, gamerscore, icon, unlock status, timeUnlocked). `titleId` comes from the `games` response. |
+| Action         | What it needs                         | Returns                                                                                                                                                                          |
+| -------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`         | authorizationCode or refreshToken     | xuid + gamertag + userHash + xstsToken + accessToken + refreshToken + expiresIn. A refresh rotates `xstsToken` **and** `userHash` - persist the whole tuple ([auth.md](auth.md)) |
+| `profile`      | xuid + userHash + xstsToken           | Xbox profile settings (gamertag, gamerscore, avatar)                                                                                                                             |
+| `games`        | xuid + userHash + xstsToken           | Title history - played games with name, titleId, devices, lastTimePlayed, developer, publisher. Playtime (minutesPlayed) merged from userstats.                                  |
+| `achievements` | xuid + userHash + xstsToken + titleId | Full achievement list per titleId (name, description, gamerscore, icon, unlock status, timeUnlocked). `titleId` comes from the `games` response.                                 |
 
 **Limitation**: Xbox's REST API only returns titles that have been started at least once (no full purchase library like Steam). The `games` action mirrors what's available via `titlehub.xboxlive.com` - this is the same limitation Playnite's Xbox integration has.
 
 No env vars needed - the Microsoft OAuth client ID is the Xbox app's consumer ID (same one Playnite uses).
 
 ## API (api/ea.js)
-
-POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
 
 Uses EA's internal GraphQL API (`service-aggregation-layer.juno.ea.com`) plus the legacy achievements REST API (`achievements.gameservices.ea.com`). Auth via OAuth implicit token flow - user visits EA auth URL while logged into EA in their browser, gets a Bearer access token directly.
 
@@ -165,43 +200,38 @@ Returns `{ access_token, token_type, expires_in }`. Pass the `access_token` valu
 **Example flow**:
 
 ```
-auth  { pidId, personaId, displayName }
-library  records[0].gameSlug = "fifa-20", achievementSetOverride = "50072_194927_50844"
-achievements({ personaId, achievementSetOverride: "50072_194927_50844" })  full achievement list
+auth         -> { pidId, personaId, displayName }
+library      -> records[0].gameSlug = "fifa-20", achievementSetOverride = "50072_194927_50844"
+achievements({ personaId, achievementSetOverride: "50072_194927_50844" }) -> full achievement list
 ```
 
-### Auth note
+### Renewal (`refresh`)
 
-EA access tokens from the `ORIGIN_JS_SDK` client expire after ~4 hours and there
-is no refresh token. The `refresh` action closes that gap by trading the stored
-`accounts.ea.com` session cookies for a new token - the same request the ea.com
-site makes to stay signed in.
-
-The measured minimum is **`sid` + `_nx_mpcid` together**; any one of them alone
-is refused with `login_required`, and `remid` is the long-lived extra. EA may
-return replacements in `set-cookie`, so the caller must persist the cookie line
-that comes back rather than the one it sent.
-
-Full reasoning, the measured cookie behaviour, and the two routes that turned out
-to be dead ends are in [auth.md](auth.md).
+EA tokens expire after ~4 hours with no refresh token; `refresh` renews from the
+stored `accounts.ea.com` session cookies. The cookie rules (`sid` + `_nx_mpcid`,
+`prompt=none` and the two-step connect, persisting rotated cookies, the connect
+dialog opening nothing, never running `refresh` from the API console) all live
+in [auth.md](auth.md#ea-renewing-from-session-cookies).
 
 ## API (api/igdb.js)
 
-POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
+Uses IGDB v4 (Twitch-backed game database) via OAuth client_credentials flow. No user auth needed - the Twitch Client ID + Client Secret are server-side env vars.
 
-Uses IGDB v4 (Twitch-backed game database) via OAuth client_credentials flow. No user auth needed - the Twitch Client ID + Client Secret are in server-side env vars (set via `vercel env add` - `.env.local` unreliable on this machine due to iCloud Drive file locking).
+The handler reshapes images, renames fields and merges popularity, so its output differs from IGDB's raw data (and from what a direct IGDB query returns).
 
-| Action        | What it needs                           | Returns                                                                                                                                                                                                                                                                                        |
-| ------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth`        | nothing                                 | `{ accessToken, expiresAt }` - Twitch OAuth token (auto-refreshed in-memory)                                                                                                                                                                                                                   |
+| Action        | What it needs                           | Returns                                                                                                                                                                                                                                                                                                                        |
+| ------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `auth`        | nothing                                 | `{ accessToken, expiresAt }` - Twitch OAuth token (auto-refreshed in-memory)                                                                                                                                                                                                                                                   |
 | `search`      | query [+ limit=200] [+ offset] [+ type] | Everything a result card needs, in one request: `name`, `slug`, `summary`, `game_type`, `first_release_date`, `cover.url` (t_1080p), `platforms`, plus `alternative_names`, `total_rating_count`, `hypes` and `popularity` `{ visits, want_to_play }` for ranking. `type` filters by game_type (a number, or an array of 0-14) |
-| `game`        | ids (single int or array of ints)       | Array of full game records by IGDB id. **A strict superset of `search`** - see below. `external_games` bundled in response with `source` name (enriched from numeric ID). See [game response fields](api-responses.md#game) in api-responses.md.                                               |
-| `by_external` | source + uid                            | Lightweight lookup: `{ id }` (IGDB game ID) or `null`. Use `game(id)` for full record. `source` accepts name or number.                                                                                                                                                                        |
+| `game`        | ids (single int or array of ints)       | Array of full game records by IGDB id. **A strict superset of `search`** - see below. `external_games` bundled in response with `source` name (enriched from numeric ID). See [game response fields](api-responses.md#game) in api-responses.md.                                                                               |
+| `by_external` | source + uid                            | Lightweight lookup: `{ id }` (IGDB game ID) or `null`. Use `game(id)` for full record. `source` accepts name or number.                                                                                                                                                                                                        |
 
-**`game` must stay a superset of `search`.** Both write to the same `games`
-row - `search` through `cache_search_games()`, the game detail page through
-`cache_game_details()`. If `game` stops returning a field that `search` ranks
-on, opening that game's detail page silently degrades its search ranking.
+**`game` must stay a strict superset of `search`.** Both write to the same
+`games` row - `search` through `cache_search_games()`, a detail page through
+`cache_game_details()`, which also writes the fields search ranks on
+(`alternative_names`, `popularity`, `hypes`). If `game` stops returning one of
+them, opening that game's detail page silently degrades its search ranking. See
+[database.md](database.md#cache_game_detailspayload-jsonb).
 
 `GAME_FIELDS` in the handler is written in two halves for exactly this reason:
 the first block is character-for-character what `SEARCH_FIELDS` asks for, the
@@ -303,7 +333,8 @@ against this project's own cached games rather than assumed:
 
 IGDB is touching records for its own housekeeping. So there is nothing to poll,
 compare, or subscribe to - which is also why the game detail page uses a plain
-timer, and why there is no cron sweep and no webhook. See
+timer (24 hours), and why there is no cron sweep and no webhook. Don't rebuild
+one. See
 [database.md](database.md#fully_synced_at-and-the-daily-refresh).
 
 **Webhooks are ruled out for the same reason, plus three more.** IGDB can push
@@ -320,7 +351,9 @@ The `search` action accepts an optional `type` parameter to filter results by ga
 when the query contains punctuation: `search "marvel spider man"` puts Marvel's
 Spider-Man first, while `search "Marvel Spider-Man"` puts a DLC first. The
 handler deliberately returns IGDB's raw order anyway (no business logic in the
-API layer) - `public/lab/js/ranking.js` re-ranks.
+API layer) - the client re-ranks, in `public/lab/js/ranking.js` for the lab and
+its independent copy `public/js/ranking.js` for the new app (used by
+`public/js/search.js`).
 
 Known IGDB limitation: some abbreviations return **nothing at all**, on any
 endpoint - `ac odyssey` matches no game, no alternative name and no `/v4/search`
@@ -329,15 +362,13 @@ side.
 
 ## API (api/sgdb.js)
 
-POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app.
-
 Uses SteamGridDB v2 API (community-driven game artwork: grids, heroes, logos). Auth via static API key (`STEAMGRIDDB_API_KEY` in Vercel env), sent as `Authorization: Bearer` header. No OAuth, no token refresh.
 
 Asset actions default to including everything (nsfw/humor/epilepsy/animated). Override via optional filters: `styles`, `dimensions`, `mimes`, `types` (static/animated), `nsfw` (yes/no/any), `humor` (yes/no/any), `epilepsy` (yes/no/any), `limit`, `page`. Styles/dimensions values differ per asset type (see SGDB docs for valid values).
 
 **`types` must be sent explicitly.** SteamGridDB's own default is static images only, so omitting it silently hides every animated asset - Bloodborne goes from 186 covers to 171 and from 38 heroes to 35. `DEFAULT_FILTERS` in the handler sends `static,animated` for this reason. Animated assets come back with `url` as an animated `.webp` but `thumb` as a `.webm` **video**, which no `<img>` tag can display; the media picker checks for that and uses a `<video>` element.
 
-Each action accepts either an SGDB `gameId` or a `{ platform, platformId }` pair for direct platform ID lookups. Platform enum: `steam`, `origin`, `egs`, `bnet`, `uplay`, `flashpoint`, `eshop`.
+`game`, `grids`, `heroes` and `logos` accept either an SGDB `sgdbId` or a `{ platform, platformId }` pair for direct platform ID lookups; `search` takes only `name`. Platform enum: `steam`, `origin`, `egs`, `bnet`, `uplay`, `flashpoint`, `eshop`.
 
 `game` also takes `platformdata` - a comma-separated list of stores whose own IDs should be returned back, as `external_platform_data`. That is how a match found by name can be confirmed against an ID we already hold.
 
@@ -357,30 +388,30 @@ Paging is zero-based, `limit` maxes out at 50, and `total` is the real count - B
 
 ### Matching IGDB games to SGDB entries
 
-The handler stays 1:1 with SGDB. The matching lives in `public/lab/js/sgdb-match.js` (pure) and `public/lab/js/sgdb.js` (fetching). The rule is one IGDB game to one SGDB entry, or nothing:
+The handler stays 1:1 with SGDB. The matching lives in `sgdb-match.js` (pure, and holding all the judgement, with the reasoning behind each threshold in its comments) and `sgdb.js` (fetching) - in `public/lab/js/` for the lab, and as independent copies in `public/js/` for the new app. The new app's `sgdb-match.js` is unchanged; its `sgdb.js` throws when a non-404 failure occurred and nothing matched, instead of swallowing it, so a failed lookup writes nothing (a match that was found is still returned even if another request failed; see [database.md](database.md#sgdb_id)).
+
+**SteamGridDB may return nothing, and that is correct.** SteamGridDB is a community art library, not a catalogue, so "no match" is a normal answer, and loosening the matching to raise the hit rate is how the wrong cover ends up on a page. The rule is one IGDB game to one SGDB entry, or nothing:
 
 - **Store ID first.** IGDB's `external_games` gives Steam and Epic IDs; SGDB accepts those directly as `{ platform: "steam" | "egs", platformId }`. Provably exact, and it has not misfired in testing. IGDB often lists several Steam IDs for one game (base game, a separate multiplayer app, a playtest) and each resolves to a different SGDB entry, so they are tried best-first by the store's own title.
 - **Name second.** Real title, then IGDB's alternative names. Nothing is trimmed or broadened.
-- **Nothing third**, and often. A DLC never falls back to its base game, and an edition never falls back to the base game - Horizon Zero Dawn, its Complete Edition and its Remaster are three separate SGDB entries, and Marvel's Spider-Man's DLC is not in SGDB at all.
+- **Nothing third**, and often. A DLC never falls back to its base game, and an edition never falls back to the base game - each is a separate entry with separate art. Horizon Zero Dawn, its Complete Edition and its Remaster are three separate SGDB entries, and Marvel's Spider-Man's DLC is not in SGDB at all.
 
 Only Steam and Epic bridge. SGDB also accepts origin, uplay, bnet, flashpoint and eshop, but IGDB publishes no IDs for any of them.
 
 **The year is a much stronger signal than it looks.** Measured across 187 games matched by Steam ID, so the match was certain: the year agreed exactly in 97.3% of cases, was one out in 2.1%, and the worst case in the whole sample was three. It never reached four. That is why a large year gap is treated as evidence of a different game rather than as noise.
 
-> Detailed API responses, field observations, data flows, and sync patterns for all handlers are in [`api-responses.md`](api-responses.md).
-
 ## API (api/hltb.js)
 
-POST or GET with `{ action, options }`. CORS whitelisted to localhost:3000 and my-play-db.vercel.app. No API key, and none to add - there is nothing to sign up for.
+No API key, and none to add - there is nothing to sign up for.
 
-**There is no HowLongToBeat API.** HLTB has been an IGN Entertainment brand since 2019, publishes no developer documentation, and IGN's terms of use explicitly forbid automated retrieval. What exists is the internal endpoint HLTB's own front end calls, and that is what this handler talks to. Treat that as a standing caveat on everything below: it is not a contract, nobody owes us its stability, and it changes without notice.
+**There is no HowLongToBeat API, and this scraper will break.** HLTB has been an IGN Entertainment brand since 2019, publishes no developer documentation, and IGN's terms of use explicitly forbid automated retrieval. What exists is the internal endpoint HLTB's own front end calls, and that is what this handler talks to. Treat that as a standing caveat on everything below: it is not a contract, nobody owes us its stability, and it changes without notice.
 
-The logic is ported from the HLTB for Deck plugin (MIT, `github.com/morwy/hltb-for-deck`, `src/hooks/HltbApi.ts`) - the only implementation still maintained against HLTB's current defences. Keeping the structure close to that file is deliberate: when HLTB changes something, their fix can be read across directly. The abandoned original of that same plugin (`hulkrelax/hltb-for-deck`) returns 403 today, and every dead HLTB package on npm died the same way.
+The logic is ported from the HLTB for Deck plugin (MIT, `github.com/morwy/hltb-for-deck`, `src/hooks/HltbApi.ts`) - the only implementation still maintained against HLTB's current defences. Keeping the structure close to that file is deliberate: when HLTB changes something, their fix can be read across directly. **When this breaks, read that project's recent commits first** - they have almost certainly already fixed it. The abandoned original of that same plugin (`hulkrelax/hltb-for-deck`) returns 403 today, and every dead HLTB package on npm died the same way.
 
 ### The three moving parts
 
-1. **The path rotates.** It has been `/api/search`, `/api/find`, `/api/seek`, `/api/bleed`, and is `/api/search/site` today. It is **discovered at runtime** by reading HLTB's homepage, fetching each of its script bundles, and finding the one that POSTs to `/api/...` near the strings `searchTerms` and `searchOptions`. `DEFAULT_SEARCH_PATH` is a last-resort fallback, not the primary route. **Never hardcode this.**
-2. **A token, per-use.** `GET <path>/init?t=<ms>` returns only `{ token }` (since Oct 2026; it used to also return `hpKey` and `hpVal`). The token goes on the search request as `x-auth-token`. `x-hp-key` / `x-hp-val` (and the body field below) are sent only if HLTB returns a pair again. Upstream fix: morwy/hltb-for-deck commit `3651f03`.
+1. **The path rotates.** It has been `/api/search`, `/api/find`, `/api/seek`, `/api/bleed`, and is `/api/search/site` today. It is **discovered at runtime** by reading HLTB's homepage, fetching each of its script bundles, and taking a `/api/...` POST path from a bundle that contains both `searchTerms` and `searchOptions` (anywhere in it); a candidate whose `/init` route also appears in the bundle wins. `DEFAULT_SEARCH_PATH` is a last-resort fallback, not the primary route. **Never hardcode this.**
+2. **A short-lived token, cached and reused for 5 minutes** (`AUTH_TTL_MS`). `GET <path>/init?t=<ms>` returns only `{ token }` (since Oct 2026; it used to also return `hpKey` and `hpVal`). The token goes on the search request as `x-auth-token`. `x-hp-key` / `x-hp-val` (and the body field below) are sent only if HLTB returns a pair again. Upstream fix: morwy/hltb-for-deck commit `3651f03`.
 3. **A Next.js build id**, scraped from the `_buildManifest.js` / `_ssgManifest.js` script URL, needed for the per-game detail read.
 
 ### Traps, all measured
@@ -389,7 +420,7 @@ The logic is ported from the HLTB for Deck plugin (MIT, `github.com/morwy/hltb-f
 - **The token is bound to the requesting IP and User-Agent.** It is encoded in the token itself, in plain sight - base64-decode one and you get `<timestamp>::<ip>|<user-agent>|<hpKey>|<hmac>`. So `USER_AGENT` is a fixed constant and must stay identical between the `/init` call and the search call. Randomising it invalidates the token.
 - **Sending no User-Agent at all returns 403.** Confirmed by bisection.
 - **`profile_steam` is null in search results.** It only appears on the detail page, which is why confirming a match by Steam ID costs one extra request per candidate.
-- **`release_world` has two different types.** Search returns a bare year (`2022`); the detail page returns a full date (`"2022-02-25"`). `candidateYear()` in `hltb-match.js` handles both - a caller mixing them is otherwise an invisible bug.
+- **`release_world` has two different types.** Search returns a bare year (`2022`); the detail page returns a full date (`"2022-02-25"`). `candidateYear()` in `public/lab/js/hltb-match.js` handles both - a caller mixing them is otherwise an invisible bug.
 - **Times are in SECONDS.** Elden Ring's main story is `216329`, not `60.1`. Converting to hours is presentation and happens at render time. Only `comp_main`, `comp_plus` and `comp_100` are stored; see [`database.md`](database.md) for why `comp_all` and the submission counts are not.
 
 ### Recovery
@@ -411,14 +442,16 @@ Discovered values are cached in module scope for 30 minutes (path, build id) and
 
 ### Matching IGDB games to HLTB entries
 
-The handler stays 1:1 with HLTB. Matching lives in `public/lab/js/hltb-match.js` (pure) and `public/lab/js/hltb.js` (fetching and freshness). It reuses the scoring from `sgdb-match.js` rather than duplicating it - sequels, editions and remasters are the same problem in both places, and two copies would drift.
+The handler stays 1:1 with HLTB. Matching lives in `public/lab/js/hltb-match.js` (pure) and `public/lab/js/hltb.js` (fetching and freshness); the new app has no HLTB code yet. It reuses the scoring from `sgdb-match.js` rather than duplicating it - sequels, editions and remasters are the same problem in both places, and two copies would drift.
 
-**The Decky plugin always returns something**; when nothing matches it falls back to the smallest edit distance. That is reasonable on a Steam Deck and wrong here, where DLC and special editions sit directly beside their base games. **No match is a valid answer**, and a blank playtime is honest where a wrong one is indistinguishable from a right one.
+**The Decky plugin always returns something**; when nothing matches it falls back to the smallest edit distance. That is reasonable on a Steam Deck and wrong here, where DLC and special editions sit directly beside their base games. **No match is a valid answer** - the SteamGridDB rule above applies here, and harder: a blank playtime is honest where a wrong one is indistinguishable from a right one.
+
+**A missing playtime renders as a blank space, never an error.** HLTB will be down periodically, and `getPlaytimes()` never throws; anything that turns a null into a visible failure defeats the point.
 
 Evidence, in order:
 
-- **Steam ID.** HLTB's `profile_steam` against IGDB's Steam appids. The only signal here that is not a guess. Costs one detail request per candidate checked, capped at 4, and only candidates already plausible on name are opened.
-- **Name and year**, scored, with the `sgdb-match.js` penalties plus one addition: an **add-on category conflict** (IGDB type 1/2/4/6/7 against HLTB's `game_type: "dlc"`) multiplies the name score by 0.6. Name scoring alone cannot catch DLC that is named nothing like its parent.
+- **Steam ID.** HLTB's `profile_steam` against IGDB's Steam appids. The only signal here that is not a guess. Costs one detail request per candidate checked, capped at 4 per name search, with at most 2 name searches (so 8 detail requests worst case), and only candidates already plausible on name are opened.
+- **Name and year**, scored against HLTB's name and its aliases (`game_alias`), with the `sgdb-match.js` penalties plus two additions. An **add-on category conflict** (IGDB type 1/2/4/6/7 on one side, HLTB's `game_type: "dlc"` on the other, in either direction, and only when both sides state a type) multiplies the name score by 0.6 - name scoring alone cannot catch DLC that is named nothing like its parent. And a **submission-count tiebreak** worth at most 3 points favours the entry more people have submitted times for.
 - **Nothing**, and often.
 
 Measured across 9 games chosen as the awkward cases, at 1-2 requests each: Elden Ring, Hades (2020), Hades II and Spider-Man Remastered all resolved exactly by Steam ID; Shadow of the Erdtree and Phantom Liberty each found their **own** DLC entry rather than their base game; Spider-Man and Cyberpunk 2077 resolved by name; and the 1995 "Hades" correctly returned **no match** rather than taking Supergiant's.
