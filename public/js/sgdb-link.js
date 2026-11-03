@@ -1,9 +1,8 @@
 // The "no SteamGridDB match" card in the Customize drawer. Shown when the
 // game's lookup found nothing (sgdb_id 0): a search field pre-filled with the
 // name the lookup used, SteamGridDB's results as "Name (year)", and picking
-// one stores it as the game's sgdb_id for good. Linking only; the game page
-// pulls the first images on its next open (game-art.js). The look is in
-// css/customize.css.
+// one stores it as the game's sgdb_id for good, and the drawer then loads its
+// images. Its close icon leaves it unlinked. The look is in css/customize.css.
 
 import { setSgdbId } from "/js/games-cache.js";
 import { createOverlayScroll } from "/js/overlay-scroll.js";
@@ -25,7 +24,6 @@ function resultLabel(result) {
 export function buildSgdbLink() {
   const card = document.createElement("div");
   card.className = "sgdb-link";
-  card.hidden = true;
   card.setAttribute("role", "group");
   card.setAttribute("aria-labelledby", "sgdb-link-title");
 
@@ -59,12 +57,34 @@ export function buildSgdbLink() {
   status.setAttribute("role", "status");
   results.append(scroller, status);
 
-  card.append(title, field, results);
-  return { card, input, status, list, scroller, results };
+  // Title on the left, a plain close icon on the right that leaves the game
+  // unlinked (the drawer stays usable without images).
+  const head = document.createElement("div");
+  head.className = "sgdb-link-head";
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.className = "sgdb-link-dismiss";
+  dismiss.setAttribute("aria-label", "Close");
+  dismiss.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.3 5.71 12 12.01l-6.3-6.3-1.41 1.41 6.3 6.3-6.3 6.29 1.41 1.42 6.3-6.3 6.29 6.3 1.42-1.42-6.3-6.29 6.3-6.3z"/></svg>';
+  head.append(title, dismiss);
+
+  card.append(head, field, results);
+
+  // The card floats over the drawer's content as a pop-up.
+  const overlay = document.createElement("div");
+  overlay.className = "sgdb-link-overlay";
+  overlay.hidden = true;
+  overlay.append(card);
+  return { overlay, card, input, status, list, scroller, results, dismiss };
 }
 
-export function wireSgdbLink({ card, input, status, list, scroller, results }) {
+export function wireSgdbLink(
+  { overlay: popup, card, input, status, list, scroller, results, dismiss },
+  { blocks = [] } = {},
+) {
   let gameId = null;
+  let callbacks = {};
   let timer = 0;
   let token = 0;
   let saving = false;
@@ -137,8 +157,11 @@ export function wireSgdbLink({ card, input, status, list, scroller, results }) {
     // the box is empty.
     card.classList.add("is-saving");
     try {
-      await setSgdbId(gameId, Number(button.dataset.sgdbId));
+      const sgdbId = Number(button.dataset.sgdbId);
+      await setSgdbId(gameId, sgdbId);
+      const { onLinked } = callbacks;
       hide();
+      onLinked?.(sgdbId);
     } catch {
       render([]);
       setStatus("Couldn't save the link. Search again to retry.");
@@ -148,11 +171,17 @@ export function wireSgdbLink({ card, input, status, list, scroller, results }) {
     }
   };
 
-  function show(id, name) {
+  const onDismiss = () => hide();
+
+  // onLinked(sgdbId) runs once a pick is stored. While it shows, everything
+  // in `blocks` (the rest of the drawer) is out of reach.
+  function show(id, name, { onLinked } = {}) {
     gameId = id;
+    callbacks = { onLinked };
     input.value = name ?? "";
     render([]);
-    card.hidden = false;
+    popup.hidden = false;
+    for (const el of blocks) el.inert = true;
     search(input.value);
   }
 
@@ -160,7 +189,11 @@ export function wireSgdbLink({ card, input, status, list, scroller, results }) {
     clearTimeout(timer);
     token += 1;
     gameId = null;
-    card.hidden = true;
+    callbacks = {};
+    // Nothing stays focused inside a hidden pop-up (no stray ring).
+    if (popup.contains(document.activeElement)) document.activeElement.blur();
+    popup.hidden = true;
+    for (const el of blocks) el.inert = false;
     render([]);
     setStatus("");
   }
@@ -168,6 +201,7 @@ export function wireSgdbLink({ card, input, status, list, scroller, results }) {
   input.addEventListener("input", onInput);
   input.addEventListener("keydown", onEnter);
   list.addEventListener("click", onPick);
+  dismiss.addEventListener("click", onDismiss);
 
   return {
     show,
@@ -178,6 +212,7 @@ export function wireSgdbLink({ card, input, status, list, scroller, results }) {
       input.removeEventListener("input", onInput);
       input.removeEventListener("keydown", onEnter);
       list.removeEventListener("click", onPick);
+      dismiss.removeEventListener("click", onDismiss);
     },
   };
 }

@@ -80,6 +80,41 @@ const ICONS = {
     markup:
       '<path d="m10 15.586l-3.293-3.293l-1.414 1.414L10 18.414l9.707-9.707l-1.414-1.414z" />',
   },
+  // Save's look before the Preview tab (moves to the next tab): Back's
+  // arrow, mirrored.
+  next: {
+    viewBox: "0 0 24 24",
+    style: "fill",
+    markup:
+      '<path transform="matrix(-1 0 0 1 24 0)" d="M19 11H7.14l3.63-4.36a1 1 0 1 0-1.54-1.28l-5 6a1 1 0 0 0-.09.15c0 .05 0 .08-.07.13A1 1 0 0 0 4 12a1 1 0 0 0 .07.36c0 .05 0 .08.07.13a1 1 0 0 0 .09.15l5 6A1 1 0 0 0 10 19a1 1 0 0 0 .64-.23a1 1 0 0 0 .13-1.41L7.14 13H19a1 1 0 0 0 0-2" />',
+  },
+  // Close for the Customize drawer's full-screen image.
+  close: {
+    viewBox: "0 0 24 24",
+    style: "fill",
+    markup:
+      '<path d="M18.3 5.71 12 12.01l-6.3-6.3-1.41 1.41 6.3 6.3-6.3 6.29 1.41 1.42 6.3-6.3 6.29 6.3 1.42-1.42-6.3-6.29 6.3-6.3z" />',
+  },
+  // Reset to Defaults in the Customize drawer (counter-clockwise arrow).
+  reset: {
+    viewBox: "0 0 24 24",
+    style: "fill",
+    markup:
+      '<path d="M12 5V2L7 6l5 4V7c3.31 0 6 2.69 6 6s-2.69 6-6 6s-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8s-3.58-8-8-8" />',
+  },
+  // Either end of the Customize drawer's image-size slider.
+  zoomOut: {
+    viewBox: "0 0 1024 1024",
+    style: "fill",
+    markup:
+      '<path d="M637 443H325c-4.4 0-8 3.6-8 8v60c0 4.4 3.6 8 8 8h312c4.4 0 8-3.6 8-8v-60c0-4.4-3.6-8-8-8m284 424L775 721c122.1-148.9 113.6-369.5-26-509c-148-148.1-388.4-148.1-537 0c-148.1 148.6-148.1 389 0 537c139.5 139.6 360.1 148.1 509 26l146 146c3.2 2.8 8.3 2.8 11 0l43-43c2.8-2.7 2.8-7.8 0-11M696 696c-118.8 118.7-311.2 118.7-430 0c-118.7-118.8-118.7-311.2 0-430c118.8-118.7 311.2-118.7 430 0c118.7 118.8 118.7 311.2 0 430" />',
+  },
+  zoomIn: {
+    viewBox: "0 0 1024 1024",
+    style: "fill",
+    markup:
+      '<path d="M637 443H519V309c0-4.4-3.6-8-8-8h-60c-4.4 0-8 3.6-8 8v134H325c-4.4 0-8 3.6-8 8v60c0 4.4 3.6 8 8 8h118v134c0 4.4 3.6 8 8 8h60c4.4 0 8-3.6 8-8V519h118c4.4 0 8-3.6 8-8v-60c0-4.4-3.6-8-8-8m284 424L775 721c122.1-148.9 113.6-369.5-26-509c-148-148.1-388.4-148.1-537 0c-148.1 148.6-148.1 389 0 537c139.5 139.6 360.1 148.1 509 26l146 146c3.2 2.8 8.3 2.8 11 0l43-43c2.8-2.7 2.8-7.8 0-11M696 696c-118.8 118.7-311.2 118.7-430 0c-118.7-118.8-118.7-311.2 0-430c118.8-118.7 311.2-118.7 430 0c118.7 118.8 118.7 311.2 0 430" />',
+  },
   // Selected-item checkmark in the filter pull-down.
   check: {
     viewBox: "0 0 24 24",
@@ -1214,7 +1249,7 @@ export async function mountMenu({ search, filter, game }) {
   stage.append(backCircle, bar, bottomBar, panel, filterPanel, filterSub);
   // The Customize drawer covers the page, so it is its own fixed box after
   // the stage (customize.css), with circles built like the Back circle.
-  const customizeParts = buildCustomize(buildCircleButton);
+  const customizeParts = buildCustomize(buildCircleButton, iconSvg);
   document.body.append(stage, customizeParts.layer);
   const customize = wireCustomize({ ...customizeParts, game });
 
@@ -1312,7 +1347,23 @@ export async function mountMenu({ search, filter, game }) {
       }),
       liquidGL({
         ...GLASS_CONFIG,
-        target: "#customize-back, #customize-save, #customize-tab-pill",
+        target: "#customize-back, #customize-reset, #customize-save",
+        content: false,
+        zIndex: 1,
+      }),
+      // In the drawer's tab bar, its own fixed box above the drawer.
+      liquidGL({
+        ...GLASS_CONFIG,
+        target: "#customize-tab-pill",
+        content: false,
+        zIndex: 1,
+      }),
+      // The full-screen image's Close: photographs only the viewer, so its
+      // glass shows just the image (re-photographed as it zooms and moves).
+      liquidGL({
+        ...GLASS_CONFIG,
+        snapshot: ".customize-viewer",
+        target: "#customize-viewer-close",
         content: false,
         zIndex: 1,
       }),

@@ -372,11 +372,15 @@ export function createGamePage({ game, content, onProgress }) {
 
   const offOpen = game.on("open", onOpen);
   const offClose = game.on("close", onClose);
+  const offArt = game.on("art", ({ id }) => {
+    if (parts && id === game.id) loadArt(id);
+  });
 
   return {
     destroy() {
       offOpen();
       offClose();
+      offArt();
       spring.destroy();
       overlay?.destroy();
       parts?.layer.remove();

@@ -12,11 +12,12 @@ const PROXIED_HOSTS = {
 };
 
 // Per use: IGDB's size segment and Sony's ?w= width. SteamGridDB art is served
-// as stored.
+// as stored. "full" is the original (the Customize preview: what gets saved).
 const SIZES = {
   cover: { igdb: "t_cover_big_2x", psn: "528" },
   banner: { igdb: "t_1080p", psn: "1320" },
   logo: { igdb: "t_1080p", psn: "528" },
+  full: { igdb: "t_original", psn: null },
 };
 
 export function displayImageUrl(url, kind = "cover") {
@@ -30,7 +31,8 @@ export function displayImageUrl(url, kind = "cover") {
     const prefix = PROXIED_HOSTS[parsed.hostname];
     if (prefix) {
       if (parsed.hostname === "image.api.playstation.com") {
-        parsed.searchParams.set("w", size.psn);
+        if (size.psn) parsed.searchParams.set("w", size.psn);
+        else parsed.searchParams.delete("w");
       }
       return prefix + parsed.pathname + parsed.search;
     }

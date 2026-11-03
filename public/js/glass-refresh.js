@@ -9,6 +9,22 @@
 
 let queued = false;
 
+// Re-photographs only the renderers whose snapshot is `target` (the
+// full-screen image viewer), coalesced to one capture per frame.
+const queuedTargets = new Set();
+export function refreshGlassOf(target) {
+  if (queuedTargets.has(target)) return;
+  queuedTargets.add(target);
+  requestAnimationFrame(() => {
+    queuedTargets.delete(target);
+    for (const renderer of renderers()) {
+      if (renderer.snapshotTarget !== target) continue;
+      renderer._captureGeneration = (renderer._captureGeneration || 0) + 1;
+      renderer.captureSnapshot()?.catch?.(() => {});
+    }
+  });
+}
+
 // liquidGL keeps one renderer (one snapshot) per z-index layer, and only the
 // first is reachable as window.__liquidGLRenderer__. menu.js hands over every
 // lens so all layers - search pill, pull-downs - get the fresh snapshot too.

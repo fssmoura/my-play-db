@@ -19,6 +19,8 @@
 //      No match: store 0. Any failure: store nothing.
 //   4. >0 but no SteamGridDB image stored in any kind (linked by hand after a
 //      "no match"): fetch and write the first images as in 3.
+//   Automatic writes only fill gaps: a kind already holding a non-IGDB image
+//   (chosen in the Customize drawer, or added by URL) is never replaced.
 //
 // One lookup per game at a time (in-flight map by id).
 
@@ -29,7 +31,22 @@ export const KINDS = {
 };
 
 const IGDB_HOST = "//images.igdb.com/";
-const isIgdb = (url) => typeof url === "string" && url.includes(IGDB_HOST);
+export const isIgdb = (url) =>
+  typeof url === "string" && url.includes(IGDB_HOST);
+
+/** SteamGridDB's first static (non-animated) image of a kind, or null. */
+export async function firstStaticArt(sgdbId, kind) {
+  const { call } = await import("/js/api.js");
+  const res = await call("sgdb", KINDS[kind], {
+    sgdbId,
+    types: "static",
+    nsfw: "false",
+    // Grids include wide 460x215 capsules; covers must be portrait 2:3.
+    ...(kind === "cover" ? { dimensions: "600x900,342x482,660x930" } : {}),
+    limit: 1,
+  });
+  return res?.data?.[0]?.url ?? null;
+}
 
 /**
  * The art rule, mirrored from the SQL function set_game_art: an array is at
@@ -64,17 +81,7 @@ async function defaultDeps() {
     // Loaded only when a lookup is actually needed (never for ready rows).
     match: async (game) => (await import("/js/sgdb.js")).resolveSgdb(game),
     // The first static (non-animated) image of a type, or null.
-    firstStatic: async (sgdbId, kind) => {
-      const res = await call("sgdb", KINDS[kind], {
-        sgdbId,
-        types: "static",
-        nsfw: "false",
-        // Grids include wide 460x215 capsules; covers must be portrait 2:3.
-        ...(kind === "cover" ? { dimensions: "600x900,342x482,660x930" } : {}),
-        limit: 1,
-      });
-      return res?.data?.[0]?.url ?? null;
-    },
+    firstStatic: firstStaticArt,
   };
 }
 
@@ -178,9 +185,12 @@ const hasSgdbArt = (row) =>
   Object.keys(KINDS).some((kind) => row[kind]?.some((url) => !isIgdb(url)));
 
 // Fetch and write the first static image of each kind. Throws on failure.
+// Automatic, so it only fills gaps: a kind already holding a non-IGDB image
+// (a pick from Customize, or a link added by hand) is left alone.
 async function pullFirst(d, id, sgdbId, row) {
   const out = artOf(row, "ready");
   for (const kind of Object.keys(KINDS)) {
+    if (row?.[kind]?.some((url) => !isIgdb(url))) continue;
     const url = await d.firstStatic(sgdbId, kind);
     if (!url) continue;
     // An automatic cover sits behind IGDB's; banners and logos (IGDB has

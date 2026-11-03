@@ -13,6 +13,8 @@
 //            content (reportLoading()).
 //   "scroll" ({ top, delta }) the open page scrolled (reportScroll()); top is
 //            the scroll position in px, delta the change since the last one.
+//   "art"    ({ id }) the game's stored art changed (reportArtChanged()); the
+//            page reloads it.
 
 export function isGameId(value) {
   return Number.isSafeInteger(value) && value > 0;
@@ -59,5 +61,6 @@ export function createGameState() {
     reportProgress: (t) => emit("progress", t),
     reportScroll: (detail) => emit("scroll", detail),
     reportLoading: (on) => emit("loading", on),
+    reportArtChanged: (gameId) => emit("art", { id: Number(gameId) }),
   };
 }

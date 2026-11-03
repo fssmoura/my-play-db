@@ -121,15 +121,43 @@ Rules a redesign must keep, with the HIG reason where there is one.
   the game sheet going edge to edge) and a side panel 40% of the window wide
   over a dimmed page above that. Back reverses the slide; Escape and tapping
   the dimmed page also close it, and closing the game page closes it at once.
-- Header: Back circle, game title with "type · year" under it, and a Save
-  circle (checkmark). The tabs (Poster, Banner, Logo, Preview) sit at the
-  bottom, centred where the game page's toolbar is, text only, with the active
-  one on a glass pill that slides between them.
-- A game SteamGridDB couldn't match (`sgdb_id` 0) shows a centred card in the
-  drawer: a search field pre-filled with the game's name, and SteamGridDB's
-  results as "Name (year)". Choosing one links it for good; the game page
-  pulls its first images the next time it opens.
-  The card is content, so it is a plain card, not glass.
+- Header: Back circle, game title with "type · year" under it, a red Reset
+  circle (Apple's critical colour), and a circle that reads Next (arrow) on
+  Poster, Banner and Logo and Save (checkmark) on Preview. The tabs (Poster,
+  Banner, Logo, Preview) sit at the bottom where the game page's toolbar is,
+  text only, with the active one on a glass pill that slides between them.
+  Tabs never advance on their own. Content ends above the tabs, so their glass
+  sits on plain black.
+- Poster, Banner and Logo are grids of every SteamGridDB image of that type,
+  in SteamGridDB's order (animated and NSFW included), each with its size on
+  a thin dark band at its bottom left. Posters sit in a 2:3 box: 600x900 fills
+  it, any other shape is shown whole inside it. The picked one has a white
+  ring; what is stored starts picked. A quiet slider just above the tabs
+  (magnifiers at both ends also step it) sets images per row in a few steps,
+  remembered per tab; the largest banner step is one per row.
+- Preview shows the picks at full size, one row per type (poster, logo,
+  banner), centred as a group: name and size above each image at its two
+  corners, "Add Manually +" under it (grey, white on hover). That swaps for a
+  URL field of the same height with its own Save, which only shows the image
+  here once it loads.
+- Clicking a Preview image opens it full screen on black: wheel or pinch to
+  zoom towards the pointer, double-click or double-tap to zoom in there (or
+  back out), drag to move around once zoomed. The X (glass, showing only the
+  image being viewed), Escape (closing only the image, not the drawer) or a
+  tap beside the image closes it.
+- The drawer's Save writes the changed picks, each first in its array, closes
+  the drawer and the game page shows them. Nothing is written before that:
+  Back drops every pick. Reset puts every pick back to what an untouched game
+  gets - the IGDB poster (or SteamGridDB's first static one) and
+  SteamGridDB's first static banner and logo - and shows Preview; still only
+  Save writes it.
+- A game SteamGridDB couldn't match (`sgdb_id` 0) shows a centred pop-up over
+  the whole drawer, dimmed and out of reach, header and tabs included: the
+  title in regular weight on the left, a plain close icon on the right, a
+  search field pre-filled with the game's name, and SteamGridDB's results as
+  "Name (year)". Choosing one links it for good (straight away, unlike image
+  picks) and fills the grids; closing it leaves them showing "No Results
+  Available". The pop-up is content, so it is a plain card, not glass.
 
 **Loading**
 
@@ -163,7 +191,9 @@ Google button also keeps Google's official dark-theme colours.
 
 Liquid glass is for the navigation/controls layer only (the top-right pill
 menu and its pull-downs, the Back circle, the search pill, the filter circle,
-panel and By Type submenu, the game page's bottom toolbar, and the Customize drawer's Back, Save and tab pill), never for content such as the sign-in form. Apple
+panel and By Type submenu, the game page's bottom toolbar, and the Customize
+drawer's Back, Reset, Next/Save, tab pill and full-screen X), never for content
+such as the sign-in form. Apple
 reserves it for the layer that floats above content.
 
 **The approved look (owner signed off, October 2026) - reuse it for any new

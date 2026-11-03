@@ -121,14 +121,27 @@ cover/banner/logo).** Used by the game page when it fetches art automatically.
 The array holds at most one IGDB image plus one other, and this function
 _replaces_ rather than appends:
 
-- A **choice** (`as_backup` false - future manual picks) goes first, with the
-  IGDB entry kept behind it as the fallback.
+- A **choice** (`as_backup` false) goes first, with the IGDB entry kept behind
+  it as the fallback.
 - An **automatic pick** (`as_backup` true - the game page's SteamGridDB cover)
   goes behind the IGDB entry as its backup; with no IGDB entry it is simply
   first. Automatic banners and logos use `as_backup` false, since IGDB has none
   and they are first either way.
 - An IGDB URL never displaces a non-IGDB one; it goes first only when nothing
   else is there.
+- **The owner's choice outranks automatic art:** the game page's automatic
+  pull skips any kind already holding a non-IGDB image (`pullFirst()` in
+  `game-art.js`), so it only fills gaps.
+
+**The Customize drawer doesn't go through `set_game_art()`.** Its Save writes
+each changed kind's whole array with a plain update (`setGameArtArray()` in
+`public/js/games-cache.js`): the pick first, always, with one other image kept
+behind it (the IGDB one when there is one). The reason is the last rule above -
+`set_game_art()` never lets an IGDB image go first, but the owner can pick one
+(an IGDB URL added by hand), and Reset needs to put the IGDB poster back in
+front. Reset's arrays are the untouched defaults: the IGDB poster first with
+SteamGridDB's first static poster behind it (or that alone), and SteamGridDB's
+first static banner and logo.
 
 It returns the new array (null if there is no row). The JS mirror is
 `applyArtRule()` in `public/js/game-art.js`. Migrations: `game_art_functions`,
@@ -156,13 +169,15 @@ and can be set by hand.
   on non-404 failures instead of returning "no match". `set_sgdb_id(game_id,
 value)` (security invoker, granted to `authenticated`) writes any id above 0,
   but writes `0` only over `NULL`, so it can never erase a real id.
-- **By hand (new app):** the Customize drawer's "no match" card
+- **By hand (new app):** the Customize drawer's "no match" pop-up
   (`public/js/sgdb-link.js`) lets the owner pick an entry for a game stored as
-  `0`, through the same `set_sgdb_id()`. The card only links. The next game
-  page open sees an id above 0 with no SteamGridDB image in any of cover,
-  banner or logo, and pulls the first match then. There is no "art pulled"
-  marker: once any one SteamGridDB image is stored it is never pulled again,
-  so an entry with no images at all is re-asked on every open (cheap).
+  `0`, through the same `set_sgdb_id()`, and the drawer's grids then fill. If
+  nothing is saved, the next game page open sees an id above 0 with no
+  SteamGridDB image in any of cover, banner or logo, and pulls the first match
+  then. There is deliberately no "art pulled" marker (the owner wants this
+  handled by the open-game flow, not by a database rule): once any one
+  non-IGDB image is stored it is never pulled again, so an entry with no
+  images at all is re-asked on every open (cheap).
 - **Lab:** filled the first time the media picker is opened, via a plain
   update (`saveSgdbId()`). The lab never writes `0`, and it treats a stored
   `0` like `NULL`: it retries the lookup and, on a match, overwrites the `0`.

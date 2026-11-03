@@ -46,6 +46,8 @@
   display: flex;
   flex-direction: column;
   padding-top: env(safe-area-inset-top, 0px);
+  /* Room for the floating tabs; the content and slider end above them. */
+  padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
 }
 
 @media (min-width: 744px) {
@@ -71,6 +73,11 @@
   flex: none;
   width: 44px;
   padding: 0;
+}
+
+/* Reset to Defaults: Apple's critical red on the icon (as Sign Out). */
+.customize-reset .menu-item {
+  color: var(--destructive);
 }
 
 .customize-heading {
@@ -99,16 +106,32 @@
   line-height: 16px;
 }
 
-/* Tabs: centred at the bottom, where the game page's toolbar sits; text only,
-   the active one on a glass pill (a lens of its own, moved by customize.js
-   with left and width). */
+/* Tabs: centred at the bottom, where the game page's toolbar sits, floating
+   over the content as that toolbar does; text only, the active one on a glass
+   pill (a lens of its own, moved by customize.js with left and width).
+   They live in .customize-bar, a fixed box of their own laid exactly over
+   the drawer and above it, so the pill's glass is drawn over the images
+   (liquidGL draws under its fixed box's contents). Only the tabs take
+   clicks. */
+.customize-bar {
+  position: fixed;
+  bottom: 0;
+  right: calc(var(--drawer-w) * -1 * max(0, 1 - var(--customize-t)));
+  z-index: 201;
+  display: flex;
+  justify-content: center;
+  width: var(--drawer-w);
+  padding-bottom: calc(25px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
 .customize-tabs {
   position: relative;
   display: flex;
   justify-content: center;
-  align-self: center;
   max-width: calc(100% - 32px);
-  margin-bottom: calc(25px + env(safe-area-inset-bottom, 0px));
+  pointer-events: auto;
 }
 
 .customize-tab-pill {
@@ -133,6 +156,9 @@
   color: rgba(244, 244, 244, 0.6);
   font: inherit;
   font-size: 14px;
+  /* The faint dark halo the glass controls' labels have, so the plain ones
+     stay readable over bright images. */
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -158,18 +184,568 @@
   outline-offset: -4px;
 }
 
+/* The size slider at the bottom, just above the tabs (image tabs only): a thin
+   track filled up to the thumb, a magnifier at either end, a small capsule
+   thumb (HIG sliders), all kept quiet. Few steps: each is a number of images
+   per row. */
+.customize-zoom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 25px 0;
+}
+
+.customize-zoom[hidden] {
+  display: none;
+}
+
+/* The magnifiers step the slider; a 28px hit area around a 16px icon. Beats
+   the generic button rules in sign-in.css. */
+.customize-zoom .customize-zoom-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0 -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--gray);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .customize-zoom .customize-zoom-icon:hover {
+    color: var(--light-gray);
+  }
+}
+
+.customize-zoom .customize-zoom-icon:active {
+  color: var(--white);
+}
+
+.customize-zoom .customize-zoom-icon:focus {
+  outline: none;
+}
+
+.customize-zoom .customize-zoom-icon:focus-visible {
+  outline: 1px solid var(--gray);
+}
+
+.customize-zoom-icon .menu-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.customize-zoom-range {
+  --fill: 50%;
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  margin: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.customize-zoom-range::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    rgba(244, 244, 244, 0.7) var(--fill),
+    rgba(244, 244, 244, 0.15) var(--fill)
+  );
+}
+
+.customize-zoom-range::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(244, 244, 244, 0.15);
+}
+
+.customize-zoom-range::-moz-range-progress {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(244, 244, 244, 0.7);
+}
+
+.customize-zoom-range::-webkit-slider-thumb {
+  width: 22px;
+  height: 14px;
+  margin-top: -5.5px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--light-gray);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.customize-zoom-range::-moz-range-thumb {
+  width: 22px;
+  height: 14px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--light-gray);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.customize-zoom-range:focus {
+  outline: none;
+}
+
+.customize-zoom-range:focus-visible::-webkit-slider-thumb {
+  outline: 1px solid var(--gray);
+  outline-offset: 3px;
+}
+
+.customize-zoom-range:focus-visible::-moz-range-thumb {
+  outline: 1px solid var(--gray);
+  outline-offset: 3px;
+}
+
+/* Each tab's content is a pane filling the space between the header and the
+   tabs, scrolling on its own. It ends above the tabs, so their glass sits on
+   plain black: nothing scrolls under it, and the page never has to be
+   re-photographed while scrolling. */
 .customize-panel {
+  position: relative;
   flex: 1;
   min-height: 0;
+  margin-top: 16px;
+}
+
+.customize-pane {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: 4px 25px 12px;
+  box-sizing: border-box;
+}
+
+.customize-pane[hidden] {
+  display: none;
+}
+
+/* "No Results Available": one dim line, centred in the pane. */
+.customize-empty {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px 25px;
+  margin: 0;
+  padding: 0 25px;
+  color: var(--gray);
+  font-size: 15px;
+  line-height: 20px;
+  text-align: center;
 }
 
-/* The "no SteamGridDB match" card (js/sgdb-link.js): content, so a plain
-   card rather than glass, centred between the header and the tabs. Its field
-   is the sign-in page's (.field). */
+.customize-empty[hidden] {
+  display: none;
+}
+
+/* The image grid: --cols columns (the slider). Each tile is the image in its
+   type's shape - posters 2:3, banners SteamGridDB's hero shape, logos a 16:9
+   box they fit inside - with its size in small grey text under it. */
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  gap: 14px 12px;
+  padding: 4px;
+}
+
+/* Beats the generic button rules in sign-in.css. */
+.picker-grid .picker-tile {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.picker-art {
+  position: relative;
+  display: block;
+  border-radius: 10px;
+  overflow: hidden;
+  background-color: var(--dark-gray);
+}
+
+.picker-grid.is-cover .picker-art {
+  aspect-ratio: 2 / 3;
+  background-color: #161618;
+}
+
+/* A 600x900 poster fills its 2:3 box exactly; any other shape is shown whole
+   inside it, never cropped or stretched. */
+.picker-grid.is-cover .picker-art img,
+.picker-grid.is-cover .picker-art video {
+  object-fit: contain;
+}
+
+.picker-grid.is-banner .picker-art {
+  aspect-ratio: 96 / 31;
+}
+
+.picker-grid.is-logo .picker-art {
+  aspect-ratio: 16 / 9;
+  background-color: #161618;
+}
+
+/* The size, on the image at the bottom left, on a thin dark band so it reads
+   over any art. Hidden until the image is in. */
+.picker-size {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  z-index: 1;
+  max-width: calc(100% - 12px);
+  padding: 1px 6px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgba(9, 9, 11, 0.6);
+  color: var(--light-gray);
+  font-size: 10px;
+  line-height: 15px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.picker-size[hidden],
+.picker-tile.is-loading .picker-size {
+  display: none;
+}
+
+.picker-art img,
+.picker-art video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 200ms ease;
+}
+
+.picker-grid.is-logo .picker-art img,
+.picker-grid.is-logo .picker-art video {
+  padding: 10%;
+  box-sizing: border-box;
+  object-fit: contain;
+}
+
+.picker-tile.is-loading .picker-art img,
+.picker-tile.is-loading .picker-art video,
+.picker-tile.is-failed .picker-art img,
+.picker-tile.is-failed .picker-art video {
+  opacity: 0;
+}
+
+/* Couldn't load: the results grid's quiet "no image" tile. */
+.picker-tile.is-failed .picker-art {
+  --edge-alpha: 0.1;
+  background-color: #151516;
+}
+
+.picker-tile.is-failed .picker-art::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(28%, 40px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: #272727;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M22 20.7L3.3 2L2 3.3l1 1V19c0 1.1.9 2 2 2h14.7l1 1zM5 19V6.3l7.6 7.6l-1.5 1.9L9 13.1L6 17h9.7l2 2zM8.8 5l-2-2H19c1.1 0 2 .9 2 2v12.2l-2-2V5z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M22 20.7L3.3 2L2 3.3l1 1V19c0 1.1.9 2 2 2h14.7l1 1zM5 19V6.3l7.6 7.6l-1.5 1.9L9 13.1L6 17h9.7l2 2zM8.8 5l-2-2H19c1.1 0 2 .9 2 2v12.2l-2-2V5z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+/* Picked: a white ring with a little air between it and the image. */
+.picker-tile.is-selected .picker-art {
+  outline: 2px solid var(--white);
+  outline-offset: 3px;
+}
+
+.picker-grid .picker-tile:focus {
+  outline: none;
+}
+
+.picker-grid .picker-tile:focus-visible:not(.is-selected) .picker-art {
+  outline: 1px solid var(--gray);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .picker-grid .picker-tile:not(.is-skeleton):hover .picker-art {
+    filter: brightness(1.1);
+  }
+}
+
+/* Preview: one row per art type - poster, logo, banner - centred in the pane
+   as a group. Logo and banner run the full width; the poster stays a natural
+   size. Each: name and size above the image at its two corners, then the
+   image, then "Add Manually". */
+.preview-layout {
+  display: grid;
+  align-content: center;
+  row-gap: 24px;
+  min-height: 100%;
+  padding: 4px 0;
+  box-sizing: border-box;
+}
+
+.preview-slot {
+  min-width: 0;
+  margin: 0;
+}
+
+.preview-slot.is-cover {
+  --ratio: 2 / 3;
+}
+
+.preview-slot.is-logo {
+  --ratio: 3 / 1;
+}
+
+.preview-slot.is-banner {
+  --ratio: 96 / 31;
+}
+
+.preview-body {
+  width: 100%;
+}
+
+.preview-slot.is-cover .preview-body {
+  width: min(45%, 260px);
+}
+.preview-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--ratio);
+  border-radius: 10px;
+  overflow: hidden;
+  background-color: var(--dark-gray);
+}
+
+.preview-slot.is-cover .preview-frame,
+.preview-slot.is-logo .preview-frame {
+  background-color: #161618;
+}
+.preview-frame img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 200ms ease;
+}
+
+/* Posters and logos are shown whole inside their box, never cropped. */
+.preview-slot.is-cover .preview-frame img {
+  object-fit: contain;
+}
+
+.preview-slot.is-logo .preview-frame img {
+  padding: 8% 12%;
+  box-sizing: border-box;
+  object-fit: contain;
+}
+
+.preview-frame.is-loading img,
+.preview-frame.is-failed img {
+  opacity: 0;
+}
+
+/* Nothing chosen: an empty tile with a faint edge. */
+.preview-frame.is-empty {
+  background-color: #111113;
+  box-shadow: inset 0 0 0 1px rgba(244, 244, 244, 0.12);
+}
+
+.preview-frame.is-empty::after {
+  display: none;
+}
+
+.preview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  /* Clear of the image's rounded corners. */
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.preview-name {
+  color: var(--light-gray);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.preview-size {
+  overflow: hidden;
+  color: var(--gray);
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+}
+
+/* "Add Manually +" and the URL field that replaces it share one height, so
+   opening the field moves nothing. */
+.preview-foot {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  margin-top: 6px;
+}
+
+.preview-field[hidden],
+.preview-foot .preview-add[hidden],
+.preview-note[hidden],
+.preview-status[hidden] {
+  display: none;
+}
+
+.preview-foot .preview-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gray);
+  font: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.preview-add svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (hover: hover) {
+  .preview-foot .preview-add:hover {
+    color: var(--white);
+  }
+}
+
+.preview-foot .preview-add:focus {
+  outline: none;
+}
+
+.preview-foot .preview-add:focus-visible {
+  outline: 1px solid var(--gray);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.preview-field.field {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.preview-field-row {
+  display: flex;
+  gap: 6px;
+}
+
+.preview-field input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.preview-foot .preview-submit {
+  flex: none;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--light-gray);
+  color: var(--black);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .preview-foot .preview-submit:hover {
+    background: var(--white);
+  }
+}
+
+.preview-foot .preview-submit:focus {
+  outline: none;
+}
+
+.preview-foot .preview-submit:focus-visible {
+  outline: 1px solid var(--gray);
+  outline-offset: 2px;
+}
+.preview-note {
+  margin: 6px 0 0;
+  color: var(--gray);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.preview-status {
+  margin: 20px 0 0;
+  color: var(--gray);
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* The "no SteamGridDB match" pop-up (js/sgdb-link.js), over the whole drawer
+   - header, slider and tabs included, all out of reach while it shows: a
+   plain card on a dark backdrop that slides with the drawer. Its field is
+   the sign-in page's (.field). */
+.sgdb-link-overlay {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: calc(var(--drawer-w) * -1 * max(0, 1 - var(--customize-t)));
+  z-index: 250;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--drawer-w);
+  padding: 25px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.sgdb-link-overlay[hidden] {
+  display: none;
+}
+
 .sgdb-link {
   display: flex;
   flex-direction: column;
@@ -178,24 +754,62 @@
   /* Fixed height: more results scroll inside the list, the card never grows. */
   height: 480px;
   max-height: 100%;
-  padding: 20px 16px 16px;
+  padding: 14px 16px 16px;
   box-sizing: border-box;
   border-radius: 22px;
   background: #161618;
 }
 
-.sgdb-link[hidden] {
-  display: none;
+/* Title on the left, a plain close icon on the right. */
+.sgdb-link-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 -10px 10px 4px;
 }
 
 .sgdb-link-title {
-  margin: 0 0 16px;
+  margin: 0;
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 22px;
-  text-align: center;
 }
 
+/* Beats the generic button rules in sign-in.css. */
+.sgdb-link .sgdb-link-dismiss {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--gray);
+  cursor: pointer;
+}
+
+.sgdb-link-dismiss svg {
+  width: 20px;
+  height: 20px;
+}
+
+@media (hover: hover) {
+  .sgdb-link .sgdb-link-dismiss:hover {
+    color: var(--white);
+  }
+}
+
+.sgdb-link .sgdb-link-dismiss:focus {
+  outline: none;
+}
+
+.sgdb-link .sgdb-link-dismiss:focus-visible {
+  outline: 1px solid var(--gray);
+}
 .sgdb-link .sgdb-link-field {
   margin-bottom: 8px;
 }
@@ -289,4 +903,75 @@
 .sgdb-link-list .sgdb-link-result:focus-visible {
   outline: 1px solid var(--gray);
   outline-offset: -2px;
+}
+
+/* A shown preview image opens full screen. */
+.preview-frame.is-viewable {
+  cursor: zoom-in;
+}
+
+.preview-frame:focus {
+  outline: none;
+}
+
+.preview-frame.is-viewable:focus-visible {
+  outline: 1px solid var(--gray);
+  outline-offset: 3px;
+}
+
+/* The full-screen image (js/customize-viewer.js): over the whole window,
+   drawer and tabs included, on black. Zoom and pan resize and move the
+   image's own box (see customize-viewer.js). */
+.customize-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  overflow: hidden;
+  background: var(--black);
+  opacity: 0;
+  touch-action: none;
+  transition: opacity 160ms ease;
+}
+
+.customize-viewer[hidden] {
+  display: none;
+}
+
+.customize-viewer.is-open {
+  opacity: 1;
+}
+
+.customize-viewer-img {
+  position: absolute;
+  display: block;
+  max-width: none;
+  cursor: zoom-in;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.customize-viewer.is-zoomed .customize-viewer-img {
+  cursor: grab;
+}
+
+.customize-viewer-img.is-easing {
+  transition-property: left, top, width, height;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
+}
+
+/* Close: a glass circle like every other (menu.js builds it and makes its
+   lens), in a fixed box of its own above the image so the glass is drawn
+   over it. Only the circle takes clicks. */
+.customize-viewer-bar {
+  position: fixed;
+  top: calc(25px + env(safe-area-inset-top, 0px));
+  right: 25px;
+  z-index: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .customize-viewer,
+  .customize-viewer-img.is-easing {
+    transition: none;
+  }
 }

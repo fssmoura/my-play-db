@@ -127,7 +127,8 @@ export function toDetailRow(game) {
 /** Writes one full IGDB record (cache_game_details). Throws on failure. */
 export async function saveGameDetails(game) {
   const payload = toDetailRow(game);
-  if (!payload) throw new Error("IGDB returned a game with no id, name or slug");
+  if (!payload)
+    throw new Error("IGDB returned a game with no id, name or slug");
   const { data, error } = await supabase.rpc("cache_game_details", { payload });
   if (error) throw error;
   lookups.clear();
@@ -149,6 +150,23 @@ export async function setGameArt(id, kind, url, { asBackup = false } = {}) {
   if (error) throw error;
   lookups.clear();
   return data ?? null;
+}
+
+/**
+ * The owner's choice from the Customize drawer: replaces one kind's whole
+ * array (already ordered - the pick first; null empties it). A plain update,
+ * not set_game_art(), which never lets an IGDB image go first. Throws.
+ */
+export async function setGameArtArray(id, kind, list) {
+  if (!["cover", "banner", "logo"].includes(kind)) {
+    throw new Error("setGameArtArray: kind must be cover, banner or logo");
+  }
+  const { error } = await supabase
+    .from("games")
+    .update({ [kind]: list?.length ? list : null })
+    .eq("id", Number(id));
+  if (error) throw error;
+  lookups.clear();
 }
 
 /** sgdb_id: null never tried, 0 tried and nothing found, >0 matched. Throws. */
