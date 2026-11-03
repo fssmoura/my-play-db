@@ -136,8 +136,8 @@ It returns the new array (null if there is no row). The JS mirror is
 `merge_image_array()`, `cache_game_details()` and `cache_search_games()` were
 not changed for it, so a detail or search sync can still append a changed IGDB
 cover and leave three entries. Nothing tidies that up: the game page only calls
-`set_game_art()` while `sgdb_id` is still null, so once a game has been tried
-the third entry stays.
+`set_game_art()` while `sgdb_id` is still null (or a hand-linked game has no
+SteamGridDB image yet), so once a game has been tried the third entry stays.
 
 **Who writes `banner` and `logo`:** only SteamGridDB picks (`set_game_art()` in
 the new app, the media picker in the lab) and, historically, PSN artwork from
@@ -156,6 +156,13 @@ and can be set by hand.
   on non-404 failures instead of returning "no match". `set_sgdb_id(game_id,
 value)` (security invoker, granted to `authenticated`) writes any id above 0,
   but writes `0` only over `NULL`, so it can never erase a real id.
+- **By hand (new app):** the Customize drawer's "no match" card
+  (`public/js/sgdb-link.js`) lets the owner pick an entry for a game stored as
+  `0`, through the same `set_sgdb_id()`. The card only links. The next game
+  page open sees an id above 0 with no SteamGridDB image in any of cover,
+  banner or logo, and pulls the first match then. There is no "art pulled"
+  marker: once any one SteamGridDB image is stored it is never pulled again,
+  so an entry with no images at all is re-asked on every open (cheap).
 - **Lab:** filled the first time the media picker is opened, via a plain
   update (`saveSgdbId()`). The lab never writes `0`, and it treats a stored
   `0` like `NULL`: it retries the lookup and, on a match, overwrites the `0`.

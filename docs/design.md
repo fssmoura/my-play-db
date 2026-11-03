@@ -114,6 +114,23 @@ Rules a redesign must keep, with the HIG reason where there is one.
   it is restored by tapping it or scrolling back to the top, not by scrolling
   up. Tapping a compact bar only expands it; it does not trigger the item.
 
+**Customize drawer**
+
+- Opened by the toolbar's Customize. It slides in from the right over
+  everything, top bar included. It is full width up to 743px (the same line as
+  the game sheet going edge to edge) and a side panel 40% of the window wide
+  over a dimmed page above that. Back reverses the slide; Escape and tapping
+  the dimmed page also close it, and closing the game page closes it at once.
+- Header: Back circle, game title with "type · year" under it, and a Save
+  circle (checkmark). The tabs (Poster, Banner, Logo, Preview) sit at the
+  bottom, centred where the game page's toolbar is, text only, with the active
+  one on a glass pill that slides between them.
+- A game SteamGridDB couldn't match (`sgdb_id` 0) shows a centred card in the
+  drawer: a search field pre-filled with the game's name, and SteamGridDB's
+  results as "Name (year)". Choosing one links it for good; the game page
+  pulls its first images the next time it opens.
+  The card is content, so it is a plain card, not glass.
+
 **Loading**
 
 - The game page shows a whole-sheet shimmer while it works out which art to
@@ -146,7 +163,7 @@ Google button also keeps Google's official dark-theme colours.
 
 Liquid glass is for the navigation/controls layer only (the top-right pill
 menu and its pull-downs, the Back circle, the search pill, the filter circle,
-panel and By Type submenu, and the game page's bottom toolbar), never for content such as the sign-in form. Apple
+panel and By Type submenu, the game page's bottom toolbar, and the Customize drawer's Back, Save and tab pill), never for content such as the sign-in form. Apple
 reserves it for the layer that floats above content.
 
 **The approved look (owner signed off, October 2026) - reuse it for any new

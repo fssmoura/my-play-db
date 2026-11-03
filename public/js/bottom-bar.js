@@ -16,13 +16,15 @@
 import { createSpring } from "/js/spring.js";
 import { refreshGlass } from "/js/glass-refresh.js";
 
-// TODO: Customize does nothing yet.
+// onSelect gets the context passed to wireBottomBar (menu.js) and the click.
 export const BAR_ITEMS = [
   {
     id: "customize",
     label: "Customize",
     icon: "customize",
-    onSelect() {},
+    // detail 0 = activated from the keyboard, not a pointer.
+    onSelect: ({ customize }, event) =>
+      customize.open({ byKeyboard: event.detail === 0 }),
   },
 ];
 
@@ -58,7 +60,14 @@ export function buildBottomBar(items, iconSvg) {
   return { bar, buttons };
 }
 
-export function wireBottomBar({ stage, bar, items, buttons, game }) {
+export function wireBottomBar({
+  stage,
+  bar,
+  items,
+  buttons,
+  game,
+  context = {},
+}) {
   let expanded = true;
 
   const spring = createSpring({
@@ -144,7 +153,9 @@ export function wireBottomBar({ stage, bar, items, buttons, game }) {
   }
   bar.addEventListener("click", onClickCapture, true);
   buttons.forEach((button, i) =>
-    button.addEventListener("click", () => items[i].onSelect?.()),
+    button.addEventListener("click", (event) =>
+      items[i].onSelect?.(context, event),
+    ),
   );
 
   return () => {

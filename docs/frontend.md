@@ -41,7 +41,7 @@ The glass is [liquidGL](https://github.com/naughtyduk/liquidGL) (npm
 dynamic `import()`; if that fails the controls are plain and still work.
 
 **The vendored copy is patched - never swap it for a CDN or npm copy, and
-re-apply all six patches if upgrading.** What each patch does and why is in the
+re-apply all seven patches if upgrading.** What each patch does and why is in the
 file's header; each is marked `my-play-db patch` in both shaders (WebGL and
 WebGPU) and in the JavaScript that feeds them (the blur's snapshot code and the
 rim light's `dpr` uniform). What the header doesn't say:
@@ -85,6 +85,16 @@ on its own can darken a band inside the rim.
   `transform`.
 - No CSS layers behind or on a lens (fill, rim, blur, isolation) - they
   glitch next to it.
+- It draws each lens on a canvas inside the lens's nearest fixed ancestor,
+  just above that ancestor's own background and below its contents. A new
+  fixed screen with a background (the Customize drawer) gets glass by making
+  the screen itself the fixed box that carries the background, with the
+  usual `zIndex: 1`. A background on a separate box painted above the canvas
+  hides the glass silently. Upstream also drew the glass of every lower box
+  under its lenses, even when covered (patched: see the file header).
+- Its snapshot leaves out a lens's own contents but not text merely placed
+  over it, so such text (the Customize tab labels over their pill) must carry
+  `data-liquid-ignore`, or the glass shows it as a blurred glow.
 
 ### Glass refresh
 

@@ -23,6 +23,11 @@
  * Sixth patch (same marker): adaptive dimming. The glass always darkens what
  * shows through by 30% (keeping its colour), and up to a further 40% where
  * the background is bright, so white text stays readable on anything.
+ * Seventh patch (same marker, JavaScript only): a canvas only draws glass
+ * from lower layers of its own fixed box (or a box containing it). Upstream
+ * draws every lower layer's glass under every lens, so the Customize
+ * drawer's buttons bent the game page's buttons hidden behind the drawer and
+ * looked like glass on glass.
  */
 /*
  * liquidGL – Liquid Glass - Powered by WebGPU/WebGL
@@ -6439,12 +6444,20 @@ fn fs() -> @location(0) vec4<f32> {
 
       const time = (Date.now() - this.startTime) / 1000;
 
+      // my-play-db patch: glass from another fixed box (e.g. the page behind
+      // the Customize drawer) is covered by this box's own background, so it
+      // isn't drawn under these lenses. Only layers of the same box or of a
+      // box containing it show through.
+      const below = lower.filter((renderer) =>
+        renderer._anchor.contains(this._anchor),
+      );
+
       this._prepareContentLayers();
       backend.beginFrame(
         this.canvas.width,
         this.canvas.height,
         time,
-        this._contentLayers.length > 0 || lower.length > 0,
+        this._contentLayers.length > 0 || below.length > 0,
       );
 
       if (this._updateDynamicVideos() !== false) this._updateDynamicNodes();
@@ -6452,7 +6465,7 @@ fn fs() -> @location(0) vec4<f32> {
       this._frameSnapRect = this.snapshotTarget.getBoundingClientRect();
       this._frameLensRects = [];
 
-      for (const renderer of lower) {
+      for (const renderer of below) {
         for (const layer of renderer._contentLayers) {
           if (layer.before) this._drawContentLayer(layer);
         }

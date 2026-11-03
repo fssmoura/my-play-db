@@ -1,0 +1,292 @@
+/* =========================================================================
+   my-play-db - the Customize drawer (public/js/customize.js). Looks only; the
+   behaviour drives --customize-t on the layer (0 hidden, 1 open).
+   Above everything, top bar included (menu stage is z-index 100). It is full
+   width up to 743px (the same line as the game sheet going edge to edge), a
+   side panel over a dimmed page above that.
+   The drawer is its own fixed box, like the menu stage: liquidGL draws its
+   glass inside it, above its black and below its controls, with the same
+   settings as every other lens. It moves by `right`, not transform: its
+   lenses follow their own boxes.
+   ========================================================================= */
+
+.customize-layer {
+  --customize-t: 0;
+  --drawer-w: 100vw;
+  display: none;
+  color: var(--light-gray);
+}
+
+.customize-layer.is-open {
+  display: block;
+}
+
+.customize-layer.is-closing {
+  pointer-events: none;
+}
+
+.customize-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: min(var(--customize-t), 1);
+}
+
+/* max() keeps the spring's overshoot from pulling it off the right edge. */
+.customize-drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: calc(var(--drawer-w) * -1 * max(0, 1 - var(--customize-t)));
+  z-index: 200;
+  width: var(--drawer-w);
+  background: var(--black);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+@media (min-width: 744px) {
+  .customize-layer {
+    --drawer-w: 40vw;
+  }
+
+  .customize-drawer {
+    box-shadow: -1px 0 0 rgba(244, 244, 244, 0.08);
+  }
+}
+
+/* Back, title block, Save: the circles sit 25px from the top and sides, like
+   the app's top bar. */
+.customize-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 25px 25px 0;
+}
+
+.menu.customize-circle {
+  flex: none;
+  width: 44px;
+  padding: 0;
+}
+
+.customize-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.customize-title,
+.customize-meta {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.customize-title {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.customize-meta {
+  margin-top: 1px;
+  color: rgba(244, 244, 244, 0.6);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* Tabs: centred at the bottom, where the game page's toolbar sits; text only,
+   the active one on a glass pill (a lens of its own, moved by customize.js
+   with left and width). */
+.customize-tabs {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-self: center;
+  max-width: calc(100% - 32px);
+  margin-bottom: calc(25px + env(safe-area-inset-bottom, 0px));
+}
+
+.customize-tab-pill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 44px;
+  border-radius: 22px;
+}
+
+/* Beats the generic button rules in sign-in.css. */
+.customize-tabs .customize-tab {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  height: 44px;
+  padding: 0 clamp(10px, 3.5vw, 16px);
+  border: 0;
+  border-radius: 22px;
+  background: none;
+  color: rgba(244, 244, 244, 0.6);
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.customize-tabs .customize-tab.is-active {
+  color: var(--light-gray);
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
+}
+
+@media (hover: hover) {
+  .customize-tabs .customize-tab:hover:not(.is-active) {
+    background: none;
+    color: var(--light-gray);
+  }
+}
+
+.customize-tabs .customize-tab:focus {
+  outline: none;
+}
+
+.customize-tabs .customize-tab:focus-visible {
+  outline: 1px solid var(--gray);
+  outline-offset: -4px;
+}
+
+.customize-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 25px;
+}
+
+/* The "no SteamGridDB match" card (js/sgdb-link.js): content, so a plain
+   card rather than glass, centred between the header and the tabs. Its field
+   is the sign-in page's (.field). */
+.sgdb-link {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 520px;
+  /* Fixed height: more results scroll inside the list, the card never grows. */
+  height: 480px;
+  max-height: 100%;
+  padding: 20px 16px 16px;
+  box-sizing: border-box;
+  border-radius: 22px;
+  background: #161618;
+}
+
+.sgdb-link[hidden] {
+  display: none;
+}
+
+.sgdb-link-title {
+  margin: 0 0 16px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+  text-align: center;
+}
+
+.sgdb-link .sgdb-link-field {
+  margin-bottom: 8px;
+}
+
+.sgdb-link .sgdb-link-field input {
+  --field-fill: #212123;
+}
+
+.sgdb-link .sgdb-link-field input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+.sgdb-link-results {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid rgba(244, 244, 244, 0.12);
+  border-radius: 14px;
+}
+
+.sgdb-link-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 16px;
+  color: var(--gray);
+  font-size: 15px;
+  line-height: 20px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.sgdb-link-status[hidden] {
+  display: none;
+}
+
+.sgdb-link-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sgdb-link-list {
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+}
+
+.sgdb-link.is-saving .sgdb-link-list {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Beats the generic button rules in sign-in.css. */
+.sgdb-link-list .sgdb-link-result {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--gray);
+  font: inherit;
+  font-size: 15px;
+  line-height: 22px;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .sgdb-link-list .sgdb-link-result:hover {
+    background: rgba(244, 244, 244, 0.08);
+    color: var(--white);
+  }
+}
+
+.sgdb-link-list .sgdb-link-result:active {
+  background: rgba(244, 244, 244, 0.12);
+  color: var(--white);
+}
+
+.sgdb-link-list .sgdb-link-result:focus {
+  outline: none;
+}
+
+.sgdb-link-list .sgdb-link-result:focus-visible {
+  outline: 1px solid var(--gray);
+  outline-offset: -2px;
+}

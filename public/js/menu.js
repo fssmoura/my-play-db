@@ -13,6 +13,7 @@ import { createOverlayScroll } from "/js/overlay-scroll.js";
 import { TYPES, COMMON_TYPES } from "/js/result-types.js";
 import { BAR_ITEMS, buildBottomBar, wireBottomBar } from "/js/bottom-bar.js";
 import { trackGlassLenses } from "/js/glass-refresh.js";
+import { buildCustomize, wireCustomize } from "/js/customize.js";
 
 const LIQUID_GL_URL = "/vendor/liquidGL.js";
 const LIQUID_GL_HELPER_URL =
@@ -71,6 +72,13 @@ const ICONS = {
     style: "type",
     markup:
       '<path class="menu-type-circle" d="M29 16a13 13 0 1 1-26 0a13 13 0 0 1 26 0" /><path class="menu-type-tick" d="m11.5 16l3.5 3.5l6-6" />',
+  },
+  // Save in the Customize drawer.
+  confirm: {
+    viewBox: "0 0 24 24",
+    style: "fill",
+    markup:
+      '<path d="m10 15.586l-3.293-3.293l-1.414 1.414L10 18.414l9.707-9.707l-1.414-1.414z" />',
   },
   // Selected-item checkmark in the filter pull-down.
   check: {
@@ -255,13 +263,13 @@ function buildSearchPill() {
   return { pill, input, clear };
 }
 
-// The Back circle at the top left: a lens of its own, shown only while the
-// results screen is open. Same classes as the main pill (.menu, .menu-row,
-// .menu-item) so size, icon, halo, press and focus rules are shared.
-function buildBackButton() {
+// A glass circle holding one icon button: a lens of its own, with the same
+// classes as the main pill (.menu, .menu-row, .menu-item) so size, icon,
+// halo, press and focus rules are shared. `className` places it.
+function buildCircleButton({ id, className, label, icon }) {
   const circle = document.createElement("div");
-  circle.id = "app-back";
-  circle.className = "menu menu-back";
+  circle.id = id;
+  circle.className = `menu ${className}`;
 
   const row = document.createElement("div");
   row.className = "menu-row";
@@ -269,13 +277,24 @@ function buildBackButton() {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "menu-item";
-  button.title = "Back";
-  button.setAttribute("aria-label", "Back");
-  button.innerHTML = iconSvg("back");
+  button.title = label;
+  button.setAttribute("aria-label", label);
+  button.innerHTML = iconSvg(icon);
 
   row.append(button);
   circle.append(row);
   return { circle, button };
+}
+
+// The Back circle at the top left, shown only while the results screen or
+// the game page is open.
+function buildBackButton() {
+  return buildCircleButton({
+    id: "app-back",
+    className: "menu-back",
+    label: "Back",
+    icon: "back",
+  });
 }
 
 // The filter circle, left of the search pill: a lens like the Back circle
@@ -1193,7 +1212,11 @@ export async function mountMenu({ search, filter, game }) {
     iconSvg,
   );
   stage.append(backCircle, bar, bottomBar, panel, filterPanel, filterSub);
-  document.body.append(stage);
+  // The Customize drawer covers the page, so it is its own fixed box after
+  // the stage (customize.css), with circles built like the Back circle.
+  const customizeParts = buildCustomize(buildCircleButton);
+  document.body.append(stage, customizeParts.layer);
+  const customize = wireCustomize({ ...customizeParts, game });
 
   const trigger = row.querySelector('[data-opens="pull-down"]');
   const cleanups = [];
@@ -1235,7 +1258,9 @@ export async function mountMenu({ search, filter, game }) {
       items: BAR_ITEMS,
       buttons: bottomButtons,
       game,
+      context: { customize },
     }),
+    customize.cleanup,
   );
   const searchTrigger = row.querySelector('[data-opens="search"]');
   if (searchTrigger) {
@@ -1282,6 +1307,12 @@ export async function mountMenu({ search, filter, game }) {
       liquidGL({
         ...GLASS_CONFIG,
         target: "#app-bottom",
+        content: false,
+        zIndex: 1,
+      }),
+      liquidGL({
+        ...GLASS_CONFIG,
+        target: "#customize-back, #customize-save, #customize-tab-pill",
         content: false,
         zIndex: 1,
       }),
@@ -1356,4 +1387,5 @@ export function unmountMenu() {
   }
   glass = null;
   document.getElementById("app-menu-stage")?.remove();
+  document.getElementById("app-customize")?.remove();
 }

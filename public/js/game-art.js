@@ -17,6 +17,8 @@
 //      art rule (set_game_art), then store the id. Written last, so a failure
 //      part way leaves the id unset and the next open tries again.
 //      No match: store 0. Any failure: store nothing.
+//   4. >0 but no SteamGridDB image stored in any kind (linked by hand after a
+//      "no match"): fetch and write the first images as in 3.
 //
 // One lookup per game at a time (in-flight map by id).
 
@@ -111,6 +113,15 @@ async function run(id, injected) {
     return artOf(null, "error");
   }
 
+  // Linked (by hand, after a "no match") but its first match never pulled.
+  if (row?.sgdb_id > 0 && !hasSgdbArt(row)) {
+    try {
+      return await pullFirst(d, id, row.sgdb_id, row);
+    } catch {
+      return artOf(row, "error");
+    }
+  }
+
   // A lookup that would settle the matter is already recorded.
   const needsLookup = row && row.sgdb_id == null;
   if (row && !needsLookup) return artOf(row, "ready");
@@ -152,20 +163,30 @@ async function run(id, injected) {
 
   // Match: fetch, write the art, then store the id (last, so a failure leaves
   // the game un-tried).
-  const sgdbId = match.sgdbId;
-  const out = { ...artOf(row, "ready") };
   try {
-    for (const kind of Object.keys(KINDS)) {
-      const url = await d.firstStatic(sgdbId, kind);
-      if (!url) continue;
-      // An automatic cover sits behind IGDB's; banners and logos (IGDB has
-      // none) take first place.
-      const arr = await d.setArt(id, kind, url, { asBackup: kind === "cover" });
-      if (arr?.[0]) out[kind] = arr[0];
-    }
-    await d.setSgdbId(id, sgdbId);
+    const out = await pullFirst(d, id, match.sgdbId, row);
+    await d.setSgdbId(id, match.sgdbId);
+    return out;
   } catch {
-    return { ...out, status: "error" };
+    return artOf(row, "error");
+  }
+}
+
+// Any non-IGDB image stored means SteamGridDB art was already pulled (or
+// chosen), so a hand-linked game is only pulled once.
+const hasSgdbArt = (row) =>
+  Object.keys(KINDS).some((kind) => row[kind]?.some((url) => !isIgdb(url)));
+
+// Fetch and write the first static image of each kind. Throws on failure.
+async function pullFirst(d, id, sgdbId, row) {
+  const out = artOf(row, "ready");
+  for (const kind of Object.keys(KINDS)) {
+    const url = await d.firstStatic(sgdbId, kind);
+    if (!url) continue;
+    // An automatic cover sits behind IGDB's; banners and logos (IGDB has
+    // none) take first place.
+    const arr = await d.setArt(id, kind, url, { asBackup: kind === "cover" });
+    if (arr?.[0]) out[kind] = arr[0];
   }
   return out;
 }
