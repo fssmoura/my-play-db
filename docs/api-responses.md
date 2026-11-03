@@ -1308,77 +1308,97 @@ rank, so the app never follows up with a second call.
 
 ### `game`
 
-**Request**: `{ ids: [112] }`
+**Request**: `{ ids: [119133] }`
+
+Captured through the lab, arrays trimmed to their first entries (counts in
+comments are the real lengths):
 
 ```json
 [
   {
-    "id": 112,
-    "name": "Elden Ring",
-    "slug": "elden-ring",
-    "summary": "The Golden Order has been broken...",
-    "storyline": "Rise, Tarnished, and be guided by grace...",
-    "game_type": 0,
-    "version_title": null,
-    "first_release_date": 1645660800,
-    "total_rating": 95.0,
-    "total_rating_count": 4321,
-    "hypes": 0,
+    "id": 119133,
+    "alternative_names": [{ "id": 24917, "name": "Great Rune" }],
+    "artworks": [
+      { "url": "https://images.igdb.com/igdb/image/upload/t_1080p/ar3m1o.jpg" }
+    ],
+    "bundles": [287975],
     "cover": {
       "url": "https://images.igdb.com/igdb/image/upload/t_1080p/co4jni.jpg"
     },
-    "screenshots": [
-      { "url": "https://images.igdb.com/igdb/image/upload/t_1080p/sc52we.jpg" }
+    "dlcs": [415376],
+    "expansions": [240009],
+    "external_games": [
+      { "name": "ELDEN RING", "uid": "1245620", "source": "steam" },
+      { "name": "ELDEN RING", "uid": "10000333", "source": "psn" },
+      { "name": "ELDEN RING", "uid": "9P3J32CTXLRZ", "source": "microsoft" }
     ],
-    "artworks": [{ "url": "..." }],
-    "videos": [
-      {
-        "name": "Story Trailer",
-        "url": "https://www.youtube.com/watch?v=K_03kFqW8I"
-      }
+    "first_release_date": 1645747200,
+    "franchises": [{ "id": 8190, "name": "Elden Ring" }],
+    "genres": [
+      { "id": 12, "name": "Role-playing (RPG)" },
+      { "id": 31, "name": "Adventure" }
     ],
-    "genres": [{ "name": "Role-playing (RPG)" }, { "name": "Adventure" }],
-    "platforms": [{ "name": "PC (Microsoft Windows)", "abbreviation": "PC" }],
+    "hypes": 96,
     "involved_companies": [
       {
-        "company": { "name": "FromSoftware" },
+        "id": 334814,
+        "company": { "id": 1012, "name": "FromSoftware" },
         "developer": true,
-        "publisher": false
+        "publisher": true
       }
     ],
-    "release_dates": [{ "date": 1645660800, "platform": 6 }],
-    "websites": [{ "url": "https://www.eldenring.com", "type": "official" }],
-    "collections": [{ "name": "Souls series" }],
-    "franchises": [{ "name": "Dark Souls" }],
-    "parent_game": null,
-    "version_parent": null,
-    "bundles": [],
-    "dlcs": [109421],
-    "expanded_games": [],
-    "expansions": [],
-    "remakes": [],
-    "remasters": [],
-    "standalone_expansions": [],
-    "similar_games": [120, 130, 140],
-    "external_games": [
-      { "uid": "1245620", "source": "steam" },
-      { "uid": "10011898", "source": "psn" },
-      { "uid": "66acd000-...", "source": "xbox" }
+    "name": "Elden Ring",
+    "platforms": [
+      { "id": 169, "abbreviation": "Series X|S", "name": "Xbox Series X|S" }
     ],
-    "alternative_names": [{ "name": "ELDEN RING" }],
-    "popularity": { "visits": 0.0012, "want_to_play": 0.0034 }
+    "release_dates": [{ "date": 1645747200, "platform": 6 }],
+    "screenshots": [
+      { "url": "https://images.igdb.com/igdb/image/upload/t_1080p/scagdo.jpg" }
+    ],
+    "similar_games": [2155],
+    "slug": "elden-ring",
+    "storyline": "Elden Ring takes place in the Lands Betw...",
+    "summary": "Elden Ring is an action RPG developed by...",
+    "total_rating": 95.18148635396659,
+    "total_rating_count": 2340,
+    "videos": [
+      { "name": "Trailer", "url": "https://www.youtube.com/watch?v=D1mDo1CEMuE" }
+    ],
+    "websites": [
+      {
+        "url": "https://www.twitch.tv/directory/game/Elden%20Ring",
+        "type": "twitch"
+      }
+    ],
+    "collections": [{ "id": 10964, "name": "Elden Ring" }],
+    "game_type": 0,
+    "popularity": {
+      "want_to_play": 0.001166243650545,
+      "visits": 0.000430040382559
+    }
   }
 ]
 ```
 
+Real lengths: 5 alternative names, 4 artworks, 3 bundles, 54 external games,
+6 platforms, 6 release dates, 10 screenshots, 10 similar games, 8 videos,
+13 websites.
+
 **Key observations**:
 
+- **Fields IGDB has no value for are left out, not sent as `null` or `[]`.**
+  Elden Ring has no `version_title`, `parent_game`, `version_parent`,
+  `remakes`, `remasters` or `standalone_expansions`, so none appear. Read every
+  field as optional.
+- Nested objects keep IGDB's own `id` (`alternative_names`, `genres`,
+  `platforms`, `involved_companies` and their `company`, `collections`,
+  `franchises`).
 - `websites[].type` enriched to human-readable name (e.g. `"official"`, `"youtube"`, `"steam"`). `release_dates[].id`, `human` and `region` stripped. Both handled in `enrichImages`.
 - `game_type`: 0 = main_game, 1 = dlc_addon, 3 = bundle, 8 = remake, 9 = remaster, etc (see full table below)
 - Returns an array, one record per requested id.
 - `total_rating` is 0-100, `total_rating_count` is number of community ratings
 - Also returns the search fields `alternative_names`, `first_release_date`, `total_rating_count` and `hypes`, plus `popularity` merged in server-side from `popularity_primitives` (the detail action is a superset of `search`)
-- `version_title` is non-null for editions (e.g. "Game of the Year Edition")
+- `version_title` is present only for editions (e.g. "Game of the Year Edition")
 - Relationships are directional - `parent_game`/`version_parent` have full names; bare ID lists for children (`dlcs`, `bundles`, etc)
 - Editions and updates NOT returned by parent - finding them needs IGDB queries like `where version_parent = {id}` (editions) or `where parent_game = {id} & game_type = 14` (updates), which no action accepts today; it would need a new action
 - Image URL: `https://images.igdb.com/igdb/image/upload/t_1080p/{image_id}.jpg`
@@ -1456,9 +1476,9 @@ Endpoint: `/search/autocomplete/{term}`
 ```json
 [
   {
-    "id": 5495669,
+    "id": 5277816,
     "name": "Elden Ring",
-    "release_date": 1645568013,
+    "release_date": 1642723200,
     "types": ["steam"],
     "verified": true
   }
@@ -1475,13 +1495,13 @@ Endpoint: `/search/autocomplete/{term}`
 
 ### `game`
 
-**Request**: `{ sgdbId: 5495669 }` or `{ platform: "steam", platformId: 1245620 }` [+ `platformdata: "steam"`]
+**Request**: `{ sgdbId: 5277816 }` or `{ platform: "steam", platformId: 1245620 }` [+ `platformdata: "steam"` or `["steam"]`]
 
 ```json
 {
-  "id": 5495669,
+  "id": 5277816,
   "name": "Elden Ring",
-  "release_date": 1645568013,
+  "release_date": 1642723200,
   "types": ["steam"],
   "verified": true
 }
@@ -1500,23 +1520,32 @@ With `platformdata`, the record also carries `external_platform_data` (the entry
 
 ### `grids`
 
-**Request**: `{ sgdbId: 5495669 }` or `{ platform: "steam", platformId: 1245620 }`
+**Request**: `{ sgdbId: 5277816 }` or `{ platform: "steam", platformId: 1245620 }`
+
+Captured through the lab. `page` starts at 0; asking for `limit: 100` still returns 50.
 
 ```json
 {
   "page": 0,
-  "total": 126,
+  "total": 841,
   "limit": 50,
   "data": [
     {
-      "id": 43851234,
-      "width": 920,
-      "height": 430,
+      "id": 537056,
+      "score": 0,
+      "style": "alternate",
+      "width": 600,
+      "height": 900,
       "nsfw": false,
       "humor": false,
-      "mime": "image/webp",
-      "url": "https://cdn2.steamgriddb.com/grid/...webp",
-      "thumb": "https://cdn2.steamgriddb.com/grid/thumb/...webp"
+      "epilepsy": false,
+      "mime": "image/png",
+      "language": "en",
+      "url": "https://cdn2.steamgriddb.com/grid/afae4a727a138b562116c01fcaac77c7.png",
+      "thumb": "https://cdn2.steamgriddb.com/thumb/afae4a727a138b562116c01fcaac77c7.jpg",
+      "upvotes": 0,
+      "downvotes": 0,
+      "author": { "name": "<author>", "avatar": "<avatar url>" }
     }
   ]
 }
@@ -1529,7 +1558,7 @@ With `platformdata`, the record also carries `external_platform_data` (the entry
 - Filters: `styles`, `dimensions`, `mimes`, `types` (static/animated), `nsfw` (yes/no/any), `humor`, `epilepsy`, `limit`, `page`
 - Dimensions differ per asset type - see SGDB docs for valid values
 - 920x430 seems to be the "Steam default" grid size
-- Thumbnail URLs are in the same directory, just `thumb/` subpath
+- Thumbnails live under `/thumb/` instead of `/grid/`, same hash; the thumb can be a different format (a `.jpg` for a PNG grid above)
 
 ### Platform ID -> SGDB bridge
 
