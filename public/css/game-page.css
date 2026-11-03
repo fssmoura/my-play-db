@@ -69,7 +69,8 @@ html.is-game-open .overlay-scroll.is-page {
   --edge-alpha: 0.4;
 }
 
-@media (max-width: 640px) {
+/* Edge to edge below the narrowest tablet in portrait (744px). */
+@media (max-width: 743px) {
   .game-sheet {
     margin: 0;
   }

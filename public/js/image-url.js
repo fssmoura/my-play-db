@@ -78,3 +78,19 @@ export function loadImageForGlass(img, src, { onLoad, onError } = {}) {
   img.crossOrigin = "anonymous";
   img.src = src;
 }
+
+// Starts downloading an image ahead of use, in the same CORS mode as
+// loadImageForGlass so the later load reuses it. Held until it settles so it
+// isn't dropped mid-download.
+const warming = new Set();
+export function preloadImage(url, kind) {
+  const src = displayImageUrl(url, kind);
+  if (!src) return;
+  const img = new Image();
+  warming.add(img);
+  const done = () => warming.delete(img);
+  img.addEventListener("load", done);
+  img.addEventListener("error", done);
+  img.crossOrigin = "anonymous";
+  img.src = src;
+}

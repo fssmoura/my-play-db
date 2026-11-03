@@ -11,7 +11,22 @@
 import { refreshGlass } from "/js/glass-refresh.js";
 import { TYPES } from "/js/result-types.js";
 import { releaseYear } from "/js/ranking.js";
-import { displayImageUrl, loadImageForGlass } from "/js/image-url.js";
+import {
+  displayImageUrl,
+  loadImageForGlass,
+  preloadImage,
+} from "/js/image-url.js";
+
+async function warmGameArt(id) {
+  try {
+    const { resolveGameArt } = await import("/js/game-art.js");
+    const { banner, logo } = await resolveGameArt(id);
+    preloadImage(banner, "banner");
+    preloadImage(logo, "logo");
+  } catch {
+    // Only a head start; the game page does the real work.
+  }
+}
 
 const PAGE_SIZE = 20;
 const TRAILING = 12;
@@ -260,6 +275,18 @@ export function createResultsPage(session, { onOpen } = {}) {
   };
   list.addEventListener("click", onClick);
 
+  // Pressing a card (mouse or pen) starts the game's art lookup and image
+  // downloads before the click opens the page, which joins the same lookup.
+  // Not on touch: there a press usually starts a scroll.
+  const onPress = (event) => {
+    if (event.pointerType === "touch" || event.button !== 0) return;
+    const card = event.target.closest?.(".result-card[data-id]");
+    if (card && event.target.closest(".result-open")) {
+      warmGameArt(Number(card.dataset.id));
+    }
+  };
+  list.addEventListener("pointerdown", onPress);
+
   const off = session.on("change", render);
   render();
 
@@ -268,6 +295,7 @@ export function createResultsPage(session, { onOpen } = {}) {
     destroy: () => {
       observer?.disconnect();
       list.removeEventListener("click", onClick);
+      list.removeEventListener("pointerdown", onPress);
       off();
     },
   };

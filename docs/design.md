@@ -114,9 +114,10 @@ Rules a redesign must keep, with the HIG reason where there is one.
 
 **Loading**
 
-- The game page shows a whole-sheet shimmer while it loads, then crossfades to
-  the content. No fake text bars. Results use quiet skeleton cards with the
-  same shimmer.
+- The game page shows a whole-sheet shimmer while it works out which art to
+  show, then crossfades to the content. It never waits for image downloads:
+  the banner keeps its space and each image fades in when it arrives. No fake
+  text bars. Results use quiet skeleton cards with the same shimmer.
 - Under reduced motion the shimmer becomes a slow pulse.
 
 **Scrollbar**

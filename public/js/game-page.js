@@ -19,10 +19,7 @@
 
 import { createSpring } from "/js/spring.js";
 import { createOverlayScroll } from "/js/overlay-scroll.js";
-import {
-  refreshGlass,
-  refreshGlassWhileScrolling,
-} from "/js/glass-refresh.js";
+import { refreshGlass, refreshGlassWhileScrolling } from "/js/glass-refresh.js";
 import { resolveGameArt } from "/js/game-art.js";
 import { displayImageUrl, loadImageForGlass } from "/js/image-url.js";
 
@@ -69,8 +66,6 @@ const FLICK = 0.5;
 const SLOP = 8;
 // The sheet's resting top, px from the viewport top (css: .game-spacer).
 const REST_TOP = 85;
-// The longest the sheet waits for the logo image before showing without it.
-const LOGO_WAIT = 3000;
 
 export function createGamePage({ game, content, onProgress }) {
   let parts = null;
@@ -101,10 +96,11 @@ export function createGamePage({ game, content, onProgress }) {
 
   // Art for the open game. The whole sheet shows a loading state (is-loading)
   // while its art resolves (game-art.js: row read, IGDB detail pull,
-  // SteamGridDB lookup); when that ends the content - the banner, if there is
-  // one - fades in and the shimmer fades out. The banner box is only created
-  // once we know a banner exists. An answer for a game that is no longer the
-  // open one is dropped (it touches no UI state).
+  // SteamGridDB lookup). Once we know which images exist the header is laid
+  // out and the shimmer ends straight away - the page never waits on a
+  // download. The banner box holds its shape and each image fades in when it
+  // arrives; a failed one removes its box. An answer for a game that is no
+  // longer the open one is dropped (it touches no UI state).
   let artRun = 0;
   function setLoading(on) {
     parts?.sheet.classList.toggle("is-loading", on);
@@ -126,50 +122,56 @@ export function createGamePage({ game, content, onProgress }) {
     const logoUrl = logo ? displayImageUrl(logo, "logo") : null;
     if (!bannerUrl && !logoUrl) return finishLoading(run);
 
-    // The sticky header: the banner and the logo pin together. Either part is
-    // only added once its image has loaded; the header is dropped if neither.
+    // The sticky header: the banner and the logo pin together. The header is
+    // dropped if both images fail.
     const head = document.createElement("div");
     head.className = "game-head";
+    head.classList.toggle("has-banner", !!bannerUrl);
     parts.body.prepend(head);
 
-    const addImage = (cls, url) =>
-      new Promise((resolve) => {
-        const box = document.createElement("div");
-        box.className = cls;
-        const img = document.createElement("img");
-        img.alt = "";
-        img.decoding = "async";
-        // A drag here is the sheet's swipe-down, not an image drag.
-        img.draggable = false;
-        const done = (ok) => {
-          if (run !== artRun) return resolve();
-          if (ok) {
-            box.classList.add("is-loaded");
-          } else {
-            box.remove();
-          }
-          resolve(ok ? box : null);
-        };
-        loadImageForGlass(img, url, {
-          onLoad: () => done(true),
-          onError: () => done(false),
-        });
-        box.append(img);
-        if (cls === "game-banner") head.prepend(box);
-        else head.append(box);
-      });
+    // After an image fades in (or its box goes), the lenses retake their
+    // picture.
+    const settle = () => {
+      if (run !== artRun || !parts) return;
+      overlay?.update();
+      setTimeout(
+        () => run === artRun && refreshGlass(),
+        reducedMotion() ? 0 : 300,
+      );
+    };
 
-    const logoBox = logoUrl
-      ? Promise.race([
-          addImage("game-logo", logoUrl),
-          // A slow logo must not hold the page hostage.
-          new Promise((r) => setTimeout(r, LOGO_WAIT)),
-        ])
-      : null;
-    await Promise.all([bannerUrl && addImage("game-banner", bannerUrl), logoBox]);
-    if (run !== artRun || !parts) return;
-    head.classList.toggle("has-banner", !!head.querySelector(".game-banner"));
-    if (!head.children.length) head.remove();
+    const addImage = (cls, url) => {
+      const box = document.createElement("div");
+      box.className = cls;
+      const img = document.createElement("img");
+      img.alt = "";
+      img.decoding = "async";
+      // A drag here is the sheet's swipe-down, not an image drag.
+      img.draggable = false;
+      loadImageForGlass(img, url, {
+        onLoad: () => {
+          if (run !== artRun) return;
+          box.classList.add("is-loaded");
+          settle();
+        },
+        onError: () => {
+          if (run !== artRun) return;
+          box.remove();
+          head.classList.toggle(
+            "has-banner",
+            !!head.querySelector(".game-banner"),
+          );
+          if (!head.children.length) head.remove();
+          settle();
+        },
+      });
+      box.append(img);
+      if (cls === "game-banner") head.prepend(box);
+      else head.append(box);
+    };
+
+    if (bannerUrl) addImage("game-banner", bannerUrl);
+    if (logoUrl) addImage("game-logo", logoUrl);
     overlay?.update();
     finishLoading(run);
   }
@@ -179,7 +181,10 @@ export function createGamePage({ game, content, onProgress }) {
     if (run !== artRun || !parts) return;
     setLoading(false);
     overlay?.update();
-    setTimeout(() => run === artRun && refreshGlass(), reducedMotion() ? 0 : 350);
+    setTimeout(
+      () => run === artRun && refreshGlass(),
+      reducedMotion() ? 0 : 350,
+    );
   }
 
   // Reports scrolling to the toolbar, and keeps the glass current: the lenses
