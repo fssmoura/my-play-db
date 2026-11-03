@@ -107,14 +107,19 @@ html.is-game-open .overlay-scroll.is-page {
   background: var(--black);
 }
 
-/* The logo (SteamGridDB's, usually): centred, about 64% of the sheet wide,
-   fitted without cropping. Over a banner its middle sits on the banner's
-   bottom edge (the head isn't clipped, so it hangs below); with no banner it
-   sits at the top with 32px of space. It pins with the banner. */
+/* The logo (SteamGridDB's, usually): centred, fitted without cropping. Every
+   logo gets about the same area (a --logo-side square), shaped by its own
+   proportions (--logo-ratio, set from the image once loaded), so wide and
+   square logos look equally heavy. Capped so very wide ones keep clear of the
+   edges and square ones don't get too tall. Over a banner its middle sits on
+   the banner's bottom edge (the head isn't clipped, so it hangs below); with no
+   banner it sits at the top with 32px of space. It pins with the banner. */
 .game-logo {
+  --logo-ratio: 3;
+  --logo-side: clamp(96px, 30vw, 190px);
   position: relative;
-  width: 64%;
-  height: clamp(64px, 22vw, 120px);
+  width: min(72%, calc(var(--logo-side) * sqrt(var(--logo-ratio))));
+  height: min(26vw, 150px, calc(var(--logo-side) / sqrt(var(--logo-ratio))));
   margin: 0 auto;
   opacity: 0;
   transition: opacity 0.25s ease-out;
@@ -123,9 +128,9 @@ html.is-game-open .overlay-scroll.is-page {
 .game-head.has-banner .game-logo {
   position: absolute;
   top: 100%;
-  left: 18%;
+  left: 50%;
   margin: 0;
-  transform: translateY(calc(-50% - 8px));
+  transform: translate(-50%, calc(-50% - 8px));
 }
 
 .game-logo.is-loaded {

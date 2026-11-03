@@ -103,6 +103,8 @@ Rules a redesign must keep, with the HIG reason where there is one.
   kept; the main pill and Back stay.
 - The header (banner and logo) is sticky, so content dissolves under the
   banner as it scrolls. Banner and logo show only when the game has them.
+- Logos are sized to roughly the same area whatever their shape, so wide and
+  squarer logos carry similar weight; they sit centred on the banner's edge.
 
 **Bottom toolbar (game page)**
 

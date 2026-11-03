@@ -151,6 +151,12 @@ export function createGamePage({ game, content, onProgress }) {
       loadImageForGlass(img, url, {
         onLoad: () => {
           if (run !== artRun) return;
+          if (cls === "game-logo" && img.naturalWidth && img.naturalHeight) {
+            box.style.setProperty(
+              "--logo-ratio",
+              String(img.naturalWidth / img.naturalHeight),
+            );
+          }
           box.classList.add("is-loaded");
           settle();
         },
