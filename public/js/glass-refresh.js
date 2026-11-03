@@ -25,6 +25,24 @@ export function refreshGlassOf(target) {
   });
 }
 
+// Re-photographs only the renderers with a lens inside `container` (the
+// Customize drawer, which covers the page: the page's own glass is hidden
+// under it and keeps its photo of the page for when the drawer closes).
+const queuedWithin = new Set();
+export function refreshGlassWithin(container) {
+  if (queuedWithin.has(container)) return;
+  queuedWithin.add(container);
+  requestAnimationFrame(() => {
+    queuedWithin.delete(container);
+    for (const renderer of renderers()) {
+      if (!renderer.lenses?.some((lens) => container.contains(lens.el)))
+        continue;
+      renderer._captureGeneration = (renderer._captureGeneration || 0) + 1;
+      renderer.captureSnapshot()?.catch?.(() => {});
+    }
+  });
+}
+
 // liquidGL keeps one renderer (one snapshot) per z-index layer, and only the
 // first is reachable as window.__liquidGLRenderer__. menu.js hands over every
 // lens so all layers - search pill, pull-downs - get the fresh snapshot too.

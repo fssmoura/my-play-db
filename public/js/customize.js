@@ -24,7 +24,7 @@
 //   (sgdb-link.js); closing it leaves the pickers empty.
 
 import { createSpring } from "/js/spring.js";
-import { refreshGlass } from "/js/glass-refresh.js";
+import { refreshGlassWithin } from "/js/glass-refresh.js";
 import { loadGameRow, setGameArtArray } from "/js/games-cache.js";
 import { resolveGameArt, firstStaticArt, isIgdb } from "/js/game-art.js";
 import { releaseYear } from "/js/ranking.js";
@@ -164,6 +164,9 @@ export function buildCustomize(buildCircleButton, iconSvg) {
   panel.id = "customize-panel";
   panel.className = "customize-panel";
   panel.setAttribute("role", "tabpanel");
+  // Nothing in the panes ever sits under glass (they end above the tabs), so
+  // liquidGL's photo skips them: hundreds of tiles made every photo slow.
+  panel.setAttribute("data-liquid-ignore", "");
   const sgdbLink = buildSgdbLink();
   const tabs = CUSTOMIZE_TABS.map((tab) => {
     const button = document.createElement("button");
@@ -274,7 +277,7 @@ export function wireCustomize({
   const spring = createSpring({
     onUpdate: (v) => layer.style.setProperty("--customize-t", v.toFixed(4)),
     onRest: (target) => {
-      if (target === 1) refreshGlass();
+      if (target === 1) refreshGlassWithin(layer);
       else if (!isOpen) {
         layer.classList.remove("is-open", "is-closing");
         // Nothing keeps loading behind a closed drawer.
@@ -349,7 +352,6 @@ export function wireCustomize({
     if (kind) pickers[kind].activate();
     else preview.activate();
     setSaveIcon();
-    refreshGlass();
   }
 
   // The heading, the pickers' source and the stored picks. A game whose

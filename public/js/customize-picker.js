@@ -31,6 +31,8 @@ const SKELETONS = 12;
 const LOADS = 6;
 const AHEAD_LOADS = 2;
 const AHEAD_TILES = 24;
+// Animated thumbnails playing at once; each one keeps a video decoder busy.
+const PLAYS = 6;
 
 const calmMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -97,15 +99,20 @@ export function createPicker({ kind, onSelect }) {
       const rec = byMedia.get(entry.target);
       if (!rec) continue;
       rec.near = entry.isIntersecting;
-      if (rec.media.tagName === "VIDEO") {
-        if (rec.near && rec.state === "done" && !calmMotion())
-          rec.media.play().catch(() => {});
-        else if (!rec.near) rec.media.pause();
-      }
+      // Only tiles near the view run their shimmer.
+      rec.tile.classList.toggle("is-near", rec.near);
+      if (rec.near) continue;
       // Scrolled away before it finished: cancelled, so it doesn't hold up
-      // the ones now on screen. It starts again when it comes back.
-      if (!rec.near && rec.state === "loading" && !rec.ahead) cancel(rec);
+      // the ones now on screen. It starts again when it comes back. A video
+      // is let go even once in: each one held keeps a decoder busy.
+      if (rec.state === "loading" && !rec.ahead) cancel(rec);
+      else if (rec.state === "done" && rec.media.tagName === "VIDEO") {
+        cancel(rec);
+        rec.tile.classList.add("is-loading");
+      }
     }
+    // Shimmers start as tiles come near, so they are put back in step here.
+    syncShimmer(grid);
     schedulePump();
   }
 
@@ -120,8 +127,6 @@ export function createPicker({ kind, onSelect }) {
     rec.state = ok ? "done" : "failed";
     rec.tile.classList.remove("is-loading");
     rec.tile.classList.toggle("is-failed", !ok);
-    if (ok && rec.media.tagName === "VIDEO" && rec.near && !calmMotion())
-      rec.media.play().catch(() => {});
     schedulePump();
   }
 
@@ -145,6 +150,20 @@ export function createPicker({ kind, onSelect }) {
     }
   }
 
+  // Animated tiles play only on screen, the first PLAYS of them in grid
+  // order; the rest hold their first frame.
+  function play(onScreen) {
+    let playing = 0;
+    for (const rec of records) {
+      if (rec.media.tagName !== "VIDEO" || rec.state !== "done") continue;
+      const on = !calmMotion() && playing < PLAYS && rec.near && onScreen(rec);
+      if (on) {
+        playing += 1;
+        if (rec.media.paused) rec.media.play().catch(() => {});
+      } else if (!rec.media.paused) rec.media.pause();
+    }
+  }
+
   function schedulePump() {
     if (pumpQueued) return;
     pumpQueued = true;
@@ -160,10 +179,15 @@ export function createPicker({ kind, onSelect }) {
   function pump() {
     if (element.hidden || !records.length) return;
     const view = element.getBoundingClientRect();
+    const seen = new Map();
     const onScreen = (rec) => {
-      const r = rec.tile.getBoundingClientRect();
-      return r.bottom > view.top && r.top < view.bottom;
+      if (!seen.has(rec)) {
+        const r = rec.tile.getBoundingClientRect();
+        seen.set(rec, r.bottom > view.top && r.top < view.bottom);
+      }
+      return seen.get(rec);
     };
+    play(onScreen);
     const wanted = records.filter((r) => r.near && r.state === "idle");
     wanted.sort((a, b) => onScreen(b) - onScreen(a) || a.index - b.index);
     let busy = records.filter((r) => r.state === "loading");

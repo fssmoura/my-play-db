@@ -119,8 +119,22 @@ changes, so anything else that changes what is under the glass needs
   `liquidGL()` call). The Customize full-screen X photographs only the viewer,
   so its glass shows just the image and retaking it while the image moves is
   cheap (`refreshGlassOf()`).
+- **A capture walks every element it doesn't ignore, hidden under something
+  or not.** The Customize panes are `data-liquid-ignore` (nothing in them is
+  under glass), and the drawer retakes only its own layers'
+  (`refreshGlassWithin()`), never on a tab change. Measured with Hades open:
+  14 captures of ~27ms each with the panes photographed, 3 of ~7ms without.
+  The page's own glass,
+  covered by the drawer, keeps its photo of the page for when it closes.
 - The overlay scroll indicator is `data-liquid-ignore`, so it stays out of the
   snapshot.
+
+**The Customize grids on a phone.** Lagging and heating came from work
+nobody could see, so only what is near the view does anything: a tile's
+shimmer runs only while near the view, and is a band moved by the GPU rather
+than a repainted background; animated thumbnails play only on screen, a few at
+a time, and are let go once scrolled away (each held video keeps a decoder
+busy).
 
 ## Images
 

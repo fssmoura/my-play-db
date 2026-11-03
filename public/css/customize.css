@@ -454,6 +454,56 @@
   opacity: 0;
 }
 
+/* Loading: the results grid's shimmer (pages.css), but as a band that slides
+   (moved by the GPU, nothing repainted) and only on tiles near the view - a
+   grid can hold hundreds still waiting, and each sweep was a repaint. */
+.picker-tile.is-skeleton .picker-art,
+.picker-tile.is-loading .picker-art {
+  background-color: #1f1f23;
+}
+
+.picker-tile.is-skeleton .picker-art::before,
+.picker-tile.is-loading.is-near .picker-art::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 200%;
+  background: linear-gradient(
+    115deg,
+    rgba(244, 244, 244, 0) 35%,
+    rgba(244, 244, 244, 0.07) 50%,
+    rgba(244, 244, 244, 0) 65%
+  );
+  pointer-events: none;
+  animation: picker-shimmer 2s linear infinite;
+}
+
+/* The band starts and ends fully outside the tile, then rests for the last
+   30%, as in the results grid. */
+@keyframes picker-shimmer {
+  0% {
+    transform: translateX(-110%);
+  }
+  70%,
+  100% {
+    transform: translateX(60%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .picker-tile.is-skeleton .picker-art::before,
+  .picker-tile.is-loading.is-near .picker-art::before {
+    content: none;
+  }
+
+  .picker-tile.is-skeleton .picker-art,
+  .picker-tile.is-loading.is-near .picker-art {
+    animation: result-pulse 2.4s ease-in-out infinite;
+  }
+}
+
 /* Couldn't load: the results grid's quiet "no image" tile. */
 .picker-tile.is-failed .picker-art {
   --edge-alpha: 0.1;
