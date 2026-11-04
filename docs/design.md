@@ -134,7 +134,8 @@ Rules a redesign must keep, with the HIG reason where there is one.
   it, any other shape is shown whole inside it. The picked one has a white
   ring; what is stored starts picked. A quiet slider just above the tabs
   (magnifiers at both ends also step it) sets images per row in a few steps,
-  remembered per tab; the largest banner step is one per row.
+  remembered per tab; it drags freely and glides to the nearest step on
+  release; the largest banner step is one per row.
 - Preview shows the picks at full size, one row per type (poster, logo,
   banner), centred as a group: name and size above each image at its two
   corners, "Add Manually +" under it (grey, white on hover). That swaps for a

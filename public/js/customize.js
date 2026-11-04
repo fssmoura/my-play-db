@@ -149,7 +149,8 @@ export function buildCustomize(buildCircleButton, iconSvg) {
   range.type = "range";
   range.className = "customize-zoom-range";
   range.min = "0";
-  range.step = "1";
+  // Moves freely under a finger and glides to the nearest step on release.
+  range.step = "any";
   range.setAttribute("aria-label", "Image size");
   zoom.append(zoomOut, range, zoomIn);
 
@@ -563,24 +564,71 @@ export function wireCustomize({
     event.preventDefault();
     selectTab((active + step + tabs.length) % tabs.length, { focus: true });
   };
-  const onZoom = () => {
+  // The grid changes as soon as the thumb passes halfway to another step.
+  const setZoomValue = (raw) => {
     const kind = KINDS[active];
     if (!kind) return;
-    const step = Number(range.value);
-    const last = ZOOM[kind].columns.length - 1;
-    range.style.setProperty("--fill", `${(step / last) * 100}%`);
+    const { columns } = ZOOM[kind];
+    const last = columns.length - 1;
+    const value = Math.min(Math.max(raw, 0), last);
+    range.value = String(value);
+    range.style.setProperty("--fill", `${(value / last) * 100}%`);
+    const step = Math.round(value);
+    const grid = pickers[kind].element.style;
+    if (grid.getPropertyValue("--cols") === String(columns[step])) return;
     applyZoom(kind, step);
     saveZoom(kind, step);
     pickers[kind].relayout();
+  };
+  let glideKind = null;
+  let glideFrom = 0;
+  let glideTo = 0;
+  const zoomSpring = createSpring({
+    stiffness: 500,
+    damping: 40,
+    onUpdate: (v) => {
+      if (KINDS[active] === glideKind)
+        setZoomValue(lerp(glideFrom, glideTo, v));
+    },
+  });
+  const glideZoom = (target) => {
+    glideKind = KINDS[active];
+    glideFrom = Number(range.value);
+    glideTo = target;
+    zoomSpring.set(0);
+    zoomSpring.to(1, { instant: reducedMotion() });
+  };
+  const onZoom = () => {
+    glideKind = null;
+    zoomSpring.set(0);
+    setZoomValue(Number(range.value));
+  };
+  const onZoomRelease = () => glideZoom(Math.round(Number(range.value)));
+  // With free movement the keys would nudge by a fraction, so they step here.
+  const onZoomKey = (event) => {
+    const last = Number(range.max);
+    const at = Math.round(Number(range.value));
+    const next = {
+      ArrowLeft: at - 1,
+      ArrowDown: at - 1,
+      PageDown: at - 1,
+      ArrowRight: at + 1,
+      ArrowUp: at + 1,
+      PageUp: at + 1,
+      Home: 0,
+      End: last,
+    }[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    glideZoom(Math.min(Math.max(next, 0), last));
   };
   const onZoomStep = (event) => {
     const button = event.target.closest(".customize-zoom-icon");
     if (!button) return;
     const step = button === zoom.firstElementChild ? -1 : 1;
-    const next = Number(range.value) + step;
+    const next = Math.round(Number(range.value)) + step;
     if (next < 0 || next > Number(range.max)) return;
-    range.value = String(next);
-    onZoom();
+    glideZoom(next);
   };
   const resize = new ResizeObserver(() => {
     if (isOpen) placePill(true);
@@ -593,6 +641,8 @@ export function wireCustomize({
   tabRow.addEventListener("click", onTabClick);
   tabRow.addEventListener("keydown", onTabKey);
   range.addEventListener("input", onZoom);
+  range.addEventListener("change", onZoomRelease);
+  range.addEventListener("keydown", onZoomKey);
   zoom.addEventListener("click", onZoomStep);
   document.addEventListener("keydown", onKeydown, true);
   resize.observe(tabRow);
@@ -605,6 +655,7 @@ export function wireCustomize({
       close({ instant: true });
       spring.destroy();
       pillSpring.destroy();
+      zoomSpring.destroy();
       resize.disconnect();
       back.removeEventListener("click", onBack);
       save.removeEventListener("click", onSave);
@@ -613,6 +664,8 @@ export function wireCustomize({
       tabRow.removeEventListener("click", onTabClick);
       tabRow.removeEventListener("keydown", onTabKey);
       range.removeEventListener("input", onZoom);
+      range.removeEventListener("change", onZoomRelease);
+      range.removeEventListener("keydown", onZoomKey);
       zoom.removeEventListener("click", onZoomStep);
       document.removeEventListener("keydown", onKeydown, true);
       offGameClose();
