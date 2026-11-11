@@ -9,9 +9,14 @@ share the API, the sign-in and the database.
 The lab has no sign-in of its own: when signed out it redirects to
 `/?next=<its own path>`. See [auth.md](auth.md#gate-1---who-can-sign-in).
 
-Tabs: Connections, API console, Search, Game, and Media (the artwork picker,
+Tabs: Connections, API console, Library, Game, and Media (the artwork picker,
 which has no visible tab - it is reached from a game's "Select media" button
-as `?media=<igdb id>`).
+as `?media=<igdb id>`). Every tab is in the address (`?tab=<id>`, or
+`?game=`/`?media=`), so a refresh stays on it. All views mount at page load,
+hidden or not, so anything a view should do only when seen (the Library's
+sync) must watch for its section being shown.
+
+The search tab was removed; search lives in the app at `/`.
 
 ## Rules
 
@@ -36,28 +41,6 @@ as `?media=<igdb id>`).
   view restoring from the URL would never hear about a programmatic move.
 
 ## Decisions worth not undoing
-
-**Search: one IGDB request is the whole feature.** `igdb.search` returns the
-display fields as well as the ranking ones, so the dropdown is the top 5 of
-the list, committing is a cache hit, and paging and filtering need no network.
-It used to use three actions (a light candidate pool, a "suggest" fast path
-and a per-page hydrate), which re-fetched games it already had and drew the
-page in four stages. Adding a second IGDB request repeats that mistake.
-
-- **The `games` cache is a head start:** it answers in about 50ms against
-  IGDB's 600ms, so search paints what we hold, then merges IGDB over it by id.
-  That only goes unnoticed because cached games score identically
-  ([database.md](database.md#games-is-a-cache-not-a-list-of-games-owned)) and
-  cards are reconciled by id, not redrawn.
-- The count, type filter and pager stay hidden until IGDB lands - "6 results"
-  then "200 results" would give the two stages away.
-- `narrowLast()` re-ranks the list in memory while typing an extended query.
-  It filters on the title match alone - filtering on the total score kept
-  popular games that had stopped matching.
-- The result area is drawn in one pass; drawing each piece as it arrived
-  looked like three separate loads.
-- A cache lookup for an abandoned query lands fast and will overwrite a newer
-  search if the sequence check in `runSearch()` is removed.
 
 **Game tab.** Freshness is a plain 24-hour timer (why there is no "has it
 changed?" check:

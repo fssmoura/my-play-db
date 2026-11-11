@@ -25,7 +25,8 @@ those files.
 ## Copies of the lab's code
 
 `search.js`, `ranking.js`, `sgdb.js`, `sgdb-match.js`, `games-cache.js` and
-`api.js` are copies of the lab's, each with a header saying where it came from.
+`api.js` are copies of the lab's (the lab's `search.js` has since been
+removed), each with a header saying where it came from.
 They are independent on purpose, so work on the app can never change the lab:
 never import across, and fix a bug in both. `sgdb.js` is the one that behaves
 differently - see [Game page art](#game-page-art).
@@ -167,6 +168,13 @@ For large originals, use the host's own resize parameter if it has one.
 
 ## Search
 
+- **One IGDB request is the whole feature.** `igdb.search` returns the display
+  fields as well as the ranking ones, so paging and filtering need no network.
+  An earlier version used three actions (candidate pool, "suggest" fast path,
+  per-page hydrate), which re-fetched games it already had and drew the page
+  in four stages. Adding a second IGDB request repeats that mistake.
+- A cache lookup for an abandoned query lands fast and would overwrite a newer
+  search without the sequence guard in `search.js`.
 - **Cache first, IGDB merged over it.** The `games` cache answers faster than
   IGDB, so it is painted first. A game already on screen keeps ranking by the
   copy it was first shown with (`rankBasis`), so cards never reshuffle when

@@ -19,7 +19,7 @@
      7. platform rows  - the connection list
      8. modal          - the connect pop-up
       9. console        - the API testing tab
-     10. search         - the IGDB search tab
+     10. library        - the owned-games grid
      11. game page      - the single-game detail tab
      12. media picker   - choosing cover/logo/banner artwork
      13. mobile         - phone overrides (everything above is desktop-first)
@@ -407,170 +407,65 @@ pre.output {
   margin: 0;
 }
 
-/* ---------- 10. search ---------- */
+/* ---------- 10. library ---------- */
 
-.search-grid {
+.library {
   display: grid;
   gap: 12px;
 }
 
-.search-controls {
+.library-head {
   display: flex;
-  gap: 8px;
-  align-items: flex-end;
-}
-
-.search-box {
-  flex: 1;
-  position: relative;
-}
-
-.search-type {
-  flex: none;
-  width: 180px;
-}
-
-/* Suggestion dropdown, anchored to the input. */
-.suggest {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  z-index: 20;
-  background: var(--panel);
-  border: 1px solid var(--line-strong);
-  border-top: none;
-  border-radius: 0 0 2px 2px;
-  max-height: 260px;
-  overflow: auto;
-}
-
-.suggest-item {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 7px 10px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--line);
-}
-
-.suggest-item:last-child {
-  border-bottom: none;
-}
-
-.suggest-item:hover,
-.suggest-item.active {
-  background: var(--hover);
-}
-
-.suggest-name {
-  font-weight: 600;
-  /* A very long title must not squeeze the year/type off the row. */
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.suggest-empty {
-  padding: 7px 10px;
-}
-
-.search-results-head {
-  display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border-top: 1px solid var(--line);
-  padding-top: 12px;
 }
 
-.search-filter {
-  width: 220px;
-  flex: none;
+.library-head .meta {
+  margin: 0;
 }
 
-.result-list {
+.library-grid {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
 }
 
-.result {
-  display: flex;
-  gap: 12px;
+.library-card {
   border: 1px solid var(--line);
   border-radius: 2px;
   background: var(--panel);
-  padding: 10px;
-  cursor: pointer;
+  padding: 8px;
+  min-width: 0;
 }
 
-.result:hover {
-  border-color: var(--line-strong);
-}
-
-/* Keyboard users tab to the title link, so the whole card shows the focus. */
-.result:focus-within {
-  border-color: var(--text);
-}
-
-.result-cover {
-  width: 64px;
-  height: 88px;
-  flex: none;
+.library-cover {
+  aspect-ratio: 3 / 4;
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
   background: var(--bg);
   overflow: hidden;
+  margin-bottom: 8px;
 }
 
-.result-cover img {
+.library-cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.result-body {
-  min-width: 0;
-}
-
-.result-name {
+.library-name {
   margin: 0 0 4px;
-  font-size: 14px;
-}
-
-/* The whole card is clickable, so the title doesn't need to advertise itself
-   as a link as well. It stays a real <a> for middle-click and keyboard use. */
-.result-name a {
-  text-decoration: none;
-}
-
-.result:hover .result-name a {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  text-decoration-color: var(--line-strong);
-}
-
-.result-body .meta {
-  margin: 0 0 3px;
-}
-
-/* Keep long summaries from dominating the list. */
-.result-summary {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+  font-size: 13px;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.pager {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding-top: 4px;
+.library-card .meta {
+  margin: 0 0 2px;
+  font-size: 12px;
 }
 
 /* ---------- 11. game page ---------- */

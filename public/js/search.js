@@ -1,6 +1,5 @@
-// Adapted from public/lab/js/search.js (no typeahead; a type set instead of one
-// type; a sequence guard inside; head-start covers kept). The two copies are
-// now independent. No DOM.
+// Adapted from the lab's old search (since removed) (no typeahead; a type set
+// instead of one type; a sequence guard inside; head-start covers kept). No DOM.
 //
 // One IGDB request per query, ranked, with the local `games` cache asked at the
 // same moment as a head start. The head start arrives through `onPartial`; the

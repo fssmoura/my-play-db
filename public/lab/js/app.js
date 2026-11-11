@@ -1,6 +1,6 @@
 import { getSession, onAuthChange, signOut } from "/js/session.js";
 import * as connections from "./views/connections.js";
-import * as search from "./views/search.js";
+import * as library from "./views/library.js";
 import * as game from "./views/game.js";
 import * as media from "./views/media.js";
 import * as apiConsole from "./views/console.js";
@@ -11,7 +11,7 @@ import { onNavigate } from "./navigate.js";
 const VIEWS = {
   connections,
   console: apiConsole,
-  search,
+  library,
   game,
   media,
 };
@@ -54,17 +54,29 @@ async function applySession(session) {
     // Landing on a shared or refreshed URL should show the tab it describes.
     // Selected *before* mounting, because those views restore themselves with
     // a network round trip and the wrong tab must not be visible meanwhile.
-    // Most specific request wins.
-    const params = new URLSearchParams(location.search);
-    if (params.has("media")) selectTab("media");
-    else if (params.has("game")) selectTab("game");
-    else if (params.has("q")) selectTab("search");
+    selectTab(tabFromUrl());
 
     for (const [id, view] of Object.entries(VIEWS)) {
       await view.mount(document.getElementById(`view-${id}`));
     }
   }
 }
+
+/**
+ * The tab the URL describes. Game and media own their own parameters; every
+ * other tab is `?tab=<id>`. No parameters means the first tab.
+ */
+function tabFromUrl() {
+  const params = new URLSearchParams(location.search);
+  if (params.has("media")) return "media";
+  if (params.has("game")) return "game";
+  const tab = params.get("tab");
+  if (tab && tab in VIEWS) return tab;
+  return document.querySelector("nav.tabs button")?.dataset.view;
+}
+
+// Each tab's last query string, so stepping back into Game reopens its game.
+const lastQuery = {};
 
 function selectTab(view) {
   const button = document.querySelector(`nav.tabs button[data-view="${view}"]`);
@@ -82,6 +94,21 @@ function wireTabs() {
   );
   buttons.forEach((btn) => {
     btn.addEventListener("click", () => {
+      // Write the URL only when it doesn't already describe this tab (a
+      // view's go() or the back button got there first).
+      const current = tabFromUrl();
+      if (current !== btn.dataset.view) {
+        lastQuery[current] = location.search;
+        const saved = lastQuery[btn.dataset.view];
+        history.pushState(
+          null,
+          "",
+          `${location.pathname}${saved ?? `?tab=${btn.dataset.view}`}`,
+        );
+        // pushState is silent; a view that restores itself from the URL (Game,
+        // Media) must hear that its saved query is back.
+        if (saved) window.dispatchEvent(new PopStateEvent("popstate"));
+      }
       buttons.forEach((b) =>
         b.setAttribute("aria-selected", String(b === btn)),
       );
@@ -103,6 +130,8 @@ async function boot() {
   // One view asking to open another (search result -> game page). The view
   // itself updates the URL; this only brings the right tab to the front.
   onNavigate((view) => selectTab(view));
+  // Back and forward move between tabs too.
+  window.addEventListener("popstate", () => selectTab(tabFromUrl()));
 
   document.getElementById("sign-out").addEventListener("click", async () => {
     signingOut = true;
