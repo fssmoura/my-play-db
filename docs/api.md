@@ -49,6 +49,7 @@ Values live in Vercel; how to get them locally is in
 | `igdb.js`                           | `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`                                                                       |
 | `sgdb.js`                           | `STEAMGRIDDB_API_KEY`                                                                                            |
 | `cron-refresh.js`                   | `CRON_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`                                                       |
+| `library-sync.js`                   | `SUPABASE_SERVICE_ROLE_KEY`, plus the Steam and IGDB keys above                                                  |
 | `psn`, `epic`, `xbox`, `ea`, `hltb` | none - PSN uses the user's tokens; Epic, Xbox and EA use public client ids embedded in the code; HLTB has no key |
 
 ### Non-action endpoints
@@ -59,6 +60,9 @@ Values live in Vercel; how to get them locally is in
   See [auth.md](auth.md#scheduled-refresh-the-thing-that-survives-the-app-being-closed)
   and, for the database grants it needs,
   [database.md](database.md#grants-read-before-adding-a-table-or-function).
+- **`api/library-sync.js`** - signed-in `POST`: runs the Steam updater and
+  streams progress. Unlike the handlers it writes to the database itself. See
+  [database.md](database.md#the-steam-updater).
 - **`api/dev-signin.js`** - local preview only: auto sign-in for `vercel dev`,
   a plain 404 everywhere else. See [auth.md](auth.md#gate-1---who-can-sign-in).
 
@@ -88,6 +92,8 @@ Auth order: NPSSO -> `exchangeNpssoForAccessCode` -> `exchangeAccessCodeForAuthT
 | `game`          | appids[]           | Store metadata (type, genres, dev, screenshots)                       |
 | `schemas`       | appid              | Achievement definitions per game                                      |
 | `achievements`  | steamId + appid    | Earned achievements per game                                          |
+| `last_played`   | -                  | Undocumented: every app the key's own account launched (ids only)     |
+| `store_items`   | appids[]           | Name and store type for any app id, even without a store page         |
 | `openid_verify` | params (openid.\*) | `{ steamId, profile }` after Steam's `check_authentication` handshake |
 
 The Steam API key is the server-side `STEAM_API_KEY`, never sent from the client. `steamId` is passed as option (public info).

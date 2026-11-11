@@ -472,3 +472,67 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 };
+
+/**
+ * `by_external` for many store ids in one request: { uid: [igdb ids] }, with
+ * every game IGDB lists for that id (by_external keeps only the first). Ids
+ * with no entry are absent.
+ */
+async function byExternalMany(source, uids) {
+  const cat =
+    typeof source === "string"
+      ? (SOURCE_MAP[source.toLowerCase()] ?? source)
+      : source;
+  const out = {};
+  const list = [...new Set(uids.map(String))];
+  for (let i = 0; i < list.length; i += 200) {
+    const part = list.slice(i, i + 200);
+    const quoted = part.map((u) => `"${u.replace(/"/g, '\\"')}"`).join(",");
+    const rows = await igdbFetch(
+      "external_games",
+      `where external_game_source = ${cat} & uid = (${quoted}); fields game, uid; limit 500;`,
+    );
+    for (const row of rows ?? []) {
+      const gameId = typeof row.game === "object" ? row.game?.id : row.game;
+      if (!gameId) continue;
+      const ids = (out[row.uid] ??= []);
+      if (!ids.includes(gameId)) ids.push(gameId);
+    }
+  }
+  return out;
+}
+
+/**
+ * A name search limited to games released within a window (unix seconds).
+ * For the matcher: a store that lists a game under its series name ("Call of
+ * Duty") buries the actual game far down a plain search.
+ */
+async function searchReleasedBetween(query, from, to) {
+  const sanitized = query.replace(/"/g, '\\"');
+  const games = await igdbFetch(
+    "games",
+    `search "${sanitized}"; where release_dates.date >= ${Math.floor(from)} & release_dates.date <= ${Math.ceil(to)}; ${SEARCH_FIELDS}; limit 50;`,
+  );
+  enrichImages(games);
+  return games;
+}
+
+/**
+ * Games named exactly this (case-insensitive). IGDB's search drops common
+ * words, so a name made only of them ("We Were Here") finds nothing there.
+ */
+async function byExactName(name) {
+  const sanitized = name.replace(/"/g, '\\"');
+  const games = await igdbFetch(
+    "games",
+    `where name ~ "${sanitized}"; ${SEARCH_FIELDS}; limit 20;`,
+  );
+  enrichImages(games);
+  return games;
+}
+
+// For other server code (the matcher) to call without an HTTP hop.
+module.exports.actions = actions;
+module.exports.byExternalMany = byExternalMany;
+module.exports.searchReleasedBetween = searchReleasedBetween;
+module.exports.byExactName = byExactName;

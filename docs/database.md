@@ -6,7 +6,7 @@ column, a database function or a sync script.
 
 ## Tables
 
-Four tables exist in `public`:
+Seven tables exist in `public` (`ignored_games` and `library_sync` are described under [Sync model](#sync-model)):
 
 - **`games`** - IGDB-canonical metadata, the source of truth for game identity.
   It is a **cache** of IGDB records, not a list of games owned (see
@@ -20,11 +20,9 @@ Four tables exist in `public`:
 - **`owner_allowlist`** - the emails allowed to sign in. Documented in
   [auth.md](auth.md#gate-1---who-can-sign-in).
 
-**Planned, not built:** an `achievements` table - one row per achievement per
-`player_games` entry, holding both the definition (name, description, icon,
-reward) and your earned status (`earned` + `earned_at`) in a single row, with no
-separate unlocks table. Columns would be nullable where platforms don't provide
-the data (Steam has no rarity, Xbox has no XP). Nothing reads or writes it yet.
+- **`achievements`** - one row per achievement per `player_games` row. See
+  [`achievements` columns](#achievements-columns). Steam is loaded (by
+  `api/_steam-achievements.js`); other platforms not yet.
 
 ## Grants (read before adding a table or function)
 
@@ -37,9 +35,11 @@ Functions are the same: they need `grant execute ... to authenticated`.
 by default either** (only `references`, `trigger` and `truncate`), and it is what the nightly
 cron (`api/cron-refresh.js`) runs as. Anything the cron touches must be granted
 to `service_role` explicitly, or reached through a `security definer` function.
-Today that is `select` + `update` on `platform_credentials` and `execute` on
-`prune_games_cache()`; on `games` and `player_games` it has no `select`,
-`insert`, `update` or `delete`.
+Today that is `select` + `update` on `platform_credentials`, `execute` on
+`prune_games_cache()`, and for the library jobs (import, matcher and updater)
+`select`/`insert`/`update` on `games`, `player_games` and `achievements`,
+`select` + `update` on `library_sync`, `select` on `ignored_games` and
+`execute` on `cache_game_details`. It has no `delete` anywhere.
 
 This has already shipped broken once: the cron ran for weeks returning 500 on
 its first read because `service_role` lacked `select` on
@@ -209,10 +209,8 @@ A cached row that nobody owns is still pruned after 30 days along with its playt
 `games` holds IGDB records for the games we have already looked at. Ownership
 is `player_games`. `games` can never answer a search on its own and is not
 meant to: it exists so search can show something in ~50ms for the part of the
-catalogue we already hold, while IGDB (~600ms) remains the answer. Both apps do
-this - the lab through `public/lab/js/search.js` and
-`public/lab/js/games-cache.js`, the new app through its own copies
-`public/js/search.js` and `public/js/games-cache.js`.
+catalogue we already hold, while IGDB (~600ms) remains the answer. The app does
+this through `public/js/search.js` and `public/js/games-cache.js`.
 
 ### Two writers, two clocks
 
@@ -382,11 +380,41 @@ it.
 Deleted space is reclaimed lazily by autovacuum, so the reported table size will
 not drop immediately after a prune. That is normal.
 
-## `player_games` columns
+## `achievements` columns
+
+One row per achievement per `player_games` row, holding both the definition and
+your unlock state. Rows are never deleted (`service_role` has no `delete`):
+an achievement that disappears from a platform's list stays, which is how the
+old CS:GO achievements would have survived CS2 taking over Steam app 730.
+
+| Column          | Type                       | Notes                                                                                                                                |
+| --------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `owned_game_id` | integer FK player_games.id | Platform and version come from the owned row, so they are not repeated here                                                          |
+| `platform_key`  | text                       | The platform's own id for the achievement (Steam `apiname`, PSN `trophyId`, Epic `name`). Unique per owned game; what syncs match on |
+| `group_name`    | text                       | A real group name or null. Null for every row of a game means one flat list                                                          |
+| `icon`          | text                       | The unlocked (colour) icon only; locked is shown by greying it out                                                                   |
+| `rarity`        | numeric(5,2)               | % of that platform's players who unlocked it. Same scale everywhere, but each platform counts only its own players                   |
+| `tier`          | text                       | PSN only: `bronze`/`silver`/`gold`/`platinum`                                                                                        |
+| `points`        | integer                    | Epic XP, Xbox gamerscore                                                                                                             |
+| `secret`        | boolean                    | Hidden on the platform. The real description is still stored; the UI blurs it                                                        |
+| `unlocked_at`   | timestamptz                | Null means locked                                                                                                                    |
+
+What each platform gives (checked against the real library, Nov 2026):
+
+- **Group names:** PSN yes (`getTitleTrophyGroups`, e.g. "Watcher", "1.6 Update";
+  the `default` group is the base game). Steam only on the community page below,
+  for some games. Epic no: `achievementSets` have ids and `isBase` but no names,
+  so Epic games are always one list.
+- **Secret text:** PSN (`trophyDetail`) and Epic (`unlockedDescription`) give it
+  for every hidden entry. Steam's official API never does; the public
+  community page `steamcommunity.com/profiles/<id>/stats/<appid>/achievements/?l=english`
+  embeds it, plus group names. That page is unofficial and rate-limits, so
+  Steam jobs must fetch it slowly and fall back to the official API without
+  the secret text.
 
 | Column         | Type                | Notes                                                                                       |
 | -------------- | ------------------- | ------------------------------------------------------------------------------------------- |
-| `id`           | serial PK           | Surrogate key - keeps the FK from the planned `achievements` table simple                   |
+| `id`           | serial PK           | Surrogate key - keeps the FK from `achievements` simple                                     |
 | `igdb_id`      | integer FK games.id |                                                                                             |
 | `platform`     | text                | Hardware family: `playstation`, `pc`, `xbox`                                                |
 | `version`      | text                | Store/version: `ps5`, `ps4`, `steam`, `epic`, `ea`, `xbox`                                  |
@@ -420,16 +448,30 @@ not drop immediately after a prune. That is normal.
 - `category` - `ps5_native_game` / `ps4_game` / `pspc_game`. Determines `version` field.
 - `service` - `none(purchased)` / `ps_plus` / `ps_now`.
 
-**Steam** (planned):
+**Steam**:
 
 ```json
 {
   "appid": 252950,
-  "has_stats": true
+  "has_stats": true,
+  "name": "Example"
 }
 ```
 
+- `name` - Steam's name, kept only until a match exists, then removed.
 - `has_stats` - from `has_community_visible_stats`. False means no achievements exist - skip `schemas`/`achievements` calls.
+- `progress_hidden` - Steam refuses this player's unlocks (403), which happens
+  for games no longer on the account (free weekends, removed free games). The
+  achievement list is still stored; unlocks already saved are kept.
+- `secret_text_unavailable` - the profile page was read but has no text for
+  some hidden achievements (placeholders, or no page at all, as for Spacewar),
+  so the updater stops asking for it.
+- `no_achievements` - `has_stats` is true but a full load found no
+  achievements (Steam stats without achievements exist). Stops the updater
+  reloading it every run; asked again only when the game is played.
+- `store_type` - set only when Steam's store says the app isn't a game
+  (`demo`, `software`, `tool`, or `unknown` when the store has no record), so
+  the owner can spot candidates for `ignored_games`.
 
 **Epic** (planned):
 
@@ -485,18 +527,102 @@ No dedicated boolean column - derive it from `meta`:
 
 ## Sync model
 
-Not built yet beyond early PSN tests. Every imported game must resolve to an
-IGDB ID before anything is written. The flow is always:
+Import and matching are separate steps. A platform's list is saved first, as
+the platform gives it; the IGDB link is filled in afterwards and never
+re-resolved once set. So `player_games.igdb_id` is **nullable**: a row without
+one is an owned game still waiting for a match. Built so far: Steam's one-time
+first import, the matcher, and the [Steam updater](#the-steam-updater). PSN
+still has its early test rows, which are matched.
 
 ```
-platform game -> resolve igdb_id (by_external for PSN/Steam, igdb search for others)
-              -> upsert into games
-              -> write player_games row pointing to that igdb_id
-              -> write achievements rows pointing to that player_games row (planned table)
+platform game -> write player_games row (igdb_id null)
+              -> match: resolve igdb_id (by_external for PSN/Steam, igdb search for others)
+              -> upsert into games, set player_games.igdb_id
+              -> write achievements rows pointing to that player_games row
 ```
 
-No `player_games` row exists without a corresponding `games` row. IGDB is the
-gate.
+A game is owned once seen; there is no "still in library" flag.
+
+**`ignored_games`** (`platform`, `external_id`, `name`): things a platform lists
+that are not games (software, demos, playtests). Telling the agent to ignore one
+deletes it from `player_games` and adds it here; imports and matching skip
+anything listed. Nothing is auto-detected by name.
+
+**The matcher** (`api/_match.js`, one small adapter per platform such as
+`_match-steam.js`) is server code, not an endpoint: the
+[Steam updater](#the-steam-updater) calls `matchPlatform(platform, options)`
+after adding new rows, and it can also be run by hand with node.
+It runs as `service_role`. It links only on certainty: the store id listed in
+IGDB, or a single clear winner whose name, release date, companies and website
+agree. Rows linked any other way than a direct store-id hit get
+`meta.matched_by` (`store_link`, `name` or `release`); `release` means the store
+name was too different (Steam's "Call of Duty®" hub is Modern Warfare II) and
+the link rests on the same release week, company and website. Anything unsure
+stays unlinked with `meta.review = {reason, candidates}` for the owner to pick,
+and is not retried unless asked.
+
+Steam's owned-games call needs `skip_unvetted_apps=0`, or it silently leaves out
+small free games. Even then it permanently leaves out some free games (Dota 2,
+GeoGuessr), demos, and games from free weekends or removed licences. Games
+shared through Steam Family are never returned.
+
+**Steam rows:** `platform = 'pc'`, `version = 'steam'`, `playtime` in seconds
+(Steam gives minutes), `last_played` null when never played or not known (a
+game seen only in the recently-played list). First played, play
+count and acquisition stay empty - no source provides them. A unique index on
+`meta->>'appid'` (Steam rows only) prevents duplicates. `meta` is described
+under [Steam meta](#player_gamesmeta-shape-per-platform).
+
+### The Steam updater
+
+`api/_steam-update.js` keeps Steam rows current: new games, playtime, last
+played and achievements. It is server code run as `service_role`, called only
+by the endpoint `api/library-sync.js` (signed-in `POST`, optional
+`{force: true}`). It fetches only what changed, so it is safe to run often.
+
+**Where games come from** - three lists, merged by app id:
+
+- `GetOwnedGames`: the main list. Required; an empty answer stops the run
+  (private profile or Steam down, never "you own nothing").
+- `ClientGetLastPlayedTimes`: undocumented. Every app the API key's own
+  account ever launched, with playtime and last played but no names. The only
+  source for the games the owned list leaves out. Could stop working; the
+  updater carries on without it.
+- `GetRecentlyPlayedGames`: names, and catches a just-played game even if the
+  list above fails.
+
+Apps only in the last two are named via `IStoreBrowseService/GetItems`
+(store type in `meta.store_type`), falling back to the achievements schema's
+name. Everything not in `ignored_games` is added; only the owner ignores. If
+the store can't be reached, those apps wait for the next run.
+
+**What it does per run:**
+
+1. Adds new rows, then runs the matcher on them. A matcher failure (IGDB
+   down) is recorded in the summary and the run carries on.
+2. For every game whose playtime, last played or achievements flag changed
+   (most recent first): a quick unlock check (`refreshSteamUnlocks`), or a
+   full achievements load if the list is missing or incomplete. The row's
+   playtime is saved only after its achievements succeed, so a failure is
+   retried next run.
+3. Full loads for anything left incomplete, skipping `progress_hidden`,
+   `secret_text_unavailable` and `no_achievements` rows.
+
+Profile page reads are 3 seconds apart. The endpoint stops starting new games
+after 240 s (Vercel's limit is 300 s, set in `vercel.json`); what's left is
+picked up next run.
+
+**`library_sync`** (`platform` PK, `running_since`, `last_finished_at`,
+`last_result` jsonb): one row per platform. The endpoint skips a run if the
+last one finished under 15 minutes ago (unless `force`), and takes a lock by
+setting `running_since` in a single conditional update, so two runs can't
+overlap; a lock older than 10 minutes counts as dead. `last_result` is the
+updater's summary. `authenticated` has `select`, `service_role` `select` +
+`update`.
+
+The endpoint streams progress as JSON lines (`{step}`, then `{done, result}`,
+`{skipped}`, `{busy}` or `{error}`). Under `vercel dev` the lines arrive all at
+once at the end; live streaming on Vercel is untested.
 
 ### IGDB bridging per platform
 

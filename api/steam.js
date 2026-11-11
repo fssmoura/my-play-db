@@ -52,6 +52,9 @@ const actions = {
       steamid: steamId,
       include_appinfo: "1",
       include_played_free_games: "1",
+      // Without this Steam leaves out games it hasn't reviewed yet (small
+      // free games, mostly).
+      skip_unvetted_apps: "0",
     });
   },
 
@@ -77,6 +80,28 @@ const actions = {
 
     return steamFetch("ISteamUserStats", "GetSchemaForGame", 2, {
       appid,
+    });
+  },
+
+  // Undocumented: last-played time and playtime for every app the API key's
+  // own account has ever launched, including free games GetOwnedGames leaves
+  // out. Gives app ids only, no names.
+  async last_played() {
+    return steamFetch("IPlayerService", "ClientGetLastPlayedTimes", 1, {});
+  },
+
+  // Name and type for any app id, even ones without a store page. type 0 is
+  // a game; 1 demo, 6 software, 14 tool and so on.
+  async store_items(options = {}) {
+    const appids = options.appids;
+    if (!appids?.length) throw new Error("appids is required");
+
+    return steamFetch("IStoreBrowseService", "GetItems", 1, {
+      input_json: JSON.stringify({
+        ids: appids.map((appid) => ({ appid: Number(appid) })),
+        context: { language: "english", country_code: "US" },
+        data_request: { include_basic_info: true },
+      }),
     });
   },
 
@@ -164,3 +189,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 };
+
+// For other server code (the matcher) to call actions without an HTTP hop.
+module.exports.actions = actions;

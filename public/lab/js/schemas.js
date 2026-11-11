@@ -130,6 +130,16 @@ export const SCHEMAS = {
         placeholder: "252950",
       },
     ],
+    last_played: NONE,
+    store_items: [
+      {
+        name: "appids",
+        type: "json",
+        required: true,
+        hint: "Array of appids. Name and store type, even for apps without a store page.",
+        placeholder: "[480, 570]",
+      },
+    ],
   },
 
   epic: {

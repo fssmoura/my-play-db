@@ -13,9 +13,12 @@ It is not a public service: one owner, private sign-in, deployed on Vercel.
   1:1 to what the source provides, so the frontend (or a future sync script)
   decides what to store and how. Every data call requires the owner's
   sign-in; the nightly job uses its own secret, and the local-only dev sign-in
-  endpoint is the exception by design.
+  endpoint is the exception by design. The one exception to "no database" is
+  the library updater (`library-sync.js` and its `_steam-update.js`,
+  `_steam-achievements.js` and `_match*.js` helpers), which syncs the owner's
+  Steam library server-side.
 - **Database** - Supabase (Postgres + Auth). Stores platform tokens, a cache of
-  IGDB game records and, later, the owner's library.
+  IGDB game records and the owner's library (games, playtime, achievements).
 - **Two frontends**, sharing the same API, sign-in and database:
   - **The app at `/`** (`public/`) - the real app, built fresh: sign-in, search
     with filters, a results grid and a game page.
@@ -32,7 +35,8 @@ Browser  -> POST /api/psn    -> psn-api  -> PlayStation Network
          -> POST /api/igdb   -> fetch    -> IGDB v4 (Twitch-backed)
          -> POST /api/sgdb   -> fetch    -> SteamGridDB v2 (community art)
          -> POST /api/hltb   -> fetch    -> HowLongToBeat (scraped, no API)
-Browser  -> Supabase (sign-in, tokens, games cache)
+Browser  -> Supabase (sign-in, tokens, games cache, library)
+Browser  -> POST /api/library-sync -> Steam + IGDB -> Supabase (Steam library updater)
 Vercel Cron (daily) -> /api/cron-refresh -> keeps platform tokens alive, prunes the games cache
 ```
 
@@ -56,6 +60,9 @@ api/
   _platform-refresh.js  server-side token refresh (PSN, Epic, Xbox, EA)
   cron-refresh.js       nightly Vercel Cron job
   dev-signin.js         local-only auto sign-in (404 everywhere else)
+  library-sync.js       Steam library updater endpoint
+  _steam-update.js _steam-achievements.js   the updater and its achievements loader
+  _match.js _match-steam.js _igdb-cache.js  matching library rows to IGDB
   psn.js steam.js epic.js xbox.js ea.js   platform handlers
   igdb.js sgdb.js hltb.js                 game data handlers
 public/
@@ -75,7 +82,7 @@ vercel.json             output folder, cron schedule, image rewrites + cache hea
 | [docs/api.md](docs/api.md)                     | every handler and action, CORS, IGDB/SteamGridDB/HLTB rules        |
 | [docs/api-responses.md](docs/api-responses.md) | real captured responses and field observations                     |
 | [docs/auth.md](docs/auth.md)                   | sign-in, local auto sign-in, the token vault, connect and refresh  |
-| [docs/database.md](docs/database.md)           | tables, the games cache, grants                                    |
+| [docs/database.md](docs/database.md)           | tables, the games cache, grants, the library and the Steam updater |
 | [docs/frontend.md](docs/frontend.md)           | the app at `/`: structure, search, game page, liquid glass         |
 | [docs/lab.md](docs/lab.md)                     | the lab at `/lab/`                                                 |
 | [docs/design.md](docs/design.md)               | design rules for the app (Apple's HIG, colours, glass, components) |
@@ -92,6 +99,9 @@ Things that have already caused bugs. Each is explained in the linked doc.
 - `api/_platform-refresh.js` duplicates the handlers' token mapping. Change
   one, change the other.
   ([auth.md](docs/auth.md#scheduled-refresh-the-thing-that-survives-the-app-being-closed))
+- `api/_igdb-cache.js` copies the browser's `normalizeName()` and
+  `toDetailRow()`; if they drift, rows the matcher writes stop lining up with
+  search. Change one, change the other.
 - New tables and functions need explicit grants, including for the cron's
   `service_role`. ([database.md](docs/database.md))
 - `games` is a cache of IGDB records, not the owner's library, and prunes
