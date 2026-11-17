@@ -52,20 +52,20 @@ export async function mount(el) {
   root = el;
   root.innerHTML = `
     <div class="library">
-      <div class="library-head">
-        <p class="meta" id="l-status">Loading...</p>
-        <button id="l-reload" type="button">Sync now</button>
-      </div>
       <nav class="subtabs" id="l-platform" aria-label="Platform"></nav>
-      <div class="library-sorts" id="l-sort" role="group" aria-label="Sort by">
-        ${Object.entries(SORT_LABELS)
-          .map(
-            ([key, label]) =>
-              `<button type="button" data-sort="${key}" aria-label="${label}" title="${label}" aria-pressed="${String(key === sortBy)}">${SORT_ICONS[key]}</button>`,
-          )
-          .join("")}
+      <div class="library-toolbar">
+        <div class="library-sorts" id="l-sort" role="group" aria-label="Sort by">
+          ${Object.entries(SORT_LABELS)
+            .map(
+              ([key, label]) =>
+                `<button type="button" data-sort="${key}" aria-label="${label}" title="${label}" aria-pressed="${String(key === sortBy)}">${SORT_ICONS[key]}</button>`,
+            )
+            .join("")}
+        </div>
+        <button id="l-reload" class="library-sync" type="button">Sync now</button>
       </div>
       <div id="l-grid" class="library-grid"></div>
+      <p class="library-toast meta" id="l-status" role="status" aria-live="polite" hidden></p>
     </div>
   `;
   root.querySelector("#l-platform").addEventListener("click", (event) => {
@@ -117,7 +117,7 @@ async function load() {
     title: row.games?.name ?? row.meta?.name ?? "?",
   }));
   const unmatched = rows.filter((r) => !r.igdb_id).length;
-  summary = `${rows.length} owned${unmatched ? `, ${unmatched} not matched to IGDB` : ""}`;
+  summary = unmatched ? `${unmatched} not matched to IGDB.` : "";
   render();
 }
 
@@ -148,13 +148,24 @@ function render() {
     .sort(sort)
     .map(card)
     .join("");
-  if (!syncing) setStatus(`${summary}.`);
 }
 
-function setStatus(text, isError = false) {
+let toastTimer;
+
+/** Shows a toast; it stays while a sync reports steps (`sticky`), else fades. */
+function setStatus(text, isError = false, { sticky = false } = {}) {
   const status = root.querySelector("#l-status");
+  clearTimeout(toastTimer);
   status.textContent = text;
   status.classList.toggle("error", isError);
+  status.hidden = !text;
+  if (text && !sticky)
+    toastTimer = setTimeout(
+      () => {
+        status.hidden = true;
+      },
+      isError ? 12000 : 6000,
+    );
 }
 
 const PLATFORM_NAMES = {
@@ -170,7 +181,7 @@ async function sync(force) {
   syncing = true;
   const button = root.querySelector("#l-reload");
   button.disabled = true;
-  setStatus("Syncing...");
+  setStatus("Syncing...", false, { sticky: true });
 
   let outcome = null;
   try {
@@ -203,7 +214,10 @@ async function sync(force) {
       for (const line of lines) {
         const msg = safeJson(line);
         if (!msg) continue;
-        if (msg.step) setStatus(`${platformName(msg.platform)}: ${msg.step}`);
+        if (msg.step)
+          setStatus(`${platformName(msg.platform)}: ${msg.step}`, false, {
+            sticky: true,
+          });
         else outcome = msg;
       }
     }
@@ -219,14 +233,14 @@ async function sync(force) {
 }
 
 function describe(outcome) {
-  if (!outcome) return [`${summary}. Sync ended without an answer.`, true];
-  if (outcome.error) return [`${summary}. Sync failed: ${outcome.error}`, true];
+  if (!outcome) return ["Sync ended without an answer.", true];
+  if (outcome.error) return [`Sync failed: ${outcome.error}`, true];
   const parts = Object.entries(outcome.platforms ?? {}).map(([p, o]) => {
     const [text, bad] = describePlatform(o);
     return [`${platformName(p)}: ${text}`, bad];
   });
   return [
-    `${summary}. ${parts.map(([t]) => t).join(" ")}`,
+    [...parts.map(([t]) => t), summary].filter(Boolean).join(" "),
     parts.some(([, bad]) => bad),
   ];
 }
