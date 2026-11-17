@@ -819,6 +819,10 @@ steamId (public info)
       "name": "Expansion_Antidote",
       "displayName": "I Have The Antidote",
       "displayNameLocked": null,
+      "description": "...",
+      "descriptionLocked": "",
+      "flavorText": "",
+      "hidden": true,
       "iconUnlocked": "https://shared-static-prod.epicgames.com/epic-achievements/...",
       "iconLocked": "https://shared-static-prod.epicgames.com/epic-achievements/...",
       "XP": 20,
@@ -838,9 +842,10 @@ steamId (public info)
 - `rarity` is a percentage (e.g. `9` = 9% of players earned it)
 - `XP` per achievement, summed to `totalXP`
 - Different icons for unlocked vs locked (`iconUnlocked` / `iconLocked`)
-- `displayNameLocked` can be `null` - hidden achievement title
+- `displayNameLocked` / `descriptionLocked` are empty for hidden achievements; `description` always holds the real text, so secret text is available
+- `hidden` flags secret achievements (Dead Island 2: 27 of 59; Rocket League: none)
 - Only games with achievements on the `progress` list will return data here
-- `achievementSetId` ties each achievement to its set (base or DLC). It and `isBase` come from the player's records, so they are `null` for achievements with no player record
+- `achievementSetId` and `isBase` come from the definition, so every achievement has them, locked or not. Sets have no names
 
 ---
 
@@ -1442,7 +1447,7 @@ Or `null` if no match.
 - Uses IGDB's `external_game_source` table (not deprecated `category` field)
 - `source` accepts name (e.g. `"steam"`, `"psn"`) or numeric ID (e.g. `1`, `36`) - see the source map in [api.md](api.md#api-apiigdbjs)
 - Returns only the IGDB `id` - lightweight mapping. Use `game({ ids: [id] })` for full record
-- `null` means IGDB has no record for that external ID (common for Epic UUIDs, modern Xbox titleIds)
+- `null` means IGDB has no record for that external ID (always for Epic namespaces, which IGDB doesn't store; common for modern Xbox titleIds)
 - Returns at most 1 result
 
 ---
@@ -1455,7 +1460,7 @@ Or `null` if no match.
 | --------- | ----------------------------------------------- | -------------------------------------- | :------------: | -------------------------------------------- |
 | **PSN**   | `concept.id` from `psn/games` (e.g. `10011898`) | Numeric string                         |   Yes (1:1)    | PSN `games` -> `by_external(psn, conceptId)` |
 | **Steam** | `appid` from `steam/games` (e.g. `1245620`)     | Numeric string                         |   Yes (1:1)    | Steam `games` -> `by_external(steam, appid)` |
-| **Epic**  | `namespace` / `catalogItemId`                   | Hex UUID (product slug, not namespace) |       No       | Store URL slug differs from both identifiers |
+| **Epic**  | `namespace` / `catalogItemId`                   | Store offer id / store page id         |       No       | Via store endpoints, see [database.md](database.md#igdb-bridging-per-platform) |
 | **Xbox**  | `titleId` from `xbox/games` (e.g. `1820250788`) | Xbox 360 UUID format                   |       No       | IGDB only has Xbox 360 marketplace IDs       |
 | **EA**    | `contentId` from `ea/library`                   | N/A                                    |       No       | No EA/Origin source in IGDB                  |
 

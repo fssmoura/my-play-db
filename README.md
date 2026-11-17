@@ -14,9 +14,9 @@ It is not a public service: one owner, private sign-in, deployed on Vercel.
   decides what to store and how. Every data call requires the owner's
   sign-in; the nightly job uses its own secret, and the local-only dev sign-in
   endpoint is the exception by design. The one exception to "no database" is
-  the library updater (`library-sync.js` and its `_steam-update.js`,
-  `_steam-achievements.js` and `_match*.js` helpers), which syncs the owner's
-  Steam library server-side.
+  the library updater (`library-sync.js`, its `_steam-update.js` and
+  `_epic-update.js`, their achievement loaders and the `_match*.js` helpers),
+  which syncs the owner's Steam and Epic libraries server-side.
 - **Database** - Supabase (Postgres + Auth). Stores platform tokens, a cache of
   IGDB game records and the owner's library (games, playtime, achievements).
 - **Two frontends**, sharing the same API, sign-in and database:
@@ -36,8 +36,9 @@ Browser  -> POST /api/psn    -> psn-api  -> PlayStation Network
          -> POST /api/sgdb   -> fetch    -> SteamGridDB v2 (community art)
          -> POST /api/hltb   -> fetch    -> HowLongToBeat (scraped, no API)
 Browser  -> Supabase (sign-in, tokens, games cache, library)
-Browser  -> POST /api/library-sync -> Steam + IGDB -> Supabase (Steam library updater)
+Browser  -> POST /api/library-sync -> Steam, Epic + IGDB -> Supabase (library updater)
 Vercel Cron (daily) -> /api/cron-refresh -> keeps platform tokens alive, prunes the games cache
+Vercel Cron (nightly, one per platform) -> GET /api/library-sync -> same updater
 ```
 
 ## Stack
@@ -47,7 +48,7 @@ Vercel Cron (daily) -> /api/cron-refresh -> keeps platform tokens alive, prunes 
   `fetch` or Node's `https`.
 - **Frontend:** vanilla JavaScript ES modules in the browser. No framework,
   bundler, TypeScript or build step. Supabase's client loads from esm.sh.
-- **Hosting:** Vercel (`vercel.json`: serves `public/`, the nightly cron, and
+- **Hosting:** Vercel (`vercel.json`: serves `public/`, the nightly crons, and
   `/img/*` image rewrites with long cache headers).
 - **Tooling:** Prettier for formatting. No linter or test framework.
 
@@ -60,9 +61,10 @@ api/
   _platform-refresh.js  server-side token refresh (PSN, Epic, Xbox, EA)
   cron-refresh.js       nightly Vercel Cron job
   dev-signin.js         local-only auto sign-in (404 everywhere else)
-  library-sync.js       Steam library updater endpoint
-  _steam-update.js _steam-achievements.js   the updater and its achievements loader
-  _match.js _match-steam.js _igdb-cache.js  matching library rows to IGDB
+  library-sync.js       library updater endpoint (lab sync + nightly crons)
+  _steam-update.js _steam-achievements.js   the Steam updater and its achievements loader
+  _epic-update.js _epic-achievements.js     the Epic updater and its achievements loader
+  _match.js _match-steam.js _match-epic.js _igdb-cache.js  matching library rows to IGDB
   psn.js steam.js epic.js xbox.js ea.js   platform handlers
   igdb.js sgdb.js hltb.js                 game data handlers
 public/
@@ -71,7 +73,7 @@ public/
   vendor/liquidGL.js    liquid glass library (patched copy)
   lab/                  the lab, with its own js/ and css/
 docs/                   the reference docs below
-vercel.json             output folder, cron schedule, image rewrites + cache headers
+vercel.json             output folder, cron schedules, image rewrites + cache headers
 ```
 
 ## Docs
@@ -82,7 +84,7 @@ vercel.json             output folder, cron schedule, image rewrites + cache hea
 | [docs/api.md](docs/api.md)                     | every handler and action, CORS, IGDB/SteamGridDB/HLTB rules        |
 | [docs/api-responses.md](docs/api-responses.md) | real captured responses and field observations                     |
 | [docs/auth.md](docs/auth.md)                   | sign-in, local auto sign-in, the token vault, connect and refresh  |
-| [docs/database.md](docs/database.md)           | tables, the games cache, grants, the library and the Steam updater |
+| [docs/database.md](docs/database.md)           | tables, the games cache, grants, the library and its updaters      |
 | [docs/frontend.md](docs/frontend.md)           | the app at `/`: structure, search, game page, liquid glass         |
 | [docs/lab.md](docs/lab.md)                     | the lab at `/lab/`                                                 |
 | [docs/design.md](docs/design.md)               | design rules for the app (Apple's HIG, colours, glass, components) |

@@ -6,9 +6,9 @@ import { gameTypeLabel, releaseYear } from "../ranking.js";
  * A read-only look at everything owned (player_games), joined to the IGDB
  * details where a match exists. Nothing here is clickable.
  *
- * Opening this tab asks the server to sync Steam (it skips if the last sync
- * was under 15 minutes ago); Sync now skips that wait. The sync itself lives
- * in /api/library-sync; this tab only shows its progress.
+ * Opening this tab asks the server to sync every platform (each skips if its
+ * last sync was under 15 minutes ago); Sync now skips that wait. The sync
+ * itself lives in /api/library-sync; this tab only shows its progress.
  */
 
 const SORT_LABELS = {
@@ -16,6 +16,20 @@ const SORT_LABELS = {
   title: "A-Z",
   playtime: "Most played",
   completion: "Completion",
+};
+
+const ICON = (body) =>
+  `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+
+const SORT_ICONS = {
+  recent: ICON('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+  title: ICON('<path d="M4 17l3-10 3 10M5 14h4"/><path d="M14 7h6l-6 10h6"/>'),
+  playtime: ICON(
+    '<path d="M6 3h12M6 21h12M7 3c0 5 10 7 10 18M17 3c0 5-10 7-10 18"/>',
+  ),
+  completion: ICON(
+    '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 20h6"/>',
+  ),
 };
 
 const SORTS = {
@@ -32,6 +46,7 @@ let rows = [];
 let summary = "";
 let syncing = false;
 let sortBy = "recent";
+let shown = "all";
 
 export async function mount(el) {
   root = el;
@@ -41,23 +56,30 @@ export async function mount(el) {
         <p class="meta" id="l-status">Loading...</p>
         <button id="l-reload" type="button">Sync now</button>
       </div>
-      <nav class="subtabs" id="l-sort" aria-label="Sort by">
+      <nav class="subtabs" id="l-platform" aria-label="Platform"></nav>
+      <div class="library-sorts" id="l-sort" role="group" aria-label="Sort by">
         ${Object.entries(SORT_LABELS)
           .map(
             ([key, label]) =>
-              `<button type="button" data-sort="${key}" aria-selected="${String(key === sortBy)}">${label}</button>`,
+              `<button type="button" data-sort="${key}" aria-label="${label}" title="${label}" aria-pressed="${String(key === sortBy)}">${SORT_ICONS[key]}</button>`,
           )
           .join("")}
-      </nav>
+      </div>
       <div id="l-grid" class="library-grid"></div>
     </div>
   `;
+  root.querySelector("#l-platform").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-platform]");
+    if (!button) return;
+    shown = button.dataset.platform;
+    render();
+  });
   root.querySelector("#l-sort").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-sort]");
     if (!button) return;
     sortBy = button.dataset.sort;
     for (const b of root.querySelectorAll("#l-sort button")) {
-      b.setAttribute("aria-selected", String(b === button));
+      b.setAttribute("aria-pressed", String(b === button));
     }
     render();
   });
@@ -97,9 +119,30 @@ async function load() {
   render();
 }
 
+/** Where a game comes from: the store on PC (Steam, Epic), else the console family. */
+function source(row) {
+  return row.platform === "pc" ? row.version : row.platform;
+}
+
 function render() {
+  const sources = [...new Set(rows.map(source))].sort((a, b) =>
+    platformName(a).localeCompare(platformName(b)),
+  );
+  if (shown !== "all" && !sources.includes(shown)) shown = "all";
+  root.querySelector("#l-platform").innerHTML = ["all", ...sources]
+    .map((key) => {
+      const count =
+        key === "all"
+          ? rows.length
+          : rows.filter((r) => source(r) === key).length;
+      const label = key === "all" ? "All" : platformName(key);
+      return `<button type="button" data-platform="${escapeHtml(key)}" aria-selected="${String(key === shown)}">${escapeHtml(label)} <span class="meta">${count}</span></button>`;
+    })
+    .join("");
+
   const sort = SORTS[sortBy] ?? SORTS.recent;
-  root.querySelector("#l-grid").innerHTML = [...rows]
+  root.querySelector("#l-grid").innerHTML = rows
+    .filter((row) => shown === "all" || source(row) === shown)
     .sort(sort)
     .map(card)
     .join("");
@@ -112,13 +155,20 @@ function setStatus(text, isError = false) {
   status.classList.toggle("error", isError);
 }
 
-/** Runs a Steam sync, showing each step it reports, then reloads the list. */
+const PLATFORM_NAMES = {
+  steam: "Steam",
+  epic: "Epic",
+  playstation: "PlayStation",
+};
+const platformName = (p) => PLATFORM_NAMES[p] ?? p;
+
+/** Runs a sync, showing each step it reports, then reloads the list. */
 async function sync(force) {
   if (syncing) return;
   syncing = true;
   const button = root.querySelector("#l-reload");
   button.disabled = true;
-  setStatus("Syncing Steam...");
+  setStatus("Syncing...");
 
   let outcome = null;
   try {
@@ -151,7 +201,7 @@ async function sync(force) {
       for (const line of lines) {
         const msg = safeJson(line);
         if (!msg) continue;
-        if (msg.step) setStatus(msg.step);
+        if (msg.step) setStatus(`${platformName(msg.platform)}: ${msg.step}`);
         else outcome = msg;
       }
     }
@@ -169,9 +219,20 @@ async function sync(force) {
 function describe(outcome) {
   if (!outcome) return [`${summary}. Sync ended without an answer.`, true];
   if (outcome.error) return [`${summary}. Sync failed: ${outcome.error}`, true];
-  if (outcome.busy) return [`${summary}. A sync is already running.`];
-  if (outcome.skipped)
-    return [`${summary}. Synced ${since(outcome.last_finished_at)}.`];
+  const parts = Object.entries(outcome.platforms ?? {}).map(([p, o]) => {
+    const [text, bad] = describePlatform(o);
+    return [`${platformName(p)}: ${text}`, bad];
+  });
+  return [
+    `${summary}. ${parts.map(([t]) => t).join(" ")}`,
+    parts.some(([, bad]) => bad),
+  ];
+}
+
+function describePlatform(outcome) {
+  if (outcome.error) return [`sync failed: ${outcome.error}.`, true];
+  if (outcome.busy) return ["a sync is already running."];
+  if (outcome.skipped) return [`synced ${since(outcome.last_finished_at)}.`];
 
   const r = outcome.result ?? {};
   const changes = [
@@ -186,7 +247,7 @@ function describe(outcome) {
     r.match?.error && "matching failed",
     r.unfinished && `${r.unfinished} left for next sync`,
   ].filter(Boolean);
-  const text = `${summary}. Synced: ${changes.length ? changes.join(", ") : "nothing new"}${
+  const text = `${changes.length ? changes.join(", ") : "nothing new"}${
     problems.length ? `; ${problems.join(", ")}` : ""
   }.`;
   return [text, problems.length > 0];

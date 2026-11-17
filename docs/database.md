@@ -21,8 +21,9 @@ Seven tables exist in `public` (`ignored_games` and `library_sync` are described
   [auth.md](auth.md#gate-1---who-can-sign-in).
 
 - **`achievements`** - one row per achievement per `player_games` row. See
-  [`achievements` columns](#achievements-columns). Steam is loaded (by
-  `api/_steam-achievements.js`); other platforms not yet.
+  [`achievements` columns](#achievements-columns). Steam and Epic are loaded
+  (by `api/_steam-achievements.js` and `api/_epic-achievements.js`); other
+  platforms not yet.
 
 ## Grants (read before adding a table or function)
 
@@ -392,6 +393,8 @@ old CS:GO achievements would have survived CS2 taking over Steam app 730.
 | `owned_game_id` | integer FK player_games.id | Platform and version come from the owned row, so they are not repeated here                                                          |
 | `platform_key`  | text                       | The platform's own id for the achievement (Steam `apiname`, PSN `trophyId`, Epic `name`). Unique per owned game; what syncs match on |
 | `group_name`    | text                       | A real group name or null. Null for every row of a game means one flat list                                                          |
+| `name`          | text                       | Display name (the unlocked one, so hidden entries still have their real name)                                                        |
+| `description`   | text                       | Real description, including for secret entries where the platform gives it                                                           |
 | `icon`          | text                       | The unlocked (colour) icon only; locked is shown by greying it out                                                                   |
 | `rarity`        | numeric(5,2)               | % of that platform's players who unlocked it. Same scale everywhere, but each platform counts only its own players                   |
 | `tier`          | text                       | PSN only: `bronze`/`silver`/`gold`/`platinum`                                                                                        |
@@ -403,14 +406,17 @@ What each platform gives (checked against the real library, Nov 2026):
 
 - **Group names:** PSN yes (`getTitleTrophyGroups`, e.g. "Watcher", "1.6 Update";
   the `default` group is the base game). Steam only on the community page below,
-  for some games. Epic no: `achievementSets` have ids and `isBase` but no names,
-  so Epic games are always one list.
+  for some games. Epic no: every achievement carries its set id and `isBase`, so
+  base game and each add-on can be told apart, but sets have no name field at
+  all (the API rejects `name`, `title`, `displayName`).
 - **Secret text:** PSN (`trophyDetail`) and Epic (`unlockedDescription`) give it
   for every hidden entry. Steam's official API never does; the public
   community page `steamcommunity.com/profiles/<id>/stats/<appid>/achievements/?l=english`
   embeds it, plus group names. That page is unofficial and rate-limits, so
   Steam jobs must fetch it slowly and fall back to the official API without
   the secret text.
+
+## `player_games` columns
 
 | Column         | Type                | Notes                                                                                       |
 | -------------- | ------------------- | ------------------------------------------------------------------------------------------- |
@@ -427,6 +433,9 @@ What each platform gives (checked against the real library, Nov 2026):
 | `synced_at`    | timestamptz         | Last time this row was written                                                              |
 
 **Unique constraint**: `(igdb_id, platform, version)` - one row per game per platform version.
+Before matching (`igdb_id` null) the store id guards against duplicates
+instead: unique indexes on `meta->>'appid'` for Steam rows and
+`meta->>'namespace'` for Epic rows.
 
 ### `player_games.meta` shape per platform
 
@@ -473,19 +482,30 @@ What each platform gives (checked against the real library, Nov 2026):
   (`demo`, `software`, `tool`, or `unknown` when the store has no record), so
   the owner can spot candidates for `ignored_games`.
 
-**Epic** (planned):
+**Epic**:
 
 ```json
 {
   "namespace": "9773aa1aa54f4f7b80e44bef04986cea",
   "catalog_item_id": "...",
   "app_name": "Sugar",
-  "product_id": "..."
+  "product_id": "...",
+  "name": "Example",
+  "has_achievements": true
 }
 ```
 
-- All from `library` response. `namespace` is the `sandboxId` for achievement queries.
-- No `np_communication_id` equivalent - games without achievements simply won't appear in `progress`.
+- One row per `namespace`, which is also the `sandboxId` for achievement
+  queries. A namespace can hold several apps that Epic times separately
+  (Fortnite and Rocket Racing; two Unreal Engine builds): they stay one row,
+  with their playtime added together, and `app_name` is just the first one.
+- `name` - Epic's name, kept only until a match exists, as for Steam.
+- `has_achievements` - the game appears in `progress`.
+- `acquisition` holds `acquisitionDate`.
+- `last_played`: Epic has no such date anywhere (API, launcher, local files;
+  checked Nov 2026). It can only be the day a sync sees playtime go up, so it
+  needs a daily sync and has no history before it. Fortnite and Among Us hold
+  dates the owner gave by hand; the rest start empty.
 
 **Xbox** (planned):
 
@@ -517,13 +537,13 @@ What each platform gives (checked against the real library, Nov 2026):
 
 No dedicated boolean column - derive it from `meta`:
 
-| Platform | Signal                                                                          |
-| -------- | ------------------------------------------------------------------------------- |
-| PSN      | `meta.np_communication_id` is present                                           |
-| Steam    | `meta.has_stats = true`                                                         |
-| Epic     | game appears in `progress` response (only games with achievements are returned) |
-| Xbox     | `achievements` action returns data (no ahead-of-time signal)                    |
-| EA       | `meta.achievement_set_override` is non-null                                     |
+| Platform | Signal                                                          |
+| -------- | --------------------------------------------------------------- |
+| PSN      | `meta.np_communication_id` is present                           |
+| Steam    | `meta.has_stats = true`                                         |
+| Epic     | `meta.has_achievements = true` (the game appears in `progress`) |
+| Xbox     | `achievements` action returns data (no ahead-of-time signal)    |
+| EA       | `meta.achievement_set_override` is non-null                     |
 
 ## Sync model
 
@@ -531,8 +551,11 @@ Import and matching are separate steps. A platform's list is saved first, as
 the platform gives it; the IGDB link is filled in afterwards and never
 re-resolved once set. So `player_games.igdb_id` is **nullable**: a row without
 one is an owned game still waiting for a match. Built so far: Steam's one-time
-first import, the matcher, and the [Steam updater](#the-steam-updater). PSN
-still has its early test rows, which are matched.
+first import, the matcher, and the [Steam updater](#the-steam-updater); Epic's
+one-time first import, matched with the same matcher, and its achievements
+(`_epic-achievements.js`, one call per game; add-on sets stay with the game,
+since Epic gives them no name). PSN still has its early test rows,
+which are matched.
 
 ```
 platform game -> write player_games row (igdb_id null)
@@ -548,18 +571,30 @@ that are not games (software, demos, playtests). Telling the agent to ignore one
 deletes it from `player_games` and adds it here; imports and matching skip
 anything listed. Nothing is auto-detected by name.
 
-**The matcher** (`api/_match.js`, one small adapter per platform such as
-`_match-steam.js`) is server code, not an endpoint: the
+**The matcher** (`api/_match.js`, one small adapter per platform:
+`_match-steam.js`, `_match-epic.js`) is server code, not an endpoint: the
 [Steam updater](#the-steam-updater) calls `matchPlatform(platform, options)`
 after adding new rows, and it can also be run by hand with node.
-It runs as `service_role`. It links only on certainty: the store id listed in
-IGDB, or a single clear winner whose name, release date, companies and website
-agree. Rows linked any other way than a direct store-id hit get
-`meta.matched_by` (`store_link`, `name` or `release`); `release` means the store
-name was too different (Steam's "Call of Duty®" hub is Modern Warfare II) and
-the link rests on the same release week, company and website. Anything unsure
+It runs as `service_role`. It links only on certainty, and real data about the
+owner's own copy always comes first; store pages, names, dates and platforms
+are only additions for when that isn't enough. Concretely: the store id listed
+in IGDB, or a single clear winner whose name, release date, companies and
+website agree. A weak name (Steam's "Call of Duty®" hub is Modern Warfare II)
+can still link when the same release week, company and website all agree.
+Anything unsure
 stays unlinked with `meta.review = {reason, candidates}` for the owner to pick,
 and is not retried unless asked.
+
+A row is what the owner owns: when that is an edition (the game plus more), the
+row links the edition, not the base game. Add-ons are separate IGDB game types
+and never a row's link.
+
+When a row's store ids point at several IGDB games, add-ons are dropped (if only
+add-ons match, the row goes to the next tier or the name search). For ids the
+owner is known to own, an edition replaces its base game; otherwise ownership of
+the edition isn't known, so the base game is kept. Then bundles go if anything
+else is left, then whatever the platform's own data rules out. More than one
+left means review.
 
 Steam's owned-games call needs `skip_unvetted_apps=0`, or it silently leaves out
 small free games. Even then it permanently leaves out some free games (Dota 2,
@@ -612,17 +647,53 @@ Profile page reads are 3 seconds apart. The endpoint stops starting new games
 after 240 s (Vercel's limit is 300 s, set in `vercel.json`); what's left is
 picked up next run.
 
-**`library_sync`** (`platform` PK, `running_since`, `last_finished_at`,
-`last_result` jsonb): one row per platform. The endpoint skips a run if the
-last one finished under 15 minutes ago (unless `force`), and takes a lock by
-setting `running_since` in a single conditional update, so two runs can't
-overlap; a lock older than 10 minutes counts as dead. `last_result` is the
-updater's summary. `authenticated` has `select`, `service_role` `select` +
-`update`.
+### The Epic updater
 
-The endpoint streams progress as JSON lines (`{step}`, then `{done, result}`,
-`{skipped}`, `{busy}` or `{error}`). Under `vercel dev` the lines arrive all at
-once at the end; live streaming on Vercel is untested.
+`api/_epic-update.js`, same shape and summary as Steam's, called by the same
+endpoint. One library call gives every namespace with its playtime (split apps
+added together).
+
+1. New namespaces (not in `ignored_games`) are added with their catalog title
+   as `meta.name` and `has_achievements` from `progress`, then matched.
+2. Every game whose playtime went **up** gets its achievements re-read
+   (`loadEpicAchievements`), then its playtime, and `last_played` = the moment
+   of the run. That is the only last-played Epic has, so its accuracy is the
+   sync's frequency: the nightly run makes it at worst the day. A lower
+   playtime is ignored as a glitch. `has_achievements` is only ever switched
+   on, since a failed lookup reads as "none".
+3. Games flagged `has_achievements` with no list yet get a full load.
+
+It stops if Epic returns no playtime at all while rows have some (the library
+call carries on without it). It uses the stored token and never renews it:
+that is `cron-refresh`'s job, at 03:00 UTC, and the token lasts about 36 hours,
+so it is valid at night; if it has expired the run fails with that reason.
+
+### library_sync and the nightly runs
+
+**`library_sync`** (`platform` PK, `running_since`, `last_finished_at`,
+`last_result` jsonb): one row per platform (`steam`, `epic`); a new platform
+needs its row inserted. Each platform runs on its own: the endpoint skips one
+if its last run finished under 15 minutes ago (unless `force`), and takes its
+lock by setting `running_since` in a single conditional update, so two runs
+can't overlap; a lock older than 10 minutes counts as dead. `last_result` is
+the updater's summary, or `{error, at}` when the run failed (a failure doesn't
+set `last_finished_at`, so it doesn't hold the next run back).
+`authenticated` has `select`, `service_role` `select` + `update`.
+
+Two ways in, same code:
+
+- **The lab** (signed-in `POST`): every platform in parallel, progress
+  streamed as JSON lines (`{platform, step}`, then
+  `{done, platforms: {steam: outcome, epic: outcome}}`, where an outcome is
+  `{result}`, `{skipped}`, `{busy}` or `{error}`). Under `vercel dev` the lines
+  arrive all at once at the end; live streaming on Vercel is untested.
+- **Nightly** (Vercel Cron `GET` with `CRON_SECRET`): one cron entry per
+  platform (`?platform=steam`, `?platform=epic`), each its own function call
+  with its own 300 s, at `0 22 * * *` UTC. Vercel fires anywhere in that hour,
+  so in Porto it's 22:00-23:00 in winter and 23:00-24:00 in summer: late, but
+  before midnight, so a date stamped then is still that day. Without
+  `?platform` it runs all. Answers JSON, 500 if any platform failed. Nightly
+  runs only happen on the deployed site.
 
 ### IGDB bridging per platform
 
@@ -630,9 +701,61 @@ once at the end; live streaming on Vercel is untested.
 | -------- | ---------------------------------------------------- |
 | PSN      | `by_external(psn, concept.id)` - 1:1                 |
 | Steam    | `by_external(steam, appid)` - 1:1                    |
-| Epic     | `igdb search(name)` - no direct ID bridge            |
+| Epic     | store bridge (below), then `igdb search(name)`       |
 | Xbox     | `igdb search(name)` - IGDB only has old Xbox 360 IDs |
 | EA       | `igdb search(name)` - no EA source in IGDB           |
+
+**Epic store bridge.** IGDB's Epic ids are Epic Store ids (the 32-hex one is
+the store offer id, the dashed one the store page id), which the library and
+catalog never return. Epic's launcher GraphQL (no sign-in needed) bridges them
+from the namespace:
+
+- `Catalog.catalogOffers(namespace)` returns every offer (`id`, `offerType`,
+  `offerMappings.pageSlug`). The offer `id` is IGDB's 32-hex uid, so
+  `by_external(epic, offerId)` works directly.
+- `Catalog.catalogNs(namespace).mappings(pageType:"productHome")` returns the
+  store slug. IGDB keeps it in `external_games.url` and in `websites.url`
+  (`.../p/<slug>`, older entries `.../product/<slug>`), which catches games
+  whose IGDB entry only holds the slug.
+
+Against the real library (Nov 2026) this reached 73 of 82 namespaces. Misses:
+delisted games for which Epic returns nothing (Dauntless, original GTA V, NBA
+2K21, Evil Dead) - IGDB still has them with Epic store links, so a name search
+finds them; Football Manager 2020 (IGDB holds only a `/product/` website link);
+and four non-game items not in IGDB. An older route (the `productmapping` list
+plus store-content pages) reached only 55, because that list misses newer slugs
+with a random suffix.
+
+How `_match-epic.js` uses it. What the owner owns comes first; everything else
+only helps when that isn't enough. Each run also reads the account's
+entitlements (`entitlement-public-service-prod08.ol.epicgames.com/entitlement/api/account/{epicAccountId}/entitlements`,
+with the stored access token; the run stops if it has expired). An entitlement
+is an "audience" item, and current offers list theirs in `items` (the
+library's `catalogItemId` is only the game files and is in no offer). The exact
+lookup runs in tiers:
+
+1. offers the owner owns - every item in the offer is entitled, or the offer is
+   named after an owned item no offer contains. If the owner also has an
+   edition item that no offer sells any more (Civilization VI's "Platinum
+   Edition Audience"), the link moves up to the one IGDB edition of that game
+   with that name;
+2. only if that finds nothing: the namespace's `BASE_GAME` and `EDITION` offers
+   (a namespace also returns every add-on,
+   so the rest are skipped). When these hit several games, the titles of owned
+   items that no offer contains pick between them (Dying Light's "Enhanced
+   Edition Audience" picks the Enhanced Edition).
+
+After that, the name search. Search candidates count as store-linked when IGDB
+lists any of the namespace's offer ids or its store slug, and are ruled out when
+IGDB lists them only on non-desktop platforms (not PC or Mac) or first released
+more than a year after the owner got the game (a year allows pre-purchases).
+Store details for the search come from the owned offer, or else the own offer
+whose title is closest to the imported name.
+
+Results (Nov 2026): all 73 linked, each to a different game; the only owned
+editions are Dying Light (Enhanced) and Civilization VI (Platinum). Re-matching
+every row as if new, with the names restored, gave the same games for all the
+others.
 
 ### Schema principles
 

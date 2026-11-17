@@ -431,7 +431,7 @@ const actions = {
       epicGraphQL({
         operationName: "Achievement",
         variables: { SandboxId: sandboxId, Locale: "en-US" },
-        query: `query Achievement($SandboxId: String!, $Locale: String!) { Achievement { productAchievementsRecordBySandbox(sandboxId: $SandboxId, locale: $Locale) { productId sandboxId totalAchievements totalProductXP achievementSets { achievementSetId isBase totalAchievements totalXP } achievements { achievement { name unlockedDisplayName lockedDisplayName unlockedIconLink lockedIconLink XP rarity { percent } } } } } }`,
+        query: `query Achievement($SandboxId: String!, $Locale: String!) { Achievement { productAchievementsRecordBySandbox(sandboxId: $SandboxId, locale: $Locale) { productId sandboxId totalAchievements totalProductXP achievementSets { achievementSetId isBase totalAchievements totalXP } achievements { achievement { name hidden isBase achievementSetId unlockedDisplayName lockedDisplayName unlockedDescription lockedDescription flavorText unlockedIconLink lockedIconLink XP rarity { percent } } } } } }`,
       }),
       epicGraphQL(
         {
@@ -484,14 +484,19 @@ const actions = {
           name: a.achievement.name,
           displayName: a.achievement.unlockedDisplayName,
           displayNameLocked: a.achievement.lockedDisplayName,
+          description: a.achievement.unlockedDescription ?? null,
+          descriptionLocked: a.achievement.lockedDescription ?? null,
+          flavorText: a.achievement.flavorText ?? null,
+          hidden: a.achievement.hidden ?? false,
           iconUnlocked: a.achievement.unlockedIconLink,
           iconLocked: a.achievement.lockedIconLink,
           XP: a.achievement.XP,
           rarity: a.achievement.rarity?.percent ?? null,
           unlocked: pa?.unlocked ?? false,
           unlockDate: pa?.unlockDate ?? null,
-          achievementSetId: pa?.achievementSetId ?? null,
-          isBase: pa?.isBase ?? null,
+          achievementSetId:
+            a.achievement.achievementSetId ?? pa?.achievementSetId ?? null,
+          isBase: a.achievement.isBase ?? pa?.isBase ?? null,
         };
       }),
     };
@@ -552,3 +557,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 };
+
+module.exports.epicGraphQL = epicGraphQL;
+module.exports.actions = actions;

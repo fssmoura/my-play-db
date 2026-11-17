@@ -25,7 +25,7 @@ The owner's email is the one recorded in `owner_allowlist`. To authorise a secon
 
 ## Gate 2 - who can call /api/\*
 
-`api/_auth.js` exports `requireUser(req, res)`. Every data handler calls it immediately after the CORS preflight and before parsing the body. The two exceptions are `cron-refresh.js` (checks `CRON_SECRET` instead, see below) and `dev-signin.js` (local only, see Gate 1):
+`api/_auth.js` exports `requireUser(req, res)`. Every data handler calls it immediately after the CORS preflight and before parsing the body. The exceptions are `cron-refresh.js` and the `GET` (cron) side of `library-sync.js` (both check `CRON_SECRET` instead, see below) and `dev-signin.js` (local only, see Gate 1):
 
 ```js
 setCorsHeaders(req, res);

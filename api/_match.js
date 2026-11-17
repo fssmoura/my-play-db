@@ -7,7 +7,9 @@
  *
  *   1. Skip rows on the ignore list, and rows already waiting for review
  *      (unless `retry`).
- *   2. Exact: IGDB's own store-id table (external_games). Batched, one call.
+ *   2. Exact: IGDB's own store-id table (external_games). Batched, one call;
+ *      the adapter may give tiers, most exact first (Epic: what the owner
+ *      owns, then the store page).
  *   3. Otherwise fetch the platform's store details for the row.
  *   4. Search IGDB by that name - plainly, and again limited to games released
  *      within a week of the store's date - then pull full records for the
@@ -30,6 +32,21 @@
  *   details(ids)   Map id -> { name, date (ms|null), developers, publishers,
  *                  website } from the store, for fallback rows only
  *   storeLinked(game, id)  true when an IGDB record names this store id
+ *
+ * Optional, for stores whose row id is not the id IGDB files (Epic):
+ *
+ *   prepare(batch, { db })  async, once per run with [{ row, id }] first
+ *   storeIds(id)   the ids to look up in IGDB's store-id table for this row:
+ *                  a plain list, or tiers [{ ids, how, owned }] tried in order
+ *                  (what the owner owns before what the store page sells);
+ *                  `how` is reported in the run's result, and
+ *                  `owned` makes an edition win over its base game
+ *   prefer(games, id)  narrows several exact hits using the store's own data
+ *   upgrade(game, id, igdb)  async; after an owned exact hit, the IGDB edition
+ *                  of that game the owner owns but no store id leads to, or
+ *                  null
+ *   fits(game, id) false rules a search candidate out (wrong platform, out
+ *                  after it was bought); never applied to exact hits
  */
 
 const { toDetailRow } = require("./_igdb-cache");
@@ -428,10 +445,74 @@ function decide(store, names, candidates, externalId, adapter) {
 
 /* ------------------------------------------------------------------ runner -- */
 
+const ADD_ONS = [1, 2, 13, 14];
+const BUNDLE = 3;
+
+/**
+ * When a row's store ids point at several IGDB games (an Epic store page sells
+ * the game and its editions; IGDB sometimes files a store id under an add-on),
+ * keep one: drop add-ons, then
+ *   - for ids the owner owns (`owned`): the most complete thing owned - an
+ *     edition replaces its base game, since an edition is the game plus more;
+ *   - otherwise: the game itself - an edition whose original is also here
+ *     goes, since owning the edition isn't known;
+ * then bundles if anything else is left, then whatever the adapter's own data
+ * rules out (`prefer`). Null means only add-ons matched, so the row moves on
+ * to the next tier or the name search.
+ */
+function pickExact(games, { prefer = (list) => list, owned = false } = {}) {
+  let keep = games.filter((g) => !ADD_ONS.includes(g.game_type));
+  if (!keep.length) return null;
+  let ids = new Set(keep.map((g) => g.id));
+  if (owned) {
+    const superseded = new Set(
+      keep
+        .map((g) => refId(g.version_parent))
+        .filter((p) => p != null && ids.has(p)),
+    );
+    keep = keep.filter((g) => !superseded.has(g.id));
+  } else {
+    keep = keep.filter((g) => !ids.has(refId(g.version_parent)));
+  }
+  const editions = new Set(
+    owned
+      ? keep.filter((g) => refId(g.version_parent) != null).map((g) => g.id)
+      : [],
+  );
+  if (keep.some((g) => g.game_type !== BUNDLE || editions.has(g.id)))
+    keep = keep.filter((g) => g.game_type !== BUNDLE || editions.has(g.id));
+  ids = new Set(keep.map((g) => g.id));
+  keep = keep.filter((g) => !ids.has(refId(g.parent_game)));
+  if (keep.length > 1) {
+    const preferred = prefer(keep);
+    if (preferred.length) keep = preferred;
+  }
+  if (keep.length === 1)
+    return { linkId: keep[0].id, game: keep[0], how: "store_id" };
+  return {
+    review: {
+      reason: "IGDB lists this store id on more than one game",
+      candidates: (keep.length ? keep : games).map((g) => ({
+        igdb_id: g.id,
+        name: g.name ?? null,
+        year: yearOf(g),
+      })),
+    },
+  };
+}
+
 function chunk(list, size) {
   const out = [];
   for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
   return out;
+}
+
+/** The adapter's store ids as tiers [{ ids, how, owned }], most exact first. */
+function storeTiers(adapter, id) {
+  const raw = adapter.storeIds ? adapter.storeIds(id) : [id];
+  if (raw.every((t) => typeof t === "string"))
+    return [{ ids: raw, how: "store_id" }];
+  return raw.filter((t) => t.ids.length);
 }
 
 /**
@@ -490,28 +571,45 @@ async function runMatch({ adapter, db, igdb, options = {} }) {
   report.remaining = queue.length - batch.length;
   if (!batch.length) return report;
 
-  /* Step 2 - exact, by store id. */
+  if (adapter.prepare) await adapter.prepare(batch, { db });
+
+  /* Step 2 - exact, by store id: each tier in turn, first one with a hit wins. */
   const decisions = new Map();
   if (adapter.igdbSource) {
-    const hits = await igdb.byExternalMany(
-      adapter.igdbSource,
-      batch.map((b) => b.id),
+    const tiersOf = new Map(
+      batch.map(({ id }) => [id, storeTiers(adapter, id)]),
     );
+    const hits = await igdb.byExternalMany(adapter.igdbSource, [
+      ...new Set([...tiersOf.values()].flat().flatMap((t) => t.ids)),
+    ]);
     for (const { id } of batch) {
-      const games = hits[id] ?? [];
-      if (games.length === 1)
-        decisions.set(id, { linkId: games[0], how: "store_id" });
-      else if (games.length > 1) {
-        decisions.set(id, {
-          review: {
-            reason: "IGDB lists this store id on more than one game",
-            candidates: games.map((g) => ({
-              igdb_id: g,
-              name: null,
-              year: null,
-            })),
-          },
-        });
+      for (const tier of tiersOf.get(id)) {
+        const games = [
+          ...new Set(tier.ids.flatMap((uid) => hits[uid] ?? [])),
+        ];
+        let verdict = null;
+        if (games.length === 1) verdict = { linkId: games[0], how: tier.how };
+        else if (games.length > 1)
+          verdict = pickExact(await igdb.game({ ids: games }), {
+            prefer: (list) => (adapter.prefer ? adapter.prefer(list, id) : list),
+            owned: Boolean(tier.owned),
+          });
+        if (verdict) {
+          if (verdict.linkId) verdict.how = tier.how;
+          if (verdict.linkId && tier.owned && adapter.upgrade) {
+            const base =
+              verdict.game ?? (await igdb.game({ ids: [verdict.linkId] }))[0];
+            const better = base && (await adapter.upgrade(base, id, igdb));
+            if (better)
+              Object.assign(verdict, {
+                linkId: better.id,
+                game: better,
+                how: "owned_edition",
+              });
+          }
+          decisions.set(id, verdict);
+          break;
+        }
       }
     }
   }
@@ -580,7 +678,22 @@ async function runMatch({ adapter, db, igdb, options = {} }) {
         const candidates = closest.length
           ? await igdb.game({ ids: closest })
           : [];
-        const verdict = decide(store, names, candidates, id, adapter);
+        const fitting = adapter.fits
+          ? candidates.filter((g) => adapter.fits(g, id))
+          : candidates;
+        const verdict =
+          candidates.length && !fitting.length
+            ? {
+                review: {
+                  reason: "no IGDB game fits what this store says you own",
+                  candidates: candidates.slice(0, 3).map((game) => ({
+                    igdb_id: game.id,
+                    name: game.name ?? null,
+                    year: yearOf(game),
+                  })),
+                },
+              }
+            : decide(store, names, fitting, id, adapter);
         decisions.set(
           id,
           verdict.link
@@ -656,7 +769,6 @@ async function runMatch({ adapter, db, igdb, options = {} }) {
           const meta = { ...row.meta };
           delete meta.name;
           delete meta.review;
-          if (d.how !== "store_id") meta.matched_by = d.how;
           await db.update("player_games", `id=eq.${row.id}`, {
             igdb_id: d.linkId,
             meta,
@@ -698,6 +810,7 @@ async function runMatch({ adapter, db, igdb, options = {} }) {
 
 const ADAPTERS = {
   steam: () => require("./_match-steam"),
+  epic: () => require("./_match-epic")(),
 };
 
 function serviceClient() {

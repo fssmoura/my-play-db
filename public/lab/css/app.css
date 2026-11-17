@@ -425,6 +425,28 @@ pre.output {
   margin: 0;
 }
 
+.library-sorts {
+  display: flex;
+  gap: 4px;
+}
+
+.library-sorts button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.library-sorts button[aria-pressed="true"] {
+  color: var(--text);
+  border-color: var(--text);
+}
+
 .library-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

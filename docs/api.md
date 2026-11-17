@@ -49,7 +49,7 @@ Values live in Vercel; how to get them locally is in
 | `igdb.js`                           | `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`                                                                       |
 | `sgdb.js`                           | `STEAMGRIDDB_API_KEY`                                                                                            |
 | `cron-refresh.js`                   | `CRON_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`                                                       |
-| `library-sync.js`                   | `SUPABASE_SERVICE_ROLE_KEY`, plus the Steam and IGDB keys above                                                  |
+| `library-sync.js`                   | `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, plus the Steam and IGDB keys above                                   |
 | `psn`, `epic`, `xbox`, `ea`, `hltb` | none - PSN uses the user's tokens; Epic, Xbox and EA use public client ids embedded in the code; HLTB has no key |
 
 ### Non-action endpoints
@@ -60,9 +60,11 @@ Values live in Vercel; how to get them locally is in
   See [auth.md](auth.md#scheduled-refresh-the-thing-that-survives-the-app-being-closed)
   and, for the database grants it needs,
   [database.md](database.md#grants-read-before-adding-a-table-or-function).
-- **`api/library-sync.js`** - signed-in `POST`: runs the Steam updater and
-  streams progress. Unlike the handlers it writes to the database itself. See
-  [database.md](database.md#the-steam-updater).
+- **`api/library-sync.js`** - runs the library updaters (Steam, Epic). Signed-in
+  `POST` (the lab) runs every platform and streams progress; `GET` with
+  `CRON_SECRET` is the nightly Vercel Cron, one entry per platform
+  (`?platform=`). Unlike the handlers it writes to the database itself. See
+  [database.md](database.md#library_sync-and-the-nightly-runs).
 - **`api/dev-signin.js`** - local preview only: auto sign-in for `vercel dev`,
   a plain 404 everywhere else. See [auth.md](auth.md#gate-1---who-can-sign-in).
 
@@ -113,7 +115,7 @@ Uses Epic's undocumented internal REST APIs (same endpoints as Legendary/Playnit
 | `library`      | accessToken [+ epicAccountId] [+ resolveNames]                              | Owned games (auto-paginates) with playtime merged. Each record: `namespace`, `catalogItemId`, `sandboxName`, `appName`, `productId`, `sandboxType`, `acquisitionDate`, `playtime`, `platforms`. `resolveNames: true` calls catalog to replace generic names with real titles |
 | `catalog`      | accessToken + items[] ({ namespace, catalogItemId })                        | Store metadata per game: `id`, `title`, `description`, `keyImages`, `developer`, `releaseInfo`, `categories`, `mainGameItem`                                                                                                                                                 |
 | `progress`     | accessToken [+ epicAccountId] [+ sandboxIds[]] [+ names{}] [+ resolveNames] | Achievement progress per game: `sandboxId`, `productId`, `sandboxName`, `catalogItemId`, `totalAchievements`, `totalXP`, `totalUnlocked`, `earnedXP`, `achievementSets[]`                                                                                                    |
-| `achievements` | accessToken + sandboxId [+ epicAccountId] [+ sandboxName] [+ catalogItemId] | Game header (same fields as progress) + `achievements[]` with `name`, `displayName`, `displayNameLocked`, `iconUnlocked`, `iconLocked`, `XP`, `rarity`, `unlocked`, `unlockDate`, `achievementSetId`, `isBase`                                                               |
+| `achievements` | accessToken + sandboxId [+ epicAccountId] [+ sandboxName] [+ catalogItemId] | Game header (same fields as progress) + `achievements[]` with `name`, `displayName`, `displayNameLocked`, `description`, `descriptionLocked`, `flavorText`, `hidden`, `iconUnlocked`, `iconLocked`, `XP`, `rarity`, `unlocked`, `unlockDate`, `achievementSetId`, `isBase`   |
 
 ### Field identity guide
 
