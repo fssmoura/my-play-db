@@ -60,7 +60,8 @@ Values live in Vercel; how to get them locally is in
   See [auth.md](auth.md#scheduled-refresh-the-thing-that-survives-the-app-being-closed)
   and, for the database grants it needs,
   [database.md](database.md#grants-read-before-adding-a-table-or-function).
-- **`api/library-sync.js`** - runs the library updaters (Steam, Epic). Signed-in
+- **`api/library-sync.js`** - runs the library updaters (Steam, Epic,
+  PlayStation). Signed-in
   `POST` (the lab) runs every platform and streams progress; `GET` with
   `CRON_SECRET` is the nightly Vercel Cron, one entry per platform
   (`?platform=`). Unlike the handlers it writes to the database itself. See
@@ -72,15 +73,17 @@ Values live in Vercel; how to get them locally is in
 
 POST or GET with `{ npsso, accessToken, refreshToken, action, options }` - the odd shape is explained under [Rules every handler shares](#rules-every-handler-shares).
 
-| Action      | What it needs                                   | Returns                                                                                                                                                     |
-| ----------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth`      | npsso or refreshToken                           | accessToken + refreshToken + expiry                                                                                                                         |
-| `profile`   | accessToken                                     | profile + presence + trophy summary                                                                                                                         |
-| `games`     | accessToken [+ limit/offset]                    | played games (auto-paginates in pages of 100, ps4/ps5/pspc). `limit` returns N most recent                                                                  |
-| `titles`    | accessToken [+ limit/offset]                    | trophy-focused title list (auto-paginates, page size 800). npCommunicationId + lastUpdatedDateTime + progress per title                                     |
-| `recent`    | accessToken [+ limit/categories]                | recently played games (lightweight GraphQL, no pagination). Defaults are `psn-api`'s: limit 50, categories `ps4_game` + `ps5_native_game`.                  |
-| `trophymap` | accessToken + titleIds[]                        | `{ resolved: { npTitleId: { npCommunicationId, npServiceName } }, unresolved: [npTitleId] }`. Falls back to proxy account for titles the user never synced. |
-| `trophies`  | accessToken + npCommunicationId + npServiceName | full trophy details for one game. If the user hasn't synced the game, returns definitions with all `earned: false`.                                         |
+| Action      | What it needs                                     | Returns                                                                                                                                                           |
+| ----------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`      | npsso or refreshToken                             | accessToken + refreshToken + expiry                                                                                                                               |
+| `profile`   | accessToken                                       | profile + presence + trophy summary                                                                                                                               |
+| `games`     | accessToken [+ limit/offset]                      | played games (auto-paginates in pages of 100, ps4/ps5/pspc). `limit` returns N most recent                                                                        |
+| `purchased` | accessToken [+ isActive/membership/platform]      | PS4/PS5 game library (bought + PS Plus), paged by 100. No playtime. Includes demos and apps.                                                                      |
+| `groups`    | accessToken + npCommunicationId [+ npServiceName] | trophy group names and per-group counts for one set                                                                                                               |
+| `titles`    | accessToken [+ limit/offset]                      | trophy-focused title list (auto-paginates, page size 800). npCommunicationId + lastUpdatedDateTime + progress per title                                           |
+| `recent`    | accessToken [+ limit/categories]                  | recently played games (lightweight GraphQL, no pagination). Defaults are `psn-api`'s: limit 50, categories `ps4_game` + `ps5_native_game`.                        |
+| `trophymap` | accessToken + titleIds[]                          | `{ resolved: { npTitleId: { npCommunicationId, npServiceName, sets } }, unresolved: [npTitleId] }`. Falls back to proxy account for titles the user never synced. |
+| `trophies`  | accessToken + npCommunicationId + npServiceName   | full trophy details for one game. If progress can't be read, all `earned: false` and `earnedError` is set.                                                        |
 
 Auth order: NPSSO -> `exchangeNpssoForAccessCode` -> `exchangeAccessCodeForAuthTokens` (or `refreshToken` -> `exchangeRefreshTokenForAuthTokens`). **The `auth` action is handled before the generic authorization path - do not reorder.** Every other action needs `accessToken` (or `npsso`, which is exchanged on the fly); `auth` is the only one that takes `refreshToken`.
 

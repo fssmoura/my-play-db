@@ -8,7 +8,9 @@ const {
   getUserPlayedGames,
   getRecentlyPlayedGames,
   getUserTitles,
+  getPurchasedGames,
   getTitleTrophies,
+  getTitleTrophyGroups,
   getUserTrophiesEarnedForTitle,
   getUserTrophiesForSpecificTitle,
 } = require("psn-api");
@@ -77,6 +79,43 @@ const actions = {
     };
   },
 
+  // The PS4/PS5 game library (purchases and claimed PS Plus games). Sony gives
+  // no total, so pages are read until one comes back short.
+  async purchased(authorization, options = {}) {
+    const { isActive, membership, platform } = options;
+    const filters = {};
+    if (isActive != null && isActive !== "")
+      filters.isActive = isActive === true || isActive === "true";
+    if (membership) filters.membership = membership;
+    if (platform) filters.platform = platform;
+    const size = 100;
+    const games = [];
+    const seen = new Set();
+    const pages = [];
+    for (let start = 0; start < 5000; start += size) {
+      const page = await getPurchasedGames(authorization, {
+        ...filters,
+        size,
+        start,
+      });
+      const items = page.data?.purchasedTitlesRetrieve?.games ?? [];
+      const fresh = items.filter((g) => !seen.has(g.entitlementId));
+      fresh.forEach((g) => seen.add(g.entitlementId));
+      pages.push({ start, returned: items.length, fresh: fresh.length });
+      games.push(...fresh);
+      if (items.length < size || fresh.length === 0) break;
+    }
+    return { games, totalItemCount: games.length, pages };
+  },
+
+  async groups(authorization, options = {}) {
+    const { npCommunicationId, npServiceName } = options;
+    if (!npCommunicationId) throw new Error("npCommunicationId is required");
+    return getTitleTrophyGroups(authorization, npCommunicationId, {
+      npServiceName: npServiceName ?? "trophy2",
+    });
+  },
+
   async titles(authorization, options = {}) {
     const { limit, offset } = options;
     if (limit != null) {
@@ -137,6 +176,12 @@ const actions = {
               map.set(title.npTitleId, {
                 npCommunicationId: trophyTitle.npCommunicationId,
                 npServiceName: trophyTitle.npServiceName,
+                // Some games carry more than one trophy set (collections, expansions).
+                sets: title.trophyTitles.map((t) => ({
+                  npCommunicationId: t.npCommunicationId,
+                  npServiceName: t.npServiceName,
+                  name: t.trophyTitleName,
+                })),
               });
             }
           }
@@ -177,13 +222,13 @@ const actions = {
         npCommunicationId,
         "all",
         trophyOptions,
-      ).catch(() => null),
+      ).catch((err) => ({ failed: err.message })),
     ]);
 
-    const earnedTrophies = earnedResult ?? {
-      trophies: [],
-      lastUpdatedDateTime: null,
-    };
+    const earnedError = earnedResult?.failed ?? null;
+    const earnedTrophies = earnedError
+      ? { trophies: [], lastUpdatedDateTime: null }
+      : earnedResult;
     const earnedMap = new Map(
       (earnedTrophies.trophies ?? []).map((e) => [e.trophyId, e]),
     );
@@ -210,6 +255,9 @@ const actions = {
       trophySetVersion: titleTrophies.trophySetVersion,
       hasTrophyGroups: titleTrophies.hasTrophyGroups,
       totalItemCount: titleTrophies.totalItemCount,
+      // When this is set, every trophy shows earned:false because the user's
+      // progress couldn't be read, not because nothing was unlocked.
+      earnedError,
       trophies,
     };
   },
@@ -291,3 +339,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 };
+
+// For other server code (the trophy loader) to call without an HTTP hop.
+module.exports.actions = actions;

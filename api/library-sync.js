@@ -3,6 +3,8 @@ const { requireUser } = require("./_auth");
 const { serviceClient } = require("./_match");
 const { updateSteam } = require("./_steam-update");
 const { updateEpic } = require("./_epic-update");
+const { updatePsn } = require("./_psn-update");
+const { ensureFreshAccess } = require("./_platform-refresh");
 
 // Runs the platform updaters. Each platform is independent: its own lock,
 // its own 15-minute rule, and one failing never stops another.
@@ -15,9 +17,10 @@ const { updateEpic } = require("./_epic-update");
 // {busy} | {error}. force ignores the 15-minute rule, never the lock.
 //
 // GET (Vercel cron, Authorization: Bearer CRON_SECRET), optional
-// ?platform=steam|epic (all when absent): same runs, answered as one JSON
-// object once finished. Sign-in renewal is not done here; that is
-// cron-refresh's job.
+// ?platform=steam|epic|playstation (all when absent): same runs, answered as
+// one JSON object once finished. Sign-in renewal is cron-refresh's job; a
+// platform whose access outlives no run (PSN: one hour) asks it, through
+// ensureFreshAccess, to renew before starting.
 
 const MIN_GAP_MS = 15 * 60 * 1000;
 // A run that died without finishing stops blocking others after this long.
@@ -46,6 +49,11 @@ const UPDATERS = {
     if (cred.expires_at && new Date(cred.expires_at).getTime() < Date.now())
       throw new Error("Epic sign-in has expired");
     return updateEpic({ db, accessToken, epicAccountId, deadline, log });
+  },
+  async playstation({ db, deadline, log }) {
+    const { accessToken } = await ensureFreshAccess(db, "psn");
+    if (!accessToken) throw new Error("PlayStation is not connected");
+    return updatePsn({ db, accessToken, deadline, log });
   },
 };
 

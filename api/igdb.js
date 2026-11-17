@@ -531,8 +531,39 @@ async function byExactName(name) {
   return games;
 }
 
+/**
+ * For the matcher: each game's edition family - the game itself, its base
+ * game (`version_parent`), and every edition of that base. Returns
+ * { gameId: [members] }, each member with id, name, first_release_date,
+ * platforms, version_parent and its store ids.
+ */
+async function editionFamilies(ids) {
+  const fields =
+    "fields id,name,version_title,first_release_date,platforms,version_parent,external_games.uid,external_games.external_game_source; limit 500;";
+  const out = {};
+  for (let i = 0; i < ids.length; i += 50) {
+    const part = [...new Set(ids.slice(i, i + 50))];
+    const own = await igdbFetch(
+      "games",
+      `where id = (${part.join(",")}); fields id,version_parent; limit 500;`,
+    );
+    const baseOf = new Map(own.map((g) => [g.id, g.version_parent ?? g.id]));
+    const bases = [...new Set(baseOf.values())];
+    const members = await igdbFetch(
+      "games",
+      `where id = (${bases.join(",")}) | version_parent = (${bases.join(",")}); ${fields}`,
+    );
+    for (const id of part) {
+      const base = baseOf.get(id);
+      out[id] = members.filter((g) => (g.version_parent ?? g.id) === base);
+    }
+  }
+  return out;
+}
+
 // For other server code (the matcher) to call without an HTTP hop.
 module.exports.actions = actions;
 module.exports.byExternalMany = byExternalMany;
 module.exports.searchReleasedBetween = searchReleasedBetween;
 module.exports.byExactName = byExactName;
+module.exports.editionFamilies = editionFamilies;

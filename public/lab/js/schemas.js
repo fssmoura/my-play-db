@@ -64,6 +64,42 @@ export const SCHEMAS = {
         placeholder: '["ps5_native_game"]',
       },
     ],
+    purchased: [
+      {
+        name: "isActive",
+        type: "select",
+        options: ["", "true", "false"],
+        hint: "Not set = Sony's default (true: games you can still play). false = the inactive ones, e.g. lapsed PS Plus.",
+      },
+      {
+        name: "membership",
+        type: "select",
+        options: ["", "NONE", "PS_PLUS"],
+        hint: "NONE = bought, PS_PLUS = claimed through PS Plus. Empty = both.",
+      },
+      {
+        name: "platform",
+        type: "json",
+        hint: 'Defaults to ["ps4","ps5"].',
+        placeholder: '["ps5"]',
+      },
+    ],
+    groups: [
+      {
+        name: "npCommunicationId",
+        type: "string",
+        required: true,
+        hint: "Trophy set ID. Comes from `titles` or `trophymap`.",
+        placeholder: "NPWR49547_00",
+      },
+      {
+        name: "npServiceName",
+        type: "select",
+        default: "trophy2",
+        options: ["trophy2", "trophy"],
+        hint: "trophy2 for PS5 titles, trophy for PS4 and older.",
+      },
+    ],
     trophymap: [
       {
         name: "titleIds",

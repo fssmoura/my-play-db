@@ -36,7 +36,16 @@ export const PLATFORMS = {
     canRefresh: true,
     connectMode: "clipboard",
     extract: EXTRACTORS.psn,
-    actions: ["profile", "games", "titles", "recent", "trophymap", "trophies"],
+    actions: [
+      "profile",
+      "games",
+      "purchased",
+      "titles",
+      "recent",
+      "trophymap",
+      "groups",
+      "trophies",
+    ],
     callCredentials: (r) => ({ accessToken: r.credentials.accessToken }),
 
     async connect(npsso) {

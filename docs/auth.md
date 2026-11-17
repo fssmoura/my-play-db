@@ -297,7 +297,10 @@ because they only export a request handler. **If you change the token mapping in
 
 Vercel Hobby only allows daily cron granularity. That is sufficient: the job
 exists to roll the long-lived _refresh_ token (PSN ~10 days), not the short
-access token.
+access token. A job that needs the short one at another time (the PSN library
+updater: PSN access lasts an hour) calls `ensureFreshAccess(db, platform)` from
+the same file, which renews and saves exactly as this job does, but only when
+the stored access expires within 15 minutes. Renewal still lives only here.
 
 Extra env: `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` (server-only, never shipped
 to the browser).

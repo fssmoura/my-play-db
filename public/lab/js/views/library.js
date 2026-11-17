@@ -101,9 +101,11 @@ async function load() {
   const { data, error } = await supabase
     .from("player_games")
     .select(
-      "id, platform, version, playtime, last_played, meta, igdb_id, games(name, cover, first_release_date, game_type), achievements(count), unlocked:achievements(count)",
+      "id, platform, version, playtime, last_played, meta, igdb_id, games(name, cover, first_release_date, game_type), achievements(count), unlocked:achievements(count), platinum:achievements(count)",
     )
-    .not("unlocked.unlocked_at", "is", null);
+    .not("unlocked.unlocked_at", "is", null)
+    .eq("platinum.tier", "platinum")
+    .not("platinum.unlocked_at", "is", null);
 
   if (error) {
     setStatus(`Error: ${error.message}`, true);
@@ -241,6 +243,7 @@ function describePlatform(outcome) {
     r.new_unlocks &&
       `${r.new_unlocks} new achievement${r.new_unlocks > 1 ? "s" : ""}`,
     r.match?.review && `${r.match.review} to review`,
+    r.removed?.length && `${r.removed.length} left PS Plus`,
   ].filter(Boolean);
   const problems = [
     r.failed?.length && `${r.failed.length} failed`,
@@ -303,7 +306,9 @@ function achievementLine(row) {
     return `<p class="meta" title="Steam doesn't share progress for this game">${total} achievements · progress unavailable</p>`;
   }
   const unlocked = row.unlocked?.[0]?.count ?? 0;
-  return `<p class="meta">${unlocked}/${total} achievements · ${Math.floor(completion(row) * 100)}%</p>`;
+  const noun = row.platform === "playstation" ? "trophies" : "achievements";
+  const platinum = row.platinum?.[0]?.count ? " · platinum" : "";
+  return `<p class="meta">${unlocked}/${total} ${noun} · ${Math.floor(completion(row) * 100)}%${platinum}</p>`;
 }
 
 function byTitle(a, b) {

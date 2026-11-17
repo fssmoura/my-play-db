@@ -40,7 +40,10 @@ Today that is `select` + `update` on `platform_credentials`, `execute` on
 `prune_games_cache()`, and for the library jobs (import, matcher and updater)
 `select`/`insert`/`update` on `games`, `player_games` and `achievements`,
 `select` + `update` on `library_sync`, `select` on `ignored_games` and
-`execute` on `cache_game_details`. It has no `delete` anywhere.
+`execute` on `cache_game_details` and `remove_unplayed_ps_plus`. It has no
+`delete` anywhere; that function (security definer, `service_role` only) is
+the PSN updater's one way to remove a row, and refuses anything played,
+bought or holding trophies.
 
 This has already shipped broken once: the cron ran for weeks returning 500 on
 its first read because `service_role` lacked `select` on
@@ -388,19 +391,19 @@ your unlock state. Rows are never deleted (`service_role` has no `delete`):
 an achievement that disappears from a platform's list stays, which is how the
 old CS:GO achievements would have survived CS2 taking over Steam app 730.
 
-| Column          | Type                       | Notes                                                                                                                                |
-| --------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `owned_game_id` | integer FK player_games.id | Platform and version come from the owned row, so they are not repeated here                                                          |
-| `platform_key`  | text                       | The platform's own id for the achievement (Steam `apiname`, PSN `trophyId`, Epic `name`). Unique per owned game; what syncs match on |
-| `group_name`    | text                       | A real group name or null. Null for every row of a game means one flat list                                                          |
-| `name`          | text                       | Display name (the unlocked one, so hidden entries still have their real name)                                                        |
-| `description`   | text                       | Real description, including for secret entries where the platform gives it                                                           |
-| `icon`          | text                       | The unlocked (colour) icon only; locked is shown by greying it out                                                                   |
-| `rarity`        | numeric(5,2)               | % of that platform's players who unlocked it. Same scale everywhere, but each platform counts only its own players                   |
-| `tier`          | text                       | PSN only: `bronze`/`silver`/`gold`/`platinum`                                                                                        |
-| `points`        | integer                    | Epic XP, Xbox gamerscore                                                                                                             |
-| `secret`        | boolean                    | Hidden on the platform. The real description is still stored; the UI blurs it                                                        |
-| `unlocked_at`   | timestamptz                | Null means locked                                                                                                                    |
+| Column          | Type                       | Notes                                                                                                                                                                                                                    |
+| --------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `owned_game_id` | integer FK player_games.id | Platform and version come from the owned row, so they are not repeated here                                                                                                                                              |
+| `platform_key`  | text                       | The platform's own id for the achievement (Steam `apiname`, Epic `name`, PSN `<list>:<trophyId>` such as `NPWR22859_00:12`, since one PSN row can hold several trophy lists). Unique per owned game; what syncs match on |
+| `group_name`    | text                       | A real group name or null. Null for every row of a game means one flat list                                                                                                                                              |
+| `name`          | text                       | Display name (the unlocked one, so hidden entries still have their real name)                                                                                                                                            |
+| `description`   | text                       | Real description, including for secret entries where the platform gives it                                                                                                                                               |
+| `icon`          | text                       | The unlocked (colour) icon only; locked is shown by greying it out                                                                                                                                                       |
+| `rarity`        | numeric(5,2)               | % of that platform's players who unlocked it. Same scale everywhere, but each platform counts only its own players                                                                                                       |
+| `tier`          | text                       | PSN only: `bronze`/`silver`/`gold`/`platinum`                                                                                                                                                                            |
+| `points`        | integer                    | Epic XP, Xbox gamerscore                                                                                                                                                                                                 |
+| `secret`        | boolean                    | Hidden on the platform. The real description is still stored; the UI blurs it                                                                                                                                            |
+| `unlocked_at`   | timestamptz                | Null means locked                                                                                                                                                                                                        |
 
 What each platform gives (checked against the real library, Nov 2026):
 
@@ -415,6 +418,13 @@ What each platform gives (checked against the real library, Nov 2026):
   embeds it, plus group names. That page is unofficial and rate-limits, so
   Steam jobs must fetch it slowly and fall back to the official API without
   the secret text.
+- **PSN specifics:** group names are stored only when the list has DLC groups
+  or the row holds several lists (the `default` group is then named after the
+  game); otherwise `group_name` is null. Rarity comes with the player's
+  progress, so lists whose progress Sony refuses (games never started, trials)
+  have no rarity and are all locked. Old PS3 trophies can be earned with no
+  date (Skylanders Giants: one of four); with no date they are stored locked,
+  by the owner's choice.
 
 ## `player_games` columns
 
@@ -435,7 +445,9 @@ What each platform gives (checked against the real library, Nov 2026):
 **Unique constraint**: `(igdb_id, platform, version)` - one row per game per platform version.
 Before matching (`igdb_id` null) the store id guards against duplicates
 instead: unique indexes on `meta->>'appid'` for Steam rows and
-`meta->>'namespace'` for Epic rows.
+`meta->>'namespace'` for Epic rows. PSN rows have three: `(version,
+meta->>'concept_id')` when there is a concept, the first of `meta.title_ids`
+(PS4/PS5), and the first trophy list (PS3).
 
 ### `player_games.meta` shape per platform
 
@@ -443,19 +455,33 @@ instead: unique indexes on `meta->>'appid'` for Steam rows and
 
 ```json
 {
-  "title_ids": ["PPSA27360_00", "CUSA52314_00", ...],
-  "concept_id": 10011898,
-  "category": "ps5_native_game",
-  "service": "none(purchased)",
-  "np_communication_id": "NPWR49547_00",
-  "np_service_name": "trophy2"
+  "title_ids": ["CUSA13323_00", "CUSA18353_00"],
+  "concept_id": 235227,
+  "trophy_sets": [{ "id": "NPWR15120_00", "service": "trophy" }],
+  "ps_plus": false,
+  "name": "Ghost of Tsushima"
 }
 ```
 
-- `title_ids` - all SKUs sharing this concept (from `concept.titleIds`). Needed for `trophymap` calls.
-- `np_communication_id` + `np_service_name` - resolved via `trophymap`. Required to call `trophies`. Absent if the game has no trophy set.
-- `category` - `ps5_native_game` / `ps4_game` / `pspc_game`. Determines `version` field.
-- `service` - `none(purchased)` / `ps_plus` / `ps_now`.
+- `title_ids` - the Sony codes this row stands for: the played ones on this
+  console, or the purchased one for an unplayed game. Several only when one
+  console lists more than one code for the game (Ghost of Tsushima PS4: the
+  game plus the Director's Cut bonus content). Empty for PS3 rows.
+- `concept_id` - the game's Sony concept, for every code including unplayed
+  ones, from the public catalogue
+  (`m.np.playstation.com/api/catalog/v2/titles/<code>/concepts?age=99&country=GB&language=en-GB`,
+  no sign-in; it matched `games`' `concept.id` for all 185 played codes).
+  Absent only for PS3 rows. Groups a game's codes and is IGDB's PSN id.
+- `trophy_sets` - every trophy list of these codes (from `trophymap` `sets`;
+  a code can own several). Empty means no list is known: either no trophies
+  (apps), or a game never launched by the owner or by `trophymap`'s fallback
+  account. PS3 rows hold their one list.
+- `ps_plus` - true only when the game came from PS Plus and no copy was bought
+  (`purchased` `membership`). Free-to-play claims count as bought; Sony doesn't
+  separate them.
+- `name` - the catalogue's English name (`nameEn`; purchases and play history
+  use the store language), else Sony's own name. Kept only until a match
+  exists, as for Steam.
 
 **Steam**:
 
@@ -539,7 +565,7 @@ No dedicated boolean column - derive it from `meta`:
 
 | Platform | Signal                                                          |
 | -------- | --------------------------------------------------------------- |
-| PSN      | `meta.np_communication_id` is present                           |
+| PSN      | `meta.trophy_sets` is not empty                                 |
 | Steam    | `meta.has_stats = true`                                         |
 | Epic     | `meta.has_achievements = true` (the game appears in `progress`) |
 | Xbox     | `achievements` action returns data (no ahead-of-time signal)    |
@@ -554,8 +580,13 @@ one is an owned game still waiting for a match. Built so far: Steam's one-time
 first import, the matcher, and the [Steam updater](#the-steam-updater); Epic's
 one-time first import, matched with the same matcher, and its achievements
 (`_epic-achievements.js`, one call per game; add-on sets stay with the game,
-since Epic gives them no name). PSN still has its early test rows,
-which are matched.
+since Epic gives them no name); PSN's one-time first import (687 rows after the owner's ignore
+review, Nov 2026; the 5 early test rows were updated in place and kept their
+links), matched with the same matcher, and its trophies (`_psn-achievements.js`,
+one `trophies` call per list plus `groups` for names; 208 rows, 9,421 trophies,
+2,211 unlocked, every list matching the per-tier counts in `titles`). Trophies
+go to rows that were played or bought (`ps_plus` false) or whose list is on the
+owner's account; unplayed PS Plus rows get none until played or bought.
 
 ```
 platform game -> write player_games row (igdb_id null)
@@ -564,7 +595,15 @@ platform game -> write player_games row (igdb_id null)
               -> write achievements rows pointing to that player_games row
 ```
 
-A game is owned once seen; there is no "still in library" flag.
+A game is owned once seen; there is no "still in library" flag. The one
+exception is a PSN game from PS Plus that was never played: it stays only while
+Sony still lists it as active.
+
+**Layering.** Each import starts from the player's own records - what they
+played and what they unlocked - and adds the other calls (ownership lists,
+catalogue lookups) on top as extra layers. A secondary call never replaces or
+filters out the player's own data: anything played counts, whether or not it is
+still owned.
 
 **`ignored_games`** (`platform`, `external_id`, `name`): things a platform lists
 that are not games (software, demos, playtests). Telling the agent to ignore one
@@ -572,7 +611,7 @@ deletes it from `player_games` and adds it here; imports and matching skip
 anything listed. Nothing is auto-detected by name.
 
 **The matcher** (`api/_match.js`, one small adapter per platform:
-`_match-steam.js`, `_match-epic.js`) is server code, not an endpoint: the
+`_match-steam.js`, `_match-epic.js`, `_match-psn.js`) is server code, not an endpoint: the
 [Steam updater](#the-steam-updater) calls `matchPlatform(platform, options)`
 after adding new rows, and it can also be run by hand with node.
 It runs as `service_role`. It links only on certainty, and real data about the
@@ -607,6 +646,33 @@ game seen only in the recently-played list). First played, play
 count and acquisition stay empty - no source provides them. A unique index on
 `meta->>'appid'` (Steam rows only) prevents duplicates. `meta` is described
 under [Steam meta](#player_gamesmeta-shape-per-platform).
+
+**PSN rows**: `platform = 'playstation'`, one row per
+game per console, `version` `ps5` (`PPSA` codes), `ps4` (`CUSA`) or `ps3`.
+Nothing is merged in the database. Which games get a row:
+
+- everything played or with trophies (play history, plus games Sony dropped
+  from it but still lists in purchases with the owner's trophies: Marvel's
+  Avengers, Dauntless, Zenith);
+- PS3 trophy lists, which link to no game (trophies only, no play data);
+- bought games never played;
+- PS Plus games never played, while still active.
+
+Which console: a game (one `concept_id`) gets a row only for each console that
+holds the owner's data - playtime, or a trophy list in the owner's `titles`.
+Both PS4 and PS5 rows exist only when both have data (6 games at import: Ghost
+of Tsushima, DIRT 5, FIFA 22, eFootball, Knockout City, Genshin Impact). With
+no data anywhere it is one row, PS5 if a PS5 code is owned. Unowned codes of a
+stored game add nothing, apart from making the row bought rather than
+`ps_plus`. Sony sometimes gives a game's PS4 and PS5 versions different
+concepts: when one purchase (`productId`) holds both, they are still one game
+(Hotline Miami, Hotline Miami 2, Stellaris); otherwise nothing links them, and
+the owner ignores the extra one (Persona 5 Royal PS4). When one console lists
+several played codes for a game, `playtime` and `play_count` are added together,
+`first_played` is the earliest and `last_played` the latest. Trophies not
+confirmed unlocked are stored locked, including trials whose progress Sony
+refuses. `ignored_games.external_id` is a Sony code, so ignoring one (a demo or
+an art book under a game's name) removes only that code, not the game.
 
 ### The Steam updater
 
@@ -668,11 +734,58 @@ call carries on without it). It uses the stored token and never renews it:
 that is `cron-refresh`'s job, at 03:00 UTC, and the token lasts about 36 hours,
 so it is valid at night; if it has expired the run fails with that reason.
 
+### The PlayStation updater
+
+`api/_psn-update.js`, same shape and summary as Steam's (plus `checked` and
+`removed`), called by the same endpoint. PSN access lasts an hour, so before
+each run the endpoint calls `ensureFreshAccess(db, "psn")` from
+`_platform-refresh.js`, which renews and saves the sign-in exactly as
+`cron-refresh` does when it expires within 15 minutes; the updater itself
+never renews.
+
+1. **Quick check, every run:** `recent` (one call, the 50 latest). Its
+   `lastPlayedDateTime` equals play history's (all 50 checked). If no game is
+   newer than its row's `last_played` (or unknown), purchases were checked in
+   the last 20 hours and no played or bought row lacks its trophies, the run
+   ends (`checked: "quick"`, about a second).
+2. **Play history** (when something moved): played codes are grouped onto
+   their row (by code, else by concept on that console) and summed as at
+   import; a row changes only when its last-played date or playtime went up.
+   A game first played on a console takes over its unplayed row on the other
+   console if that row has nothing stored, else gets a new row. New codes get
+   their lists from `trophymap`.
+3. **Purchases, at most every 20 hours:** active `purchased` entries (code and
+   membership, so a PS Plus game later bought counts) not seen last time
+   (`library_sync.state.purchase_entries`) are grouped by concept: a
+   stored game can only become bought (`ps_plus` false); a new game gets one
+   row, PS5 if a PS5 code is among them. Unplayed PS Plus rows with no
+   trophies whose codes are no longer active are removed through
+   `remove_unplayed_ps_plus(row_ids)`, a security definer function that refuses
+   any row played, bought or holding trophies. Not when the profile says PS
+   Plus has lapsed (the list is kept), and not when more than 60 would go at
+   once or Sony returns nothing (taken as a glitch).
+4. Matching, then trophies (`loadPsnTrophies`) for every changed row and for
+   played or bought rows still without trophies, then the play data - so a
+   failure is retried next run.
+
+Tested Nov 2026 against the real account through the cron endpoint: a quick
+run, a played game wound back (restored from Sony with its trophies re-read),
+an unplayed PS Plus game leaving the catalogue (removed), and the same game
+then re-added as a new claim and matched.
+
+Not handled, left on purpose as rare: a new claim of a game whose PS4 and PS5
+versions have different concepts (Hotline Miami) becomes two rows, since only
+the import paired them by `productId`; and a bought, unplayed game first played
+on its other console keeps its old row next to the new one, because that row's
+locked trophy list can't be deleted.
+
 ### library_sync and the nightly runs
 
 **`library_sync`** (`platform` PK, `running_since`, `last_finished_at`,
-`last_result` jsonb): one row per platform (`steam`, `epic`); a new platform
-needs its row inserted. Each platform runs on its own: the endpoint skips one
+`last_result` jsonb, `state` jsonb): one row per platform (`steam`, `epic`,
+`playstation`); a new platform needs its row inserted. `state` is the
+updater's own bookkeeping between runs (PSN: `purchases_checked_at`,
+`purchase_entries`). Each platform runs on its own: the endpoint skips one
 if its last run finished under 15 minutes ago (unless `force`), and takes its
 lock by setting `running_since` in a single conditional update, so two runs
 can't overlap; a lock older than 10 minutes counts as dead. `last_result` is
@@ -688,7 +801,7 @@ Two ways in, same code:
   `{result}`, `{skipped}`, `{busy}` or `{error}`). Under `vercel dev` the lines
   arrive all at once at the end; live streaming on Vercel is untested.
 - **Nightly** (Vercel Cron `GET` with `CRON_SECRET`): one cron entry per
-  platform (`?platform=steam`, `?platform=epic`), each its own function call
+  platform (`?platform=steam`, `?platform=epic`, `?platform=playstation`), each its own function call
   with its own 300 s, at `0 22 * * *` UTC. Vercel fires anywhere in that hour,
   so in Porto it's 22:00-23:00 in winter and 23:00-24:00 in summer: late, but
   before midnight, so a date stamped then is still that day. Without
@@ -697,13 +810,37 @@ Two ways in, same code:
 
 ### IGDB bridging per platform
 
-| Platform | Bridge method                                        |
-| -------- | ---------------------------------------------------- |
-| PSN      | `by_external(psn, concept.id)` - 1:1                 |
-| Steam    | `by_external(steam, appid)` - 1:1                    |
-| Epic     | store bridge (below), then `igdb search(name)`       |
-| Xbox     | `igdb search(name)` - IGDB only has old Xbox 360 IDs |
-| EA       | `igdb search(name)` - no EA source in IGDB           |
+| Platform | Bridge method                                                    |
+| -------- | ---------------------------------------------------------------- |
+| PSN      | `by_external(psn, concept_id)`, then `igdb search(name)` (below) |
+| Steam    | `by_external(steam, appid)` - 1:1                                |
+| Epic     | store bridge (below), then `igdb search(name)`                   |
+| Xbox     | `igdb search(name)` - IGDB only has old Xbox 360 IDs             |
+| EA       | `igdb search(name)` - no EA source in IGDB                       |
+
+**PSN.** IGDB's PSN source holds only Sony concept ids (no per-console codes,
+nothing at edition level), and each concept points at one IGDB game. A concept
+spans a game and its editions, so IGDB may have filed it on an edition while
+the base game carries no PSN link (F1 25 -> "Iconic Edition"). The adapter's
+`refine` then looks at that edition family (`igdb.editionFamilies`: the base
+and every `version_parent` edition) and picks an edition only when the
+catalogue's name contains its IGDB `version_title` ("Weird West: Definitive
+Edition"), else the base game; members on another console, or with a PSN
+concept of their own (The Walking Dead: Saints & Sinners' base game), are never
+picked. Sony's own suffixes ("Terraria – PlayStation®4 Edition") name no IGDB
+edition. Remasters, remakes and expanded games are separate IGDB games, not
+editions, and stay as linked: Spider-Man PS5 -> Remastered, Until Dawn PS5 ->
+the remake, Ghost of Tsushima -> Director's Cut, Telltale's Batman -> Episode 1,
+Just Dance: Decades of Hits -> Just Dance 2023 (whose store page Sony reused).
+Rows without an IGDB concept (and PS3 rows, which have none) use
+the name search with the catalogue's name, publisher and release date
+(`_match-psn.js`), and only IGDB games on that console fit. The adapter sets
+`perVersion`, so a PS4 and a PS5 row of one game both link the same IGDB game.
+Results (Nov 2026): 685 of 687 linked (677 by concept, 10 of them moved within
+their edition family; 8 by name: Godfall,
+Abandoned and the 6 PS3 games other than Epic Mickey 2); the owner picked the
+other two from review: Epic Mickey 2 (Sony's "Disney" prefix) and eFootball
+PES 2021 LITE, linked to "eFootball PES 2021 Season Update" (IGDB has no LITE).
 
 **Epic store bridge.** IGDB's Epic ids are Epic Store ids (the 32-hex one is
 the store offer id, the dashed one the store page id), which the library and

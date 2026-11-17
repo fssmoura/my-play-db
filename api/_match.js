@@ -47,6 +47,11 @@
  *                  null
  *   fits(game, id) false rules a search candidate out (wrong platform, out
  *                  after it was bought); never applied to exact hits
+ *   perVersion     true when one IGDB game may back one row per console
+ *                  (`version`) rather than one row per platform (PSN)
+ *   refine(exact, { igdb, nameSimilarity })  async; given the exact hits
+ *                  [{ id, linkId }], a Map id -> a better IGDB game id
+ *                  (PSN: the edition family member the store's name names)
  */
 
 const { toDetailRow } = require("./_igdb-cache");
@@ -537,7 +542,7 @@ async function runMatch({ adapter, db, igdb, options = {} }) {
   const [rows, ignoredRows] = await Promise.all([
     db.select(
       "player_games",
-      `${adapter.rowFilter}&igdb_id=is.null&select=id,meta&order=id`,
+      `${adapter.rowFilter}&igdb_id=is.null&select=id,version,meta&order=id`,
     ),
     db.select("ignored_games", `platform=eq.${adapter.key}&select=external_id`),
   ]);
@@ -584,14 +589,13 @@ async function runMatch({ adapter, db, igdb, options = {} }) {
     ]);
     for (const { id } of batch) {
       for (const tier of tiersOf.get(id)) {
-        const games = [
-          ...new Set(tier.ids.flatMap((uid) => hits[uid] ?? [])),
-        ];
+        const games = [...new Set(tier.ids.flatMap((uid) => hits[uid] ?? []))];
         let verdict = null;
         if (games.length === 1) verdict = { linkId: games[0], how: tier.how };
         else if (games.length > 1)
           verdict = pickExact(await igdb.game({ ids: games }), {
-            prefer: (list) => (adapter.prefer ? adapter.prefer(list, id) : list),
+            prefer: (list) =>
+              adapter.prefer ? adapter.prefer(list, id) : list,
             owned: Boolean(tier.owned),
           });
         if (verdict) {
@@ -610,6 +614,23 @@ async function runMatch({ adapter, db, igdb, options = {} }) {
           decisions.set(id, verdict);
           break;
         }
+      }
+    }
+  }
+
+  /* Step 2b - an exact hit can still be the wrong member of its edition
+     family (IGDB filed the store id on an edition, not the base game). */
+  if (adapter.refine) {
+    const exact = [...decisions]
+      .filter(([, d]) => d.linkId)
+      .map(([id, d]) => ({ id, linkId: d.linkId }));
+    if (exact.length) {
+      const better = await adapter.refine(exact, { igdb, nameSimilarity });
+      for (const [id, gameId] of better) {
+        const d = decisions.get(id);
+        d.linkId = gameId;
+        d.how = `${d.how}_refined`;
+        delete d.game;
       }
     }
   }
@@ -710,7 +731,11 @@ async function runMatch({ adapter, db, igdb, options = {} }) {
     }
   }
 
-  /* An IGDB game can back only one row per platform version. */
+  /* An IGDB game can back only one row per platform version, or per console
+     for adapters with `perVersion` (PlayStation: a PS4 and a PS5 row of one
+     game share it). */
+  const slot = (gameId, version) =>
+    adapter.perVersion ? `${gameId}|${version}` : String(gameId);
   const linkIds = [
     ...new Set(
       [...decisions.values()].filter((d) => d.linkId).map((d) => d.linkId),
@@ -720,9 +745,9 @@ async function runMatch({ adapter, db, igdb, options = {} }) {
   if (linkIds.length) {
     const existing = await db.select(
       "player_games",
-      `${adapter.rowFilter}&igdb_id=in.(${linkIds.join(",")})&select=id,igdb_id`,
+      `${adapter.rowFilter}&igdb_id=in.(${linkIds.join(",")})&select=id,igdb_id,version`,
     );
-    for (const r of existing) taken.set(r.igdb_id, r.id);
+    for (const r of existing) taken.set(slot(r.igdb_id, r.version), r.id);
   }
 
   /* Full IGDB records for everything about to be linked, in one go. */
@@ -742,7 +767,7 @@ async function runMatch({ adapter, db, igdb, options = {} }) {
     if (!d) continue;
     const label = row.meta?.name ?? id;
 
-    if (d.linkId && taken.has(d.linkId)) {
+    if (d.linkId && taken.has(slot(d.linkId, row.version))) {
       d.review = {
         reason:
           "that IGDB game is already linked to another of this platform's games",
@@ -775,7 +800,7 @@ async function runMatch({ adapter, db, igdb, options = {} }) {
             synced_at: new Date().toISOString(),
           });
         }
-        taken.set(d.linkId, row.id);
+        taken.set(slot(d.linkId, row.version), row.id);
         report.linked.push({
           row_id: row.id,
           name: label,
@@ -811,6 +836,7 @@ async function runMatch({ adapter, db, igdb, options = {} }) {
 const ADAPTERS = {
   steam: () => require("./_match-steam"),
   epic: () => require("./_match-epic")(),
+  playstation: () => require("./_match-psn")(),
 };
 
 function serviceClient() {
@@ -881,6 +907,7 @@ async function matchPlatform(platform, options = {}) {
       byExternalMany: igdb.byExternalMany,
       searchReleasedBetween: igdb.searchReleasedBetween,
       byExactName: igdb.byExactName,
+      editionFamilies: igdb.editionFamilies,
     },
     options,
   });

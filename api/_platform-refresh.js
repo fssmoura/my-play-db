@@ -365,8 +365,43 @@ function hasRefreshMaterial(platform, credentials = {}) {
   return Boolean(credentials.refreshToken);
 }
 
+/**
+ * For jobs that need a platform's access right now (the library updaters):
+ * returns the stored credentials, renewing and saving them first - the same
+ * write cron-refresh makes - when they expire within `minValidMs`. db is a
+ * service-role client (select/update). The job never renews by itself.
+ */
+async function ensureFreshAccess(db, platform, minValidMs = 15 * 60 * 1000) {
+  const [row] = await db.select(
+    "platform_credentials",
+    `platform=eq.${platform}&select=id,credentials,expires_at`,
+  );
+  if (!row) throw new Error(`${platform} is not connected`);
+  const expires = row.expires_at ? new Date(row.expires_at).getTime() : 0;
+  if (expires > Date.now() + minValidMs) return row.credentials;
+  try {
+    const result = await refreshPlatform(platform, row.credentials);
+    await db.update("platform_credentials", `id=eq.${row.id}`, {
+      credentials: result.credentials,
+      expires_at: result.expiresAt,
+      refresh_expires_at: result.refreshExpiresAt,
+      last_refresh_at: new Date().toISOString(),
+      last_refresh_error: null,
+    });
+    return result.credentials;
+  } catch (err) {
+    await db
+      .update("platform_credentials", `id=eq.${row.id}`, {
+        last_refresh_error: err.message,
+      })
+      .catch(() => {});
+    throw new Error(`${platform} sign-in could not be renewed: ${err.message}`);
+  }
+}
+
 module.exports = {
   refreshPlatform,
   hasRefreshMaterial,
+  ensureFreshAccess,
   REFRESHABLE_PLATFORMS: Object.keys(REFRESHERS),
 };

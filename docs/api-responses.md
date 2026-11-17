@@ -132,14 +132,57 @@
 
 **Key observations**:
 
-- `playDuration` is ISO 8601 duration (`PT106H56M38S` = 106h56m) - needs parsing
-- `playCount` is an integer (62 times launched)
-- `category`: `ps4_game` / `ps5_native_game` / `pspc_game`
-- `service`: `none(purchased)` / `ps_plus` / `ps_now`
-- `concept.id` = numeric concept ID, `concept.titleIds` = all SKUs sharing this concept
+- `playDuration` is ISO 8601 duration (`PT106H56M38S` = 106h56m) - needs parsing. Hours are never rolled into days (`PT319H51M47S` seen). `PT0S` occurs.
+- `playCount` is an integer, but unreliable: 22 titles have `0` despite real playtime (up to 44 min).
+- `category`: `ps4_game` / `ps5_native_game` / `pspc_game` / `unknown` (4 seconds-long 2023 entries, all `none_purchased`)
+- `service`: `none(purchased)` / `ps_plus` / `other` (disc copies and the preinstalled Astro's Playroom) / `none_purchased` (the 4 `unknown` ones)
+- `concept.id` = numeric concept ID, `concept.titleIds` = all SKUs sharing this concept (always includes the entry's own `titleId`)
+- One concept can appear as several entries, each with its own playtime: PS4 + PS5 versions (Ghost of Tsushima has 3), or two PS4 SKUs where one was opened for seconds.
+- An entry can be a demo or beta under the full game's name and concept - it shares the demo's `titleId` (Ghostrunner, DBZ Kakarot, Riders Republic, Jujutsu Kaisen). `purchased` names it correctly.
+- Games that were shut down or delisted can drop out of this list entirely while their trophies and purchases remain (Marvel's Avengers, Dauntless, Zenith). Not a category filter: requesting every category only adds apps (YouTube, Twitch, Spotify, Disney+).
 - Media images have types: `GAMEHUB_COVER_ART`, `HERO_CHARACTER`, `LOGO`, `SCREENSHOT`, `MASTER`, `BACKGROUND_LAYER_ART`, `FOUR_BY_THREE_BANNER`, `PORTRAIT_BANNER`
 - Auto-paginates by default (pages of 100). `limit` returns exactly N most recent.
-- Total games: 172
+- Earliest entry 2019-10; PS3/Vita play never appears.
+
+---
+
+### `purchased`
+
+**Request**: `accessToken` [+ `{ isActive: "false", membership: "PS_PLUS", platform: ["ps5"] }`]
+
+```json
+{
+  "games": [
+    {
+      "__typename": "GameLibraryTitle",
+      "conceptId": null,
+      "entitlementId": "EP1004-PPSA01547_00-GRANDTHEFTAUTO00",
+      "isActive": true,
+      "isDownloadable": true,
+      "isPreOrder": false,
+      "membership": "NONE",
+      "name": "Grand Theft Auto VI",
+      "platform": "PS5",
+      "productId": "EP1004-PPSA01547_00-GTAVIULTIMATE001",
+      "titleId": "PPSA01547_00"
+    }
+  ],
+  "totalItemCount": 935,
+  "pages": [{ "start": 0, "returned": 100, "fresh": 100 }]
+}
+```
+
+**Key observations**:
+
+- The PS4/PS5 game library: bought (`membership: NONE`) and PS Plus (`PS_PLUS`). Sony gives no total; the handler pages by 100 until a short page and stops if a page repeats.
+- Sony's default is `isActive: true`. The inactive call is separate and doesn't overlap: mostly PS Plus games no longer playable, plus a few extra entries left by purchases (marketing-named wrappers, pre-orders) for games also listed as active.
+- `conceptId` is always `null` here - link to `games` by `titleId` (exact, unique per entry). Every non-disc played game matched this way.
+- `titleId` is per platform: a cross-gen game is two entries (PS4 + PS5) with the same name.
+- `productId` is the purchase; every entry it unlocked shares it, so one `productId` over several `titleId`s means they came in one purchase. That is all it says: nothing marks an entry as an edition or the base game. Ghost of Tsushima's PS5 purchase (`...-GHOSTDIRECTORPS5`) also unlocked a PS4 entry (`CUSA18353_00`, "Conteúdo de bónus") that shows in `games` as a second PS4 Ghost of Tsushima; Spider-Man Remastered (`PPSA01469_00`) carries a product under Miles Morales' title ID (`EP9000-PPSA01460_00-MARVELSSMMDDE000`). The purchase list holds games only, so DLC in a bundle never shows.
+- Some purchases leave an extra inactive `NONE` entry with a marketing name ("Edição Digital Deluxe de Marvel's Spider-Man 2", "BLEACH Rebirth of Souls Ultimate Edition PS4 & PS5", "STAR WARS Jedi: Survivor™ Edição Standard"). It is only a name, not an edition flag, so it is not used. The `productId` suffix is not a reliable hint either (often random digits), and the public store page (`store.playstation.com/en-gb/product/<productId>`) is missing for a third of products and shows a different product for some (the original PS4 Ghost of Tsushima shows "Legends").
+- Not only games: demos, betas, test servers, an artbook, Spotify, WatchVR. `NONE` also covers free-to-play claims - bought vs free can't be told apart.
+- Names are in the store language (Portuguese editions such as "Edição Digital Deluxe de ...") - don't match on names.
+- Discs never appear. A disc game is only visible once played (`games`, `service: other`) or once it has trophies.
 
 **`totalItemCount` vs `games` limit**: When `limit` is set, `totalItemCount` is the total available (not just the returned count). Without `limit`, the handler auto-paginates and returns all plus `totalItemCount`.
 
@@ -216,10 +259,14 @@
 - `progress` is a percentage (0-100) - calculated from defined vs earned
 - `lastUpdatedDateTime` = when the last trophy was earned (use for incremental sync)
 - `npCommunicationId` = the key needed for `trophies` action (e.g. `NPWR49547_00`)
-- `npServiceName` = always `"trophy2"` for PS4/PS5 (legacy PS3/Vita used `"trophy"`)
-- `hasTrophyGroups`: true = game has DLC trophy groups (e.g. Ghost of Yōtei has 3 groups)
+- `npServiceName` = `"trophy2"` for PS5, `"trophy"` for PS4 and older
+- `trophyTitlePlatform` can be a list: `PS5,PSPC`, `PS3,PS4`, `PS3,PSVITA,PS4`. Never `PS4,PS5`: a game played on both has a separate list per console (all 6 such games checked). The lists usually hold the same trophies under the same `trophyId` with small wording fixes (DIRT 5, eFootball), but can differ outright (Genshin Impact: 118 on PS4, 137 on PS5, different DLC groups). A PS4 save carried to PS5 re-unlocks the PS4 trophies there (Ghost of Tsushima: all 19 PS4 unlocks also on PS5).
+- `hasTrophyGroups`: true = game has DLC trophy groups (Ghost of Yōtei has 4 besides `default`); names come from `groups`
+- `hiddenFlag`: lists the user hid on their profile - still returned
 - `definedTrophies` vs `earnedTrophies` - counts per tier, not individual trophies
-- Total trophy titles: 164 (less than 172 total games - some games have no trophies)
+- `trophyTitleName` can carry stray whitespace (a trailing newline seen) - trim
+- PS3 lists appear here but can't be linked to a game: they never show in `games` or `purchased`. 7 PS3-only lists (2014-2017, before `games` history begins); `trophies` returns their full detail with earned dates. Lists that also cover PS4 (Stardew Valley, Persona 5) link through the PS4 game.
+- Some played games have a trophy set that isn't in this list at all: seconds-long launches, plus The Crew 2 (59m), The Crew Motorfest (1h22), Knockout City PS4 (6h43) and F1 25 (1h07) - all probably time-limited trials. Their `trophies` call reports `earnedError`.
 
 ---
 
@@ -245,10 +292,11 @@
 
 **Key observations**:
 
-- Input: `titleId` strings from `games`/`recent` responses (e.g. `"PPSA27360_00"`)
-- Output: maps to `npCommunicationId` + `npServiceName` needed for `trophies`
+- Input: `titleId` strings from `games`/`recent`/`purchased` responses (e.g. `"PPSA27360_00"`)
+- Output: maps to `npCommunicationId` + `npServiceName` needed for `trophies`, plus `sets` with every trophy set of that title. A title can own several: Naruto Storm Trilogy has three, HITMAN 2 a separate "Expansion" set.
+- Unresolved = no trophies on that `titleId`: demos/betas, apps (Share Factory), a few free/lite games, and the seconds-long duplicate PS4 SKUs. F1 25 also came back unresolved.
 - NOT concept IDs - passing `concept.id` numeric values (e.g. `10011898`) resolves nothing
-- Falls back to a proxy account (the `TROPHY_PROXY_ACCOUNT_ID` constant in `psn.js`, e.g. `"<proxy-account-id>"`) for titles the user hasn't synced - this ensures even unplayed games get mapped
+- Falls back to a proxy account (the `TROPHY_PROXY_ACCOUNT_ID` constant in `psn.js`, e.g. `"<proxy-account-id>"`) for titles the user hasn't synced, so unplayed games get mapped when that account has launched them (about half of unplayed library games, Nov 2026). Only the mapping comes from it; progress always comes from the user's own account
 - Batches 5 at a time, concurrency 10 - fast for large title lists
 - Essential bridge between `games` -> `trophies` pipeline
 
@@ -286,12 +334,13 @@
 **Key observations**:
 
 - `trophyType`: `"platinum"` / `"gold"` / `"silver"` / `"bronze"`
-- `trophyRare`: 0 = common, 1 = rare, 2 = very rare (Sony's internal rarity tiers)
+- `trophyRare`: 0 = ultra rare, 1 = very rare, 2 = rare, 3 = common (37.8% earned was `2`, 65.7% was `3`)
+- `trophyHidden`: hidden trophies still come with their real name and detail
 - `trophyEarnedRate`: global percentage of players who earned this (e.g. `"0.1"`)
 - `earned`: boolean - merged from `getUserTrophiesEarnedForTitle` vs definitions
-- `earnedDateTime`: ISO string when earned, `null` if not earned
+- `earnedDateTime`: ISO string when earned, `null` if not earned - and also for some old PS3 trophies that are `earned: true` (earned offline: one of four on Skylanders Giants)
 - `trophyGroupId`: `"default"` for base game, other values for DLC groups
-- Does not use the proxy account (only `trophymap` does). If the earned-trophies call fails (e.g. the user hasn't synced the game), every trophy comes back `earned: false`
+- Does not use the proxy account (only `trophymap` does). If the earned-trophies call fails (e.g. the set isn't on the user's account - Sony says "Resource not found"), every trophy comes back `earned: false` and `earnedError` carries the reason. `earnedError: null` means progress was read.
 - Merges definitions + earned data in a single response (no client-side merge needed)
 
 ---
@@ -311,8 +360,13 @@ auth -> refreshToken (persist)
   |     |
   |     `-> trophies -> full trophy list per game
   |
+  |-> purchased -> titleId, membership, isActive (ownership, no playtime)
+  |
   `-> trophymap -> titleId -> npCommunicationId (bridge for trophies)
+        `-> groups -> DLC group names for a set
 ```
+
+**Linking** (measured): `titleId` is the join key across `games`, `purchased` and `trophymap`. `concept.id` (only in `games`/`recent`) groups PS4/PS5 SKUs of one game. For any other code (purchases), the public catalogue `m.np.playstation.com/api/catalog/v2/titles/<titleId>/concepts?age=99&country=GB&language=en-GB` (no sign-in; `country`, `language` and `age` must all be present) returns the same concept `id` plus `nameEn`. It answered all 1,275 of the owner's codes; `nameEn` is missing for a few delisted games. Some games have different concepts for PS4 and PS5 (Persona 5 Royal, Hotline Miami). The trophy set hangs off a `titleId`, not a concept.
 
 **For sync**: `titles` is the incremental entry point. Compare `lastUpdatedDateTime` against stored value. If changed -> call `trophies` for that game. `games` provides playtime/playcount when you need it. `recent` is even lighter for just "was this played?" checks.
 
@@ -1367,7 +1421,10 @@ comments are the real lengths):
     "total_rating": 95.18148635396659,
     "total_rating_count": 2340,
     "videos": [
-      { "name": "Trailer", "url": "https://www.youtube.com/watch?v=D1mDo1CEMuE" }
+      {
+        "name": "Trailer",
+        "url": "https://www.youtube.com/watch?v=D1mDo1CEMuE"
+      }
     ],
     "websites": [
       {
@@ -1456,13 +1513,13 @@ Or `null` if no match.
 
 `by_external` is the bridge: pass a platform ID -> get IGDB game ID. Or use `game(id).external_games` to get all external IDs for a known game.
 
-| Platform  | Platform's own ID                               | IGDB uid format                        | Direct bridge? | How                                          |
-| --------- | ----------------------------------------------- | -------------------------------------- | :------------: | -------------------------------------------- |
-| **PSN**   | `concept.id` from `psn/games` (e.g. `10011898`) | Numeric string                         |   Yes (1:1)    | PSN `games` -> `by_external(psn, conceptId)` |
-| **Steam** | `appid` from `steam/games` (e.g. `1245620`)     | Numeric string                         |   Yes (1:1)    | Steam `games` -> `by_external(steam, appid)` |
-| **Epic**  | `namespace` / `catalogItemId`                   | Store offer id / store page id         |       No       | Via store endpoints, see [database.md](database.md#igdb-bridging-per-platform) |
-| **Xbox**  | `titleId` from `xbox/games` (e.g. `1820250788`) | Xbox 360 UUID format                   |       No       | IGDB only has Xbox 360 marketplace IDs       |
-| **EA**    | `contentId` from `ea/library`                   | N/A                                    |       No       | No EA/Origin source in IGDB                  |
+| Platform  | Platform's own ID                               | IGDB uid format                | Direct bridge? | How                                                                            |
+| --------- | ----------------------------------------------- | ------------------------------ | :------------: | ------------------------------------------------------------------------------ |
+| **PSN**   | `concept.id` from `psn/games` (e.g. `10011898`) | Numeric string                 |   Yes (1:1)    | PSN `games` -> `by_external(psn, conceptId)`                                   |
+| **Steam** | `appid` from `steam/games` (e.g. `1245620`)     | Numeric string                 |   Yes (1:1)    | Steam `games` -> `by_external(steam, appid)`                                   |
+| **Epic**  | `namespace` / `catalogItemId`                   | Store offer id / store page id |       No       | Via store endpoints, see [database.md](database.md#igdb-bridging-per-platform) |
+| **Xbox**  | `titleId` from `xbox/games` (e.g. `1820250788`) | Xbox 360 UUID format           |       No       | IGDB only has Xbox 360 marketplace IDs                                         |
+| **EA**    | `contentId` from `ea/library`                   | N/A                            |       No       | No EA/Origin source in IGDB                                                    |
 
 **Rate limit**: see [api.md](api.md).
 
