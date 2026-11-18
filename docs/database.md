@@ -425,29 +425,35 @@ What each platform gives (checked against the real library, Nov 2026):
   have no rarity and are all locked. Old PS3 trophies can be earned with no
   date (Skylanders Giants: one of four); with no date they are stored locked,
   by the owner's choice.
+- **Xbox specifics:** no groups, so `group_name` is always null. Secret
+  achievements come with their real description. One earned with Xbox's
+  "never" date (`0001-01-01`) is stored locked, as for PSN. Titles Xbox only
+  saw launched have no achievements through Xbox.
 
 ## `player_games` columns
 
-| Column         | Type                | Notes                                                                                       |
-| -------------- | ------------------- | ------------------------------------------------------------------------------------------- |
-| `id`           | serial PK           | Surrogate key - keeps the FK from `achievements` simple                                     |
-| `igdb_id`      | integer FK games.id |                                                                                             |
-| `platform`     | text                | Hardware family: `playstation`, `pc`, `xbox`                                                |
-| `version`      | text                | Store/version: `ps5`, `ps4`, `steam`, `epic`, `ea`, `xbox`                                  |
-| `playtime`     | bigint              | Seconds. Normalized on write from whatever format the platform uses                         |
-| `last_played`  | timestamptz         |                                                                                             |
-| `first_played` | timestamptz         | PSN only - most platforms don't provide this                                                |
-| `play_count`   | integer             | PSN only - most platforms don't provide this                                                |
-| `acquisition`  | timestamptz         | Epic only - `acquisitionDate` (when the game was added to library)                          |
-| `meta`         | jsonb               | Platform-specific IDs and data needed for re-syncing. Shape varies per platform - see below |
-| `synced_at`    | timestamptz         | Last time this row was written                                                              |
+| Column         | Type                | Notes                                                                                                                    |
+| -------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `id`           | serial PK           | Surrogate key - keeps the FK from `achievements` simple                                                                  |
+| `igdb_id`      | integer FK games.id |                                                                                                                          |
+| `platform`     | text                | Hardware family: `playstation`, `pc`                                                                                     |
+| `version`      | text                | Store/version: `ps5`, `ps4`, `ps3`, `steam`, `epic`, `microsoft`, `ea`. Xbox rows can be null or hand-set: see Xbox rows |
+| `playtime`     | bigint              | Seconds. Normalized on write from whatever format the platform uses                                                      |
+| `last_played`  | timestamptz         |                                                                                                                          |
+| `first_played` | timestamptz         | PSN only - most platforms don't provide this                                                                             |
+| `play_count`   | integer             | PSN only - most platforms don't provide this                                                                             |
+| `acquisition`  | timestamptz         | Epic only - `acquisitionDate` (when the game was added to library)                                                       |
+| `meta`         | jsonb               | Platform-specific IDs and data needed for re-syncing. Shape varies per platform - see below                              |
+| `synced_at`    | timestamptz         | Last time this row was written                                                                                           |
 
 **Unique constraint**: `(igdb_id, platform, version)` - one row per game per platform version.
 Before matching (`igdb_id` null) the store id guards against duplicates
 instead: unique indexes on `meta->>'appid'` for Steam rows and
 `meta->>'namespace'` for Epic rows. PSN rows have three: `(version,
 meta->>'concept_id')` when there is a concept, the first of `meta.title_ids`
-(PS4/PS5), and the first trophy list (PS3).
+(PS4/PS5), and the first trophy list (PS3). Xbox rows use
+`meta->>'title_id'`, whatever their version. Nulls count as distinct, so
+versionless rows never clash with each other or with a versioned row.
 
 ### `player_games.meta` shape per platform
 
@@ -533,17 +539,23 @@ meta->>'concept_id')` when there is a concept, the first of `meta.title_ids`
   needs a daily sync and has no history before it. Fortnite and Among Us hold
   dates the owner gave by hand; the rest start empty.
 
-**Xbox** (planned):
+**Xbox** (any row with a `title_id`):
 
 ```json
 {
-  "title_id": 1820250788,
-  "devices": ["XboxSeries"]
+  "title_id": "1234567890",
+  "product_id": "9XXXXXXXXXXX",
+  "has_achievements": true,
+  "name": "Example"
 }
 ```
 
-- `title_id` (integer) is needed for the `achievements` action.
-- No playtime for most titles - only MS-native games report `minutesPlayed`.
+- `title_id` - Xbox's id for this build, used for the `achievements` action
+  and by the updater to find the row. Every title has one.
+- `product_id` - the Microsoft Store id, IGDB's `microsoft` external id.
+  Absent for games Xbox only saw launched.
+- `has_achievements` - `totalGamerscore` above 0 in the games list.
+- `name` - Xbox's name, kept only until a match exists, as for Steam.
 
 **EA** (planned):
 
@@ -568,7 +580,7 @@ No dedicated boolean column - derive it from `meta`:
 | PSN      | `meta.trophy_sets` is not empty                                 |
 | Steam    | `meta.has_stats = true`                                         |
 | Epic     | `meta.has_achievements = true` (the game appears in `progress`) |
-| Xbox     | `achievements` action returns data (no ahead-of-time signal)    |
+| Xbox     | `meta.has_achievements = true`                                  |
 | EA       | `meta.achievement_set_override` is non-null                     |
 
 ## Sync model
@@ -583,7 +595,11 @@ one-time first import, matched with the same matcher, and its achievements
 since Epic gives them no name); PSN's one-time first import (the early test
 rows were updated in place and kept their links), matched with the same
 matcher, and its trophies (`_psn-achievements.js`, one `trophies` call per list
-plus `groups` for names; every list matched the per-tier counts in `titles`). Trophies
+plus `groups` for names; every list matched the per-tier counts in `titles`); Xbox's
+one-time first import, matched with the same matcher, and its achievements
+(`_xbox-achievements.js`, one call per store title flagged
+`has_achievements`; earned counts and gamerscore matched the games list) and
+the [Xbox updater](#the-xbox-updater). Trophies
 go to rows that were played or bought (`ps_plus` false) or whose list is on the
 owner's account; unplayed PS Plus rows get none until played or bought.
 
@@ -610,7 +626,7 @@ deletes it from `player_games` and adds it here; imports and matching skip
 anything listed. Nothing is auto-detected by name.
 
 **The matcher** (`api/_match.js`, one small adapter per platform:
-`_match-steam.js`, `_match-epic.js`, `_match-psn.js`) is server code, not an endpoint: the
+`_match-steam.js`, `_match-epic.js`, `_match-psn.js`, `_match-xbox.js`) is server code, not an endpoint: the
 [Steam updater](#the-steam-updater) calls `matchPlatform(platform, options)`
 after adding new rows, and it can also be run by hand with node.
 It runs as `service_role`. It links only on certainty, and real data about the
@@ -665,13 +681,35 @@ no data anywhere it is one row, PS5 if a PS5 code is owned. Unowned codes of a
 stored game add nothing, apart from making the row bought rather than
 `ps_plus`. Sony sometimes gives a game's PS4 and PS5 versions different
 concepts: when one purchase (`productId`) holds both, they are still one game
-(Hotline Miami, Hotline Miami 2, Stellaris); otherwise nothing links them, and
-the owner ignores the extra one (Persona 5 Royal PS4). When one console lists
+(Hotline Miami, Hotline Miami 2, Stellaris);
+otherwise nothing links them, and the owner ignores the extra one (Persona 5 Royal PS4). When one console lists
 several played codes for a game, `playtime` and `play_count` are added together,
 `first_played` is the earliest and `last_played` the latest. Trophies not
 confirmed unlocked are stored locked, including trials whose progress Sony
 refuses. `ignored_games.external_id` is a Sony code, so ignoring one (a demo or
 an art book under a game's name) removes only that code, not the game.
+
+**Xbox rows**: `platform = 'pc'` (the owner has no console). One row per Xbox
+title, all of them; the owner ignores what isn't wanted afterwards. Two kinds:
+
+- **Store titles** (with a `productId`): `version = 'microsoft'`, including
+  console builds played on another console signed into Xbox. `playtime` from
+  `minutesPlayed`, stored even when 0, and achievements.
+- **Launched titles** (no `productId`): PC games from any launcher that Windows
+  saw being opened while signed into Xbox. Only `last_played`; `version` is
+  null. Windows doesn't catch every game.
+
+`last_played` from `lastTimePlayed`; first played, play count and acquisition
+stay empty. `ignored_games` uses `platform = 'xbox'` and the `title_id`.
+
+A versionless row means "only a date". After matching, if another row has the
+same IGDB game (the same game on another store) it stays versionless and,
+when rows are merged by IGDB game, adds its date to that game (newest wins).
+If no other row has the game (a launcher we don't import), the owner sets the
+version by hand (`riot`); it can't be a version the game already has, which
+the unique constraint refuses. The updater finds rows by `title_id` and never changes
+`version`, so hand-set versions stay. A future Riot import should take over a
+hand-labelled `riot` row rather than add one.
 
 ### The Steam updater
 
@@ -733,6 +771,26 @@ call carries on without it). It uses the stored token and never renews it:
 that is `cron-refresh`'s job, at 03:00 UTC, and the token lasts about 36 hours,
 so it is valid at night; if it has expired the run fails with that reason.
 
+### The Xbox updater
+
+`api/_xbox-update.js`, same shape and summary as Epic's, called by the same
+endpoint, which first calls `ensureFreshAccess(db, "xbox")` (Xbox access lasts
+an hour). One `games` call with the `detail,achievement` extras gives every
+title with its playtime, last played and earned count.
+
+1. New titles (not in `ignored_games`) are added exactly as the first import
+   added them, then matched.
+2. A row is re-read when its playtime or last played went up, or Xbox's earned
+   count is above the unlocks stored. Xbox's last played is when a session
+   started, so an unlock later in that session only shows in the count.
+   Achievements are loaded first (`loadXboxAchievements`), then the play data,
+   so a failure is retried next run. Play data only moves forward, and
+   `version` is never written. `has_achievements` is only ever switched on.
+3. Rows flagged `has_achievements` with no list yet get a full load.
+
+It stops if no store title has playtime while rows have some (the games action
+skips the playtime call quietly when it fails).
+
 ### The PlayStation updater
 
 `api/_psn-update.js`, same shape and summary as Steam's (plus `checked` and
@@ -782,7 +840,7 @@ locked trophy list can't be deleted.
 
 **`library_sync`** (`platform` PK, `running_since`, `last_finished_at`,
 `last_result` jsonb, `state` jsonb): one row per platform (`steam`, `epic`,
-`playstation`); a new platform needs its row inserted. `state` is the
+`playstation`, `xbox`); a new platform needs its row inserted. `state` is the
 updater's own bookkeeping between runs (PSN: `purchases_checked_at`,
 `purchase_entries`). Each platform runs on its own: the endpoint skips one
 if its last run finished under 15 minutes ago (unless `force`), and takes its
@@ -800,7 +858,8 @@ Two ways in, same code:
   `{result}`, `{skipped}`, `{busy}` or `{error}`). Under `vercel dev` the lines
   arrive all at once at the end; live streaming on Vercel is untested.
 - **Nightly** (Vercel Cron `GET` with `CRON_SECRET`): one cron entry per
-  platform (`?platform=steam`, `?platform=epic`, `?platform=playstation`), each its own function call
+  platform (`?platform=steam`, `?platform=epic`, `?platform=playstation`,
+  `?platform=xbox`), each its own function call
   with its own 300 s, at `0 22 * * *` UTC. Vercel fires anywhere in that hour,
   so in Porto it's 22:00-23:00 in winter and 23:00-24:00 in summer: late, but
   before midnight, so a date stamped then is still that day. Without
@@ -809,13 +868,13 @@ Two ways in, same code:
 
 ### IGDB bridging per platform
 
-| Platform | Bridge method                                                    |
-| -------- | ---------------------------------------------------------------- |
-| PSN      | `by_external(psn, concept_id)`, then `igdb search(name)` (below) |
-| Steam    | `by_external(steam, appid)` - 1:1                                |
-| Epic     | store bridge (below), then `igdb search(name)`                   |
-| Xbox     | `igdb search(name)` - IGDB only has old Xbox 360 IDs             |
-| EA       | `igdb search(name)` - no EA source in IGDB                       |
+| Platform | Bridge method                                                               |
+| -------- | --------------------------------------------------------------------------- |
+| PSN      | `by_external(psn, concept_id)`, then `igdb search(name)` (below)            |
+| Steam    | `by_external(steam, appid)` - 1:1                                           |
+| Epic     | store bridge (below), then `igdb search(name)`                              |
+| Xbox     | `by_external(microsoft, productId)` for MS titles, else `igdb search(name)` |
+| EA       | `igdb search(name)` - no EA source in IGDB                                  |
 
 **PSN.** IGDB's PSN source holds only Sony concept ids (no per-console codes,
 nothing at edition level), and each concept points at one IGDB game. A concept
@@ -840,6 +899,15 @@ family) and the rest by name (Godfall, Abandoned, most PS3 games). Two needed
 the owner to pick from review: Epic Mickey 2 (Sony's "Disney" prefix) and
 eFootball PES 2021 LITE, linked to "eFootball PES 2021 Season Update" (IGDB has
 no LITE).
+
+**Xbox.** Only store titles have an id IGDB knows (`meta.product_id`); launched
+titles go to the name search with nothing but their name, since Xbox gives no
+release date and its developer/publisher names often differ from IGDB's (and
+would need the owner's sign-in at match time). Only IGDB games on PC fit. The
+adapter sets `perVersion`, so a versionless row and a store row can link one
+game. A stricter rule (link only when exactly one PC game has the exact name)
+was tried and dropped: it gave the same result as the normal scoring, which
+already sends same-name ties to review.
 
 **Epic store bridge.** IGDB's Epic ids are Epic Store ids (the 32-hex one is
 the store offer id, the dashed one the store page id), which the library and

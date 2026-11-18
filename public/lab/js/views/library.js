@@ -123,11 +123,72 @@ async function load() {
 
 /** Where a game comes from: the store on PC (Steam, Epic), else the console family. */
 function source(row) {
-  return row.platform === "pc" ? row.version : row.platform;
+  return row.platform === "pc" ? (row.version ?? "unknown") : row.platform;
+}
+
+/**
+ * An unknown-store row is only kept as its own entry when no known store has
+ * the same IGDB game; otherwise it just feeds that game's last played.
+ */
+function isCovered(row, list) {
+  return (
+    source(row) === "unknown" &&
+    row.igdb_id != null &&
+    list.some((r) => r.igdb_id === row.igdb_id && source(r) !== "unknown")
+  );
+}
+
+/**
+ * The All tab: one card per IGDB game, so the same game from several
+ * platforms is one card. Playtime is added up, last played is the newest and
+ * achievements come from the platform with the most progress. Unmatched rows
+ * stay on their own.
+ */
+function mergeByGame(list) {
+  const groups = new Map();
+  for (const row of list) {
+    const key = row.igdb_id ?? `row-${row.id}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  return [...groups.values()].map((group) => {
+    if (group.length === 1) return group[0];
+    const count = (r, field) => r[field]?.[0]?.count ?? 0;
+    const times = group.map((r) => r.playtime).filter((t) => t != null);
+    const withList = group.filter((r) => count(r, "achievements") > 0);
+    const visible = withList.filter((r) => !r.meta?.progress_hidden);
+    const progress = (r) => count(r, "unlocked") / count(r, "achievements");
+    // Several stores can share one achievement list, so adding them up would
+    // double count: show the one with the most progress instead.
+    const best = (visible.length ? visible : withList).sort(
+      (a, b) =>
+        progress(b) - progress(a) ||
+        count(b, "unlocked") - count(a, "unlocked"),
+    )[0];
+    return {
+      ...group[0],
+      sources: group
+        .filter((r) => !isCovered(r, group))
+        .map((r) => `${r.platform} · ${r.version ?? "unknown"}`),
+      trophies: (best ?? group[0]).platform === "playstation",
+      playtime: times.length ? times.reduce((a, b) => a + Number(b), 0) : null,
+      last_played:
+        group
+          .map((r) => r.last_played)
+          .filter(Boolean)
+          .sort()
+          .pop() ?? null,
+      meta: { progress_hidden: Boolean(best?.meta?.progress_hidden) },
+      achievements: [{ count: best ? count(best, "achievements") : 0 }],
+      unlocked: [{ count: best ? count(best, "unlocked") : 0 }],
+      platinum: [{ count: best ? count(best, "platinum") : 0 }],
+    };
+  });
 }
 
 function render() {
-  const sources = [...new Set(rows.map(source))].sort((a, b) =>
+  const tabRows = rows.filter((r) => !isCovered(r, rows));
+  const sources = [...new Set(tabRows.map(source))].sort((a, b) =>
     platformName(a).localeCompare(platformName(b)),
   );
   if (shown !== "all" && !sources.includes(shown)) shown = "all";
@@ -135,19 +196,19 @@ function render() {
     .map((key) => {
       const count =
         key === "all"
-          ? rows.length
-          : rows.filter((r) => source(r) === key).length;
+          ? mergeByGame(rows).length
+          : tabRows.filter((r) => source(r) === key).length;
       const label = key === "all" ? "All" : platformName(key);
       return `<button type="button" data-platform="${escapeHtml(key)}" aria-selected="${String(key === shown)}">${escapeHtml(label)} <span class="meta">${count}</span></button>`;
     })
     .join("");
 
   const sort = SORTS[sortBy] ?? SORTS.recent;
-  root.querySelector("#l-grid").innerHTML = rows
-    .filter((row) => shown === "all" || source(row) === shown)
-    .sort(sort)
-    .map(card)
-    .join("");
+  const list =
+    shown === "all"
+      ? mergeByGame(rows)
+      : tabRows.filter((row) => source(row) === shown);
+  root.querySelector("#l-grid").innerHTML = list.sort(sort).map(card).join("");
 }
 
 let toastTimer;
@@ -172,6 +233,13 @@ const PLATFORM_NAMES = {
   steam: "Steam",
   epic: "Epic",
   playstation: "PlayStation",
+  xbox: "Xbox",
+  microsoft: "Microsoft",
+  ea: "EA",
+  battlenet: "Battle.net",
+  riot: "Riot",
+  other: "Other",
+  unknown: "Unknown",
 };
 const platformName = (p) => PLATFORM_NAMES[p] ?? p;
 
@@ -298,7 +366,9 @@ function card(row) {
       </div>
       <h3 class="library-name">${escapeHtml(row.title)}</h3>
       <p class="meta">${escapeHtml(details)}</p>
-      <p class="meta">${escapeHtml(row.platform)} · ${escapeHtml(row.version)}</p>
+      ${(row.sources ?? [`${row.platform} · ${row.version ?? "unknown"}`])
+        .map((s) => `<p class="meta">${escapeHtml(s)}</p>`)
+        .join("")}
       <p class="meta">${playtime(row.playtime)} · ${lastPlayed(row.last_played)}</p>
       ${achievementLine(row)}
     </article>
@@ -320,7 +390,10 @@ function achievementLine(row) {
     return `<p class="meta" title="Steam doesn't share progress for this game">${total} achievements · progress unavailable</p>`;
   }
   const unlocked = row.unlocked?.[0]?.count ?? 0;
-  const noun = row.platform === "playstation" ? "trophies" : "achievements";
+  const noun =
+    (row.trophies ?? row.platform === "playstation")
+      ? "trophies"
+      : "achievements";
   const platinum = row.platinum?.[0]?.count ? " · platinum" : "";
   return `<p class="meta">${unlocked}/${total} ${noun} · ${Math.floor(completion(row) * 100)}%${platinum}</p>`;
 }

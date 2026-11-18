@@ -19,6 +19,10 @@
     {
       "path": "/api/library-sync?platform=playstation",
       "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/library-sync?platform=xbox",
+      "schedule": "0 22 * * *"
     }
   ],
   "rewrites": [

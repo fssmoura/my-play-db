@@ -1151,28 +1151,40 @@ refresh (stored cookies) -> accessToken (4h expiry) -> auth
 
 ### `games`
 
-**Request**: `{ xuid, userHash, xstsToken }`
+**Request**: `{ xuid, userHash, xstsToken, decorations? }`. `decorations` is a comma-separated list of titlehub extras (default `detail`). `detail,achievement,productid,gamepass,scid,alternatetitleid` returns everything below.
 
 ```json
 {
+  "xuid": "2535400000000000",
   "titles": [
     {
-      "titleId": 1820250788,
-      "name": "Fortnite",
-      "titleType": "XboxTitleHistory",
-      "titleHistory": {
-        "lastTimePlayed": "2026-06-05T15:05:12.8230000Z",
-        "devices": ["XboxSeries"]
+      "titleId": "2030093255",
+      "pfn": "Microsoft.624F8B84B80_8wekyb3d8bbwe",
+      "serviceConfigId": "00000000-0000-0000-0000-00007900c3c7",
+      "name": "Forza Horizon 5",
+      "type": "Game",
+      "devices": ["PC", "XboxOne", "XboxSeries"],
+      "displayImage": "https://store-images.s-microsoft.com/image/...",
+      "modernTitleId": "2030093255",
+      "productId": "9NNX1VVR3KNQ",
+      "productIds": ["9NNX1VVR3KNQ"],
+      "achievement": {
+        "currentAchievements": 3,
+        "totalAchievements": 0,
+        "currentGamerscore": 30,
+        "totalGamerscore": 3000,
+        "progressPercentage": 1
       },
+      "gamePass": { "isGamePass": true },
+      "titleHistory": { "lastTimePlayed": "2022-09-12T09:42:40.0628478Z" },
       "detail": {
-        "developerName": "Epic Games",
-        "publisherName": "Epic Games",
-        "displayImage": "https://images-eds-ssl.xboxlive.com/image?url=...",
-        "description": "string",
-        "shortDescription": "...",
-        "genres": ["Action"],
-        "attributes": []
-      }
+        "developerName": "...",
+        "publisherName": "...",
+        "releaseDate": "...",
+        "genres": []
+      },
+      "alternateTitleIds": [],
+      "minutesPlayed": 294
     }
   ]
 }
@@ -1180,31 +1192,15 @@ refresh (stored cookies) -> accessToken (4h expiry) -> auth
 
 **Key observations**:
 
-- **56 titles** tracked (only games started at least once - no full purchase library)
-- `lastTimePlayed` is ISO 8601 datetime
-- MinutesPlayed merged from `userstats.xboxlive.com/batch` - only available for Microsoft Store/Xbox-native titles (UWP, Game Pass)
-- Most games show `minutesPlayed: 0` or have no `minutesPlayed` field at all (non-MS games like Steam titles that appear via Xbox app tracking on PC)
-- Games with playtime data on this account: Minecraft Dungeons (679 min), Forza Horizon 5 (294 min), Halo Infinite (56 min), Minecraft Launcher (0 min), Microsoft Solitaire Collection (0 min)
-- `detail` includes: `developerName`, `publisherName`, `description`, `shortDescription`, `releaseDate`, `genres`, `displayImage`
-- `devices` in titleHistory: `XboxSeries`, `XboxOne`, `PC`, `Mobile`, etc.
-- No separate catalog endpoint - metadata is inline in the games response
-
-**Full title list (56 total, sorted by last played):**
-
-| Game               | Last Played | Minutes | Developer        |
-| ------------------ | ----------- | ------- | ---------------- |
-| Fortnite           | 2026-06-05  | -       | Epic Games       |
-| Rocket League      | 2026-05-31  | -       | Psyonix          |
-| League of Legends  | 2026-03-23  | -       | Riot Games       |
-| Among Us           | 2026-01-10  | -       | Innersloth       |
-| Minecraft Launcher | 2025-12-28  | 0       | Mojang/Microsoft |
-| Minecraft          | 2025-12-28  | -       | Mojang AB        |
-| Osu!               | 2025-12-27  | -       | ppy              |
-| Risk of Rain 2     | 2025-09-16  | -       | Hopoo Games      |
-| Minecraft Dungeons | 2023-03-26  | 679     | Mojang Studios   |
-| Forza Horizon 5    | 2022-09-12  | 294     | Playground Games |
-| Halo Infinite      | 2022-07-25  | 56      | 343 Industries   |
-| ... (45 more)      |             |         |                  |
+- Only titles started at least once on this account; there is no full purchase library. Everything comes back in one call (`maxItems=5000`). The Microsoft Store purchases service (`collections.mp.microsoft.com/v7.0/collections/query`, licensing XSTS token) accepts our sign-in but returns no items, even for owned games, so it can't fill the gap or tell bought from Game Pass.
+- Most entries have `devices: ["Win32"]`: PC games from other stores (Steam, Epic, EA, Riot, ...) that the Xbox app noticed running. They have no `productId`, `pfn`, achievements, playtime or Game Pass flag. Only Microsoft Store and console titles (`PC`, `XboxOne`, `XboxSeries`) carry those. Their `detail` usually has `developerName`, `publisherName` and often `shortDescription`, but never a `releaseDate`.
+- IGDB knows no Xbox `titleId`, and Microsoft's catalogue (`displaycatalog` lookup by `alternateId=XboxTitleId`) only resolves store titles, so a `Win32` title can only be matched by name.
+- `productId` is the Microsoft Store id, the one that bridges to IGDB (see [IGDB ID mapping](#igdb-id-mapping-verified-against-live-data)). Not every MS title is a game: a launcher app can have one that IGDB doesn't know.
+- The same game can appear twice for different builds (console and Windows), with different `titleId`s and `productId`s but the same IGDB game.
+- `achievement.totalAchievements` is always `0`; use `totalGamerscore` and the `achievements` call for real totals. Titles with no achievements report all zeros.
+- `gamePass.isGamePass` says the title is in Game Pass, not that it was played through Game Pass.
+- `minutesPlayed` is merged from `userstats.xboxlive.com/batch` and only exists for MS titles.
+- `devices` values seen: `Win32`, `PC`, `XboxOne`, `XboxSeries`.
 
 ---
 
@@ -1243,9 +1239,11 @@ refresh (stored cookies) -> accessToken (4h expiry) -> auth
           "type": "Gamerscore"
         }
       ],
-      "isRevoked": false
+      "isRevoked": false,
+      "rarity": { "currentCategory": "Common", "currentPercentage": 61.46 }
     }
-  ]
+  ],
+  "pagingInfo": { "continuationToken": null, "totalRecords": 164 }
 }
 ```
 
@@ -1257,16 +1255,10 @@ refresh (stored cookies) -> accessToken (4h expiry) -> auth
 - `timeUnlocked`: ISO 8601 datetime, `0001-01-01T00:00:00` if not earned
 - `isSecret`: boolean - hidden achievement
 - `mediaAssets[].url`: achievement icon
-- `description` / `lockedDescription`: same text (no hidden description trick like PSN's unearned display)
+- `description` / `lockedDescription`: same text, even for secret achievements that aren't earned
 - `platforms`: which platform the achievement was unlocked on
-- `maxItems=1000` is the request limit - should cover all games
-
-**Tested games:**
-
-| Game               | titleId    | Achievements | Earned |
-| ------------------ | ---------- | ------------ | ------ |
-| Minecraft Dungeons | 1739375565 | 104          | 10     |
-| Forza Horizon 5    | 2030093255 | 164          | 3      |
+- `rarity: { currentCategory, currentPercentage }` is only sent with contract version 4, which the handler uses
+- `maxItems=1000` returns everything in one page (`pagingInfo.continuationToken` is `null`)
 
 ---
 
@@ -1504,7 +1496,7 @@ Or `null` if no match.
 - Uses IGDB's `external_game_source` table (not deprecated `category` field)
 - `source` accepts name (e.g. `"steam"`, `"psn"`) or numeric ID (e.g. `1`, `36`) - see the source map in [api.md](api.md#api-apiigdbjs)
 - Returns only the IGDB `id` - lightweight mapping. Use `game({ ids: [id] })` for full record
-- `null` means IGDB has no record for that external ID (always for Epic namespaces, which IGDB doesn't store; common for modern Xbox titleIds)
+- `null` means IGDB has no record for that external ID (always for Epic namespaces, which IGDB doesn't store; always for Xbox titleIds; use the Microsoft Store `productId` instead)
 - Returns at most 1 result
 
 ---
@@ -1513,13 +1505,13 @@ Or `null` if no match.
 
 `by_external` is the bridge: pass a platform ID -> get IGDB game ID. Or use `game(id).external_games` to get all external IDs for a known game.
 
-| Platform  | Platform's own ID                               | IGDB uid format                | Direct bridge? | How                                                                            |
-| --------- | ----------------------------------------------- | ------------------------------ | :------------: | ------------------------------------------------------------------------------ |
-| **PSN**   | `concept.id` from `psn/games` (e.g. `10011898`) | Numeric string                 |   Yes (1:1)    | PSN `games` -> `by_external(psn, conceptId)`                                   |
-| **Steam** | `appid` from `steam/games` (e.g. `1245620`)     | Numeric string                 |   Yes (1:1)    | Steam `games` -> `by_external(steam, appid)`                                   |
-| **Epic**  | `namespace` / `catalogItemId`                   | Store offer id / store page id |       No       | Via store endpoints, see [database.md](database.md#igdb-bridging-per-platform) |
-| **Xbox**  | `titleId` from `xbox/games` (e.g. `1820250788`) | Xbox 360 UUID format           |       No       | IGDB only has Xbox 360 marketplace IDs                                         |
-| **EA**    | `contentId` from `ea/library`                   | N/A                            |       No       | No EA/Origin source in IGDB                                                    |
+| Platform  | Platform's own ID                                   | IGDB uid format                | Direct bridge? | How                                                                                                |
+| --------- | --------------------------------------------------- | ------------------------------ | :------------: | -------------------------------------------------------------------------------------------------- |
+| **PSN**   | `concept.id` from `psn/games` (e.g. `10011898`)     | Numeric string                 |   Yes (1:1)    | PSN `games` -> `by_external(psn, conceptId)`                                                       |
+| **Steam** | `appid` from `steam/games` (e.g. `1245620`)         | Numeric string                 |   Yes (1:1)    | Steam `games` -> `by_external(steam, appid)`                                                       |
+| **Epic**  | `namespace` / `catalogItemId`                       | Store offer id / store page id |       No       | Via store endpoints, see [database.md](database.md#igdb-bridging-per-platform)                     |
+| **Xbox**  | `productId` from `xbox/games` (e.g. `9NNX1VVR3KNQ`) | Microsoft Store id             | MS titles only | `by_external(microsoft, productId)`. `titleId` never matches; `Win32` titles have no id, name only |
+| **EA**    | `contentId` from `ea/library`                       | N/A                            |       No       | No EA/Origin source in IGDB                                                                        |
 
 **Rate limit**: see [api.md](api.md).
 
@@ -1712,7 +1704,7 @@ platform game -> IGDB by_external(platform, platformId) -> store IGDB game ID (c
 | Store metadata      | In `games`                | Separate `game`            | Separate `catalog`      | In `library`             | In `games` response      |
 | Achievements total  | `titles`                  | `game`                     | `progress`              | In achievements          | In achievements response |
 | Achievement details | `trophies` (merged)       | `schemas` + `achievements` | `achievements` (merged) | `achievements` (merged)  | `achievements` (merged)  |
-| Rarity              | `%` + tier 0/1/2          | Not available              | `%`                     | `%` (legacy)             | Not available            |
+| Rarity              | `%` + tier 0/1/2          | Not available              | `%`                     | `%` (legacy)             | `%` + Common/Rare        |
 | Trophy type         | bronze/silver/gold/plat   | N/A (all equal)            | N/A (XP-based)          | N/A (XP-based)           | Gamerscore               |
 | Auth expiry         | 1h / 10d refresh          | Static API key             | 36h / 365d refresh      | 4h, renewed from cookies | 1h / refresh available   |
 

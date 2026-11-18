@@ -238,7 +238,14 @@ export const SCHEMAS = {
 
   xbox: {
     profile: NONE,
-    games: NONE,
+    games: [
+      {
+        name: "decorations",
+        type: "string",
+        hint: "Comma-separated titlehub extras. Default: detail.",
+        placeholder: "detail,achievement,productid,gamepass,scid",
+      },
+    ],
     achievements: [
       {
         name: "titleId",

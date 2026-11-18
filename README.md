@@ -15,9 +15,9 @@ It is not a public service: one owner, private sign-in, deployed on Vercel.
   sign-in; the nightly job uses its own secret, and the local-only dev sign-in
   endpoint is the exception by design. The one exception to "no database" is
   the library updater (`library-sync.js`, its `_steam-update.js`,
-  `_epic-update.js` and `_psn-update.js`, their achievement loaders and the
-  `_match*.js` helpers), which syncs the owner's Steam, Epic and PlayStation
-  libraries server-side.
+  `_epic-update.js`, `_psn-update.js` and `_xbox-update.js`, their achievement
+  loaders and the `_match*.js` helpers), which syncs the owner's Steam, Epic,
+  PlayStation and Xbox libraries server-side.
 - **Database** - Supabase (Postgres + Auth). Stores platform tokens, a cache of
   IGDB game records and the owner's library (games, playtime, achievements).
 - **Two frontends**, sharing the same API, sign-in and database:
@@ -37,7 +37,7 @@ Browser  -> POST /api/psn    -> psn-api  -> PlayStation Network
          -> POST /api/sgdb   -> fetch    -> SteamGridDB v2 (community art)
          -> POST /api/hltb   -> fetch    -> HowLongToBeat (scraped, no API)
 Browser  -> Supabase (sign-in, tokens, games cache, library)
-Browser  -> POST /api/library-sync -> Steam, Epic, PSN + IGDB -> Supabase (library updater)
+Browser  -> POST /api/library-sync -> Steam, Epic, PSN, Xbox + IGDB -> Supabase (library updater)
 Vercel Cron (daily) -> /api/cron-refresh -> keeps platform tokens alive, prunes the games cache
 Vercel Cron (nightly, one per platform) -> GET /api/library-sync -> same updater
 ```
@@ -66,7 +66,8 @@ api/
   _steam-update.js _steam-achievements.js   the Steam updater and its achievements loader
   _epic-update.js _epic-achievements.js     the Epic updater and its achievements loader
   _psn-update.js _psn-achievements.js       the PlayStation updater and its trophy loader
-  _match.js _match-steam.js _match-epic.js _match-psn.js _igdb-cache.js  matching library rows to IGDB
+  _xbox-update.js _xbox-achievements.js     the Xbox updater and its achievements loader
+  _match.js _match-steam.js _match-epic.js _match-psn.js _match-xbox.js _igdb-cache.js  matching library rows to IGDB
   psn.js steam.js epic.js xbox.js ea.js   platform handlers
   igdb.js sgdb.js hltb.js                 game data handlers
 public/

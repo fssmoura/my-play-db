@@ -837,6 +837,7 @@ const ADAPTERS = {
   steam: () => require("./_match-steam"),
   epic: () => require("./_match-epic")(),
   playstation: () => require("./_match-psn")(),
+  xbox: () => require("./_match-xbox")(),
 };
 
 function serviceClient() {

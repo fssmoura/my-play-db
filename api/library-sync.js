@@ -4,6 +4,7 @@ const { serviceClient } = require("./_match");
 const { updateSteam } = require("./_steam-update");
 const { updateEpic } = require("./_epic-update");
 const { updatePsn } = require("./_psn-update");
+const { updateXbox } = require("./_xbox-update");
 const { ensureFreshAccess } = require("./_platform-refresh");
 
 // Runs the platform updaters. Each platform is independent: its own lock,
@@ -17,9 +18,9 @@ const { ensureFreshAccess } = require("./_platform-refresh");
 // {busy} | {error}. force ignores the 15-minute rule, never the lock.
 //
 // GET (Vercel cron, Authorization: Bearer CRON_SECRET), optional
-// ?platform=steam|epic|playstation (all when absent): same runs, answered as
+// ?platform=steam|epic|playstation|xbox (all when absent): same runs, answered as
 // one JSON object once finished. Sign-in renewal is cron-refresh's job; a
-// platform whose access outlives no run (PSN: one hour) asks it, through
+// platform whose access outlives no run (PSN, Xbox: one hour) asks it, through
 // ensureFreshAccess, to renew before starting.
 
 const MIN_GAP_MS = 15 * 60 * 1000;
@@ -54,6 +55,12 @@ const UPDATERS = {
     const { accessToken } = await ensureFreshAccess(db, "psn");
     if (!accessToken) throw new Error("PlayStation is not connected");
     return updatePsn({ db, accessToken, deadline, log });
+  },
+  async xbox({ db, deadline, log }) {
+    const { xuid, userHash, xstsToken } = await ensureFreshAccess(db, "xbox");
+    if (!xuid || !userHash || !xstsToken)
+      throw new Error("Xbox is not connected");
+    return updateXbox({ db, xuid, userHash, xstsToken, deadline, log });
   },
 };
 

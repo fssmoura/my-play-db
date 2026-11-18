@@ -760,11 +760,13 @@ a.game-art-frame:focus-visible {
 
 .subtabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 0;
   border-bottom: 1px solid var(--line);
 }
 
 .subtabs button {
+  white-space: nowrap;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;

@@ -142,11 +142,11 @@ async function exchangeUserForXsts(userToken) {
   return data;
 }
 
-async function xboxGet(url, userHash, xstsToken) {
+async function xboxGet(url, userHash, xstsToken, contractVersion = "2") {
   const { status, data } = await httpsRequest(url, {
     headers: {
       Authorization: `XBL3.0 x=${userHash};${xstsToken}`,
-      "x-xbl-contract-version": "2",
+      "x-xbl-contract-version": String(contractVersion),
       "Accept-Language": "en-US",
     },
   });
@@ -217,12 +217,12 @@ const actions = {
   },
 
   async games(options = {}) {
-    const { xuid, userHash, xstsToken } = options;
+    const { xuid, userHash, xstsToken, decorations } = options;
     if (!xuid || !userHash || !xstsToken) {
       throw new Error("xuid, userHash, and xstsToken are required");
     }
     const titleHistory = await xboxGet(
-      `https://titlehub.xboxlive.com/users/xuid(${xuid})/titles/titlehistory/decoration/detail`,
+      `https://titlehub.xboxlive.com/users/xuid(${xuid})/titles/titlehistory/decoration/${decorations || "detail"}?maxItems=5000`,
       userHash,
       xstsToken,
     );
@@ -272,6 +272,7 @@ const actions = {
       `https://achievements.xboxlive.com/users/xuid(${xuid})/achievements?titleId=${titleId}&maxItems=1000`,
       userHash,
       xstsToken,
+      "4", // v4 adds rarity
     );
   },
 };
@@ -306,3 +307,5 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 };
+
+module.exports.actions = actions;
