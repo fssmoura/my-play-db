@@ -84,7 +84,9 @@ Worth documenting:
   rules, data rules).
 
 Not worth documenting: what each function or file does, step-by-step
-walkthroughs of the code, styling values, or a changelog of what was built.
+walkthroughs of the code, styling values, a changelog of what was built, or
+counts of the owner's library (games, rows, trophies, how many matched). They
+change with every sync; query the database instead.
 
 Each fact lives in one doc. Anywhere else, link to it rather than repeating it.
 Delete what stops being true.

@@ -470,7 +470,7 @@ meta->>'concept_id')` when there is a concept, the first of `meta.title_ids`
 - `concept_id` - the game's Sony concept, for every code including unplayed
   ones, from the public catalogue
   (`m.np.playstation.com/api/catalog/v2/titles/<code>/concepts?age=99&country=GB&language=en-GB`,
-  no sign-in; it matched `games`' `concept.id` for all 185 played codes).
+  no sign-in; it matched `games`' `concept.id` for every played code).
   Absent only for PS3 rows. Groups a game's codes and is IGDB's PSN id.
 - `trophy_sets` - every trophy list of these codes (from `trophymap` `sets`;
   a code can own several). Empty means no list is known: either no trophies
@@ -580,11 +580,10 @@ one is an owned game still waiting for a match. Built so far: Steam's one-time
 first import, the matcher, and the [Steam updater](#the-steam-updater); Epic's
 one-time first import, matched with the same matcher, and its achievements
 (`_epic-achievements.js`, one call per game; add-on sets stay with the game,
-since Epic gives them no name); PSN's one-time first import (687 rows after the owner's ignore
-review, Nov 2026; the 5 early test rows were updated in place and kept their
-links), matched with the same matcher, and its trophies (`_psn-achievements.js`,
-one `trophies` call per list plus `groups` for names; 208 rows, 9,421 trophies,
-2,211 unlocked, every list matching the per-tier counts in `titles`). Trophies
+since Epic gives them no name); PSN's one-time first import (the early test
+rows were updated in place and kept their links), matched with the same
+matcher, and its trophies (`_psn-achievements.js`, one `trophies` call per list
+plus `groups` for names; every list matched the per-tier counts in `titles`). Trophies
 go to rows that were played or bought (`ps_plus` false) or whose list is on the
 owner's account; unplayed PS Plus rows get none until played or bought.
 
@@ -660,8 +659,8 @@ Nothing is merged in the database. Which games get a row:
 
 Which console: a game (one `concept_id`) gets a row only for each console that
 holds the owner's data - playtime, or a trophy list in the owner's `titles`.
-Both PS4 and PS5 rows exist only when both have data (6 games at import: Ghost
-of Tsushima, DIRT 5, FIFA 22, eFootball, Knockout City, Genshin Impact). With
+Both PS4 and PS5 rows exist only when both have data (e.g. Ghost of Tsushima,
+Genshin Impact). With
 no data anywhere it is one row, PS5 if a PS5 code is owned. Unowned codes of a
 stored game add nothing, apart from making the row bought rather than
 `ps_plus`. Sony sometimes gives a game's PS4 and PS5 versions different
@@ -836,11 +835,11 @@ Rows without an IGDB concept (and PS3 rows, which have none) use
 the name search with the catalogue's name, publisher and release date
 (`_match-psn.js`), and only IGDB games on that console fit. The adapter sets
 `perVersion`, so a PS4 and a PS5 row of one game both link the same IGDB game.
-Results (Nov 2026): 685 of 687 linked (677 by concept, 10 of them moved within
-their edition family; 8 by name: Godfall,
-Abandoned and the 6 PS3 games other than Epic Mickey 2); the owner picked the
-other two from review: Epic Mickey 2 (Sony's "Disney" prefix) and eFootball
-PES 2021 LITE, linked to "eFootball PES 2021 Season Update" (IGDB has no LITE).
+At import, most rows linked by concept (some moved within their edition
+family) and the rest by name (Godfall, Abandoned, most PS3 games). Two needed
+the owner to pick from review: Epic Mickey 2 (Sony's "Disney" prefix) and
+eFootball PES 2021 LITE, linked to "eFootball PES 2021 Season Update" (IGDB has
+no LITE).
 
 **Epic store bridge.** IGDB's Epic ids are Epic Store ids (the 32-hex one is
 the store offer id, the dashed one the store page id), which the library and
@@ -855,12 +854,12 @@ from the namespace:
   (`.../p/<slug>`, older entries `.../product/<slug>`), which catches games
   whose IGDB entry only holds the slug.
 
-Against the real library (Nov 2026) this reached 73 of 82 namespaces. Misses:
+Against the real library (Nov 2026) this reached most namespaces. Misses:
 delisted games for which Epic returns nothing (Dauntless, original GTA V, NBA
 2K21, Evil Dead) - IGDB still has them with Epic store links, so a name search
 finds them; Football Manager 2020 (IGDB holds only a `/product/` website link);
-and four non-game items not in IGDB. An older route (the `productmapping` list
-plus store-content pages) reached only 55, because that list misses newer slugs
+and non-game items not in IGDB. An older route (the `productmapping` list
+plus store-content pages) reached far fewer, because that list misses newer slugs
 with a random suffix.
 
 How `_match-epic.js` uses it. What the owner owns comes first; everything else
@@ -889,9 +888,9 @@ more than a year after the owner got the game (a year allows pre-purchases).
 Store details for the search come from the owned offer, or else the own offer
 whose title is closest to the imported name.
 
-Results (Nov 2026): all 73 linked, each to a different game; the only owned
-editions are Dying Light (Enhanced) and Civilization VI (Platinum). Re-matching
-every row as if new, with the names restored, gave the same games for all the
+At import every row linked, each to a different game; the only owned editions
+were Dying Light (Enhanced) and Civilization VI (Platinum). Re-matching every
+row as if new, with the names restored, gave the same games for all the
 others.
 
 ### Schema principles

@@ -260,7 +260,7 @@
 - `lastUpdatedDateTime` = when the last trophy was earned (use for incremental sync)
 - `npCommunicationId` = the key needed for `trophies` action (e.g. `NPWR49547_00`)
 - `npServiceName` = `"trophy2"` for PS5, `"trophy"` for PS4 and older
-- `trophyTitlePlatform` can be a list: `PS5,PSPC`, `PS3,PS4`, `PS3,PSVITA,PS4`. Never `PS4,PS5`: a game played on both has a separate list per console (all 6 such games checked). The lists usually hold the same trophies under the same `trophyId` with small wording fixes (DIRT 5, eFootball), but can differ outright (Genshin Impact: 118 on PS4, 137 on PS5, different DLC groups). A PS4 save carried to PS5 re-unlocks the PS4 trophies there (Ghost of Tsushima: all 19 PS4 unlocks also on PS5).
+- `trophyTitlePlatform` can be a list: `PS5,PSPC`, `PS3,PS4`, `PS3,PSVITA,PS4`. Never `PS4,PS5`: a game played on both has a separate list per console (every such game checked). The lists usually hold the same trophies under the same `trophyId` with small wording fixes (DIRT 5, eFootball), but can differ outright (Genshin Impact: 118 on PS4, 137 on PS5, different DLC groups). A PS4 save carried to PS5 re-unlocks the PS4 trophies there (Ghost of Tsushima: all 19 PS4 unlocks also on PS5).
 - `hasTrophyGroups`: true = game has DLC trophy groups (Ghost of Yōtei has 4 besides `default`); names come from `groups`
 - `hiddenFlag`: lists the user hid on their profile - still returned
 - `definedTrophies` vs `earnedTrophies` - counts per tier, not individual trophies
@@ -366,7 +366,7 @@ auth -> refreshToken (persist)
         `-> groups -> DLC group names for a set
 ```
 
-**Linking** (measured): `titleId` is the join key across `games`, `purchased` and `trophymap`. `concept.id` (only in `games`/`recent`) groups PS4/PS5 SKUs of one game. For any other code (purchases), the public catalogue `m.np.playstation.com/api/catalog/v2/titles/<titleId>/concepts?age=99&country=GB&language=en-GB` (no sign-in; `country`, `language` and `age` must all be present) returns the same concept `id` plus `nameEn`. It answered all 1,275 of the owner's codes; `nameEn` is missing for a few delisted games. Some games have different concepts for PS4 and PS5 (Persona 5 Royal, Hotline Miami). The trophy set hangs off a `titleId`, not a concept.
+**Linking** (measured): `titleId` is the join key across `games`, `purchased` and `trophymap`. `concept.id` (only in `games`/`recent`) groups PS4/PS5 SKUs of one game. For any other code (purchases), the public catalogue `m.np.playstation.com/api/catalog/v2/titles/<titleId>/concepts?age=99&country=GB&language=en-GB` (no sign-in; `country`, `language` and `age` must all be present) returns the same concept `id` plus `nameEn`. It answered every one of the owner's codes; `nameEn` is missing for a few delisted games. Some games have different concepts for PS4 and PS5 (Persona 5 Royal, Hotline Miami). The trophy set hangs off a `titleId`, not a concept.
 
 **For sync**: `titles` is the incremental entry point. Compare `lastUpdatedDateTime` against stored value. If changed -> call `trophies` for that game. `games` provides playtime/playcount when you need it. `recent` is even lighter for just "was this played?" checks.
 
@@ -825,7 +825,7 @@ steamId (public info)
 
 **Key observations**:
 
-- 18 games have achievements out of 73 library entries
+- Some games have achievements, most don't
 - Auto-scans full library if `sandboxIds` not provided
 - Achievement sets: base game (`isBase: true`) + DLC / expansion sets
 - Player data merged in: `totalUnlocked` + `earnedXP` per set
@@ -969,7 +969,7 @@ auth -> access_token + refresh_token (36h / 365d)
 
 **Key observations**:
 
-- 7 games owned on EA (Origin desktop app)
+- Owned games from the EA app (formerly Origin)
 - Playtime in **seconds** (like Epic)
 - `gameSlug` is the URL-friendly name used for playtime lookups
 - `achievementSetOverride` is `null` for games without achievements (e.g. The Sims 4)
@@ -1715,7 +1715,6 @@ platform game -> IGDB by_external(platform, platformId) -> store IGDB game ID (c
 | Rarity              | `%` + tier 0/1/2          | Not available              | `%`                     | `%` (legacy)             | Not available            |
 | Trophy type         | bronze/silver/gold/plat   | N/A (all equal)            | N/A (XP-based)          | N/A (XP-based)           | Gamerscore               |
 | Auth expiry         | 1h / 10d refresh          | Static API key             | 36h / 365d refresh      | 4h, renewed from cookies | 1h / refresh available   |
-| Library size        | 172 games                 | 79 games                   | 73 items                | 7 games                  | 56 titles                |
 
 ---
 
@@ -1771,8 +1770,8 @@ platform game -> IGDB by_external(platform, platformId) -> store IGDB game ID (c
 
 **Library granularity**:
 
-- PSN: 172 games, 164 with trophies - includes PS+ titles
-- Steam: 79 games - full purchase library (free games opt-in)
-- Epic: 73 items - includes free claimed games + launcher/tools
-- EA: 7 games - Origin purchases only
-- Xbox: 56 titles - only started games (no full purchase library), mixes MS-native + Steam/standalone
+- PSN: includes PS+ titles
+- Steam: full purchase library (free games opt-in)
+- Epic: includes free claimed games + launcher/tools
+- EA: EA app purchases only
+- Xbox: only started games (no full purchase library), mixes MS-native + Steam/standalone
