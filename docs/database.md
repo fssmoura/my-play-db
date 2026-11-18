@@ -465,14 +465,14 @@ versionless rows never clash with each other or with a versioned row.
   "concept_id": 235227,
   "trophy_sets": [{ "id": "NPWR15120_00", "service": "trophy" }],
   "ps_plus": false,
-  "name": "Ghost of Tsushima"
+  "name": "Example"
 }
 ```
 
 - `title_ids` - the Sony codes this row stands for: the played ones on this
   console, or the purchased one for an unplayed game. Several only when one
-  console lists more than one code for the game (Ghost of Tsushima PS4: the
-  game plus the Director's Cut bonus content). Empty for PS3 rows.
+  console lists more than one code for the game (a game plus its bonus
+  content). Empty for PS3 rows.
 - `concept_id` - the game's Sony concept, for every code including unplayed
   ones, from the public catalogue
   (`m.np.playstation.com/api/catalog/v2/titles/<code>/concepts?age=99&country=GB&language=en-GB`,
@@ -536,8 +536,8 @@ versionless rows never clash with each other or with a versioned row.
 - `acquisition` holds `acquisitionDate`.
 - `last_played`: Epic has no such date anywhere (API, launcher, local files;
   checked Nov 2026). It can only be the day a sync sees playtime go up, so it
-  needs a daily sync and has no history before it. Fortnite and Among Us hold
-  dates the owner gave by hand; the rest start empty.
+  needs a daily sync and has no history before it. Dates the owner gave by hand
+  stay.
 
 **Xbox** (any row with a `title_id`):
 
@@ -667,22 +667,19 @@ game per console, `version` `ps5` (`PPSA` codes), `ps4` (`CUSA`) or `ps3`.
 Nothing is merged in the database. Which games get a row:
 
 - everything played or with trophies (play history, plus games Sony dropped
-  from it but still lists in purchases with the owner's trophies: Marvel's
-  Avengers, Dauntless, Zenith);
+  from it but still lists in purchases with the owner's trophies);
 - PS3 trophy lists, which link to no game (trophies only, no play data);
 - bought games never played;
 - PS Plus games never played, while still active.
 
 Which console: a game (one `concept_id`) gets a row only for each console that
 holds the owner's data - playtime, or a trophy list in the owner's `titles`.
-Both PS4 and PS5 rows exist only when both have data (e.g. Ghost of Tsushima,
-Genshin Impact). With
+Both PS4 and PS5 rows exist only when both have data. With
 no data anywhere it is one row, PS5 if a PS5 code is owned. Unowned codes of a
 stored game add nothing, apart from making the row bought rather than
 `ps_plus`. Sony sometimes gives a game's PS4 and PS5 versions different
-concepts: when one purchase (`productId`) holds both, they are still one game
-(Hotline Miami, Hotline Miami 2, Stellaris);
-otherwise nothing links them, and the owner ignores the extra one (Persona 5 Royal PS4). When one console lists
+concepts: when one purchase (`productId`) holds both, they are still one game;
+otherwise nothing links them, and the owner ignores the extra one. When one console lists
 several played codes for a game, `playtime` and `play_count` are added together,
 `first_played` is the earliest and `last_played` the latest. Trophies not
 confirmed unlocked are stored locked, including trials whose progress Sony
@@ -831,7 +828,7 @@ an unplayed PS Plus game leaving the catalogue (removed), and the same game
 then re-added as a new claim and matched.
 
 Not handled, left on purpose as rare: a new claim of a game whose PS4 and PS5
-versions have different concepts (Hotline Miami) becomes two rows, since only
+versions have different concepts becomes two rows, since only
 the import paired them by `productId`; and a bought, unplayed game first played
 on its other console keeps its old row next to the new one, because that row's
 locked trophy list can't be deleted.
@@ -894,11 +891,6 @@ Rows without an IGDB concept (and PS3 rows, which have none) use
 the name search with the catalogue's name, publisher and release date
 (`_match-psn.js`), and only IGDB games on that console fit. The adapter sets
 `perVersion`, so a PS4 and a PS5 row of one game both link the same IGDB game.
-At import, most rows linked by concept (some moved within their edition
-family) and the rest by name (Godfall, Abandoned, most PS3 games). Two needed
-the owner to pick from review: Epic Mickey 2 (Sony's "Disney" prefix) and
-eFootball PES 2021 LITE, linked to "eFootball PES 2021 Season Update" (IGDB has
-no LITE).
 
 **Xbox.** Only store titles have an id IGDB knows (`meta.product_id`); launched
 titles go to the name search with nothing but their name, since Xbox gives no
