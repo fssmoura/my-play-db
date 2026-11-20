@@ -27,6 +27,10 @@ here are overwhelming.
 - Don't list every option you found. Recommend one and say why, briefly.
 - Don't narrate the investigation. Give what it concluded.
 - If it needs to be long, it belongs in `docs/`, not in a reply.
+- Never put a question in the ask-a-question pop-up while the explanation
+  behind it is still unsent: in the GitHub Copilot app the pop-up shows on its
+  own and the reasoning doesn't reach the chat. Send the findings or reasoning
+  as a normal reply first, then ask.
 
 ## Ways of working
 
