@@ -128,9 +128,121 @@ async function load() {
     ...row,
     title: row.games?.name ?? row.meta?.name ?? "?",
   }));
+  await loadSharedLists();
   const unmatched = rows.filter((r) => !r.igdb_id).length;
   summary = unmatched ? `${unmatched} not matched to IGDB.` : "";
   render();
+}
+
+// Achievement lists of games held on several stores with progress shown,
+// by player_games id, for combining on the card.
+let lists = new Map();
+
+async function loadSharedLists() {
+  const shown = rows.filter(
+    (r) =>
+      r.igdb_id != null &&
+      (r.achievements?.[0]?.count ?? 0) > 0 &&
+      !r.meta?.progress_hidden,
+  );
+  const perGame = new Map();
+  for (const r of shown)
+    perGame.set(r.igdb_id, [...(perGame.get(r.igdb_id) ?? []), r.id]);
+  const ids = [...perGame.values()].filter((g) => g.length > 1).flat();
+  const next = new Map();
+  for (let i = 0; i < ids.length; i += 50) {
+    const part = ids.slice(i, i + 50);
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase
+        .from("achievements")
+        .select("owned_game_id, name, description, tier, unlocked_at")
+        .in("owned_game_id", part)
+        .order("owned_game_id")
+        .order("platform_key")
+        .range(from, from + 999);
+      if (error) {
+        setStatus(`Error: ${error.message}`, true);
+        return;
+      }
+      for (const a of data)
+        next.set(a.owned_game_id, [...(next.get(a.owned_game_id) ?? []), a]);
+      if (data.length < 1000) break;
+    }
+  }
+  lists = next;
+}
+
+/* Combining achievement lists. Stores often list the same achievement with a
+   slightly different name or description (a typo, punctuation, a reworded
+   title), and a list can hold two achievements that differ only by
+   punctuation ("BB" and "BB..."). So every pair across two lists is scored -
+   name mostly, description as backup - and pairs are settled best first, each
+   achievement used once; pairs scoring under MATCH_FLOOR stay separate
+   (a PlayStation platinum, a store-only extra). Display only: nothing stored
+   changes. Measured on the owner's library (Nov 2026): no wrong pairings. */
+
+const MATCH_FLOOR = 0.6;
+const loose = (s) => (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const wordSet = (s) =>
+  new Set(
+    (s ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean),
+  );
+const pairsOf = (s) => {
+  const t = loose(s);
+  const out = new Set();
+  for (let i = 0; i < t.length - 1; i++) out.add(t.slice(i, i + 2));
+  return out;
+};
+const dice = (a, b) => {
+  if (!a.size || !b.size) return 0;
+  let shared = 0;
+  for (const x of a) if (b.has(x)) shared++;
+  return (2 * shared) / (a.size + b.size);
+};
+const nameScore = (a, b) =>
+  a === b
+    ? 1
+    : loose(a) === loose(b)
+      ? 0.95
+      : dice(pairsOf(a), pairsOf(b)) * 0.9;
+const descScore = (a, b) => (!a || !b ? 0.5 : dice(wordSet(a), wordSet(b)));
+const pairScore = (x, y) =>
+  0.6 * nameScore(x.name, y.name) +
+  0.4 * descScore(x.description, y.description);
+
+/** One list from several: { total, unlocked, platinum } (earned on any store). */
+function combineLists(all) {
+  let master = all[0].map((a) => ({ ...a, earned: !!a.unlocked_at }));
+  for (const list of all.slice(1)) {
+    const pairs = [];
+    master.forEach((m, i) =>
+      list.forEach((a, j) => {
+        const s = pairScore(m, a);
+        if (s >= MATCH_FLOOR) pairs.push([s, i, j]);
+      }),
+    );
+    pairs.sort((p, q) => q[0] - p[0]);
+    const usedM = new Set();
+    const usedL = new Set();
+    for (const [, i, j] of pairs) {
+      if (usedM.has(i) || usedL.has(j)) continue;
+      usedM.add(i);
+      usedL.add(j);
+      if (list[j].unlocked_at) master[i].earned = true;
+    }
+    list.forEach((a, j) => {
+      if (!usedL.has(j)) master.push({ ...a, earned: !!a.unlocked_at });
+    });
+  }
+  return {
+    total: master.length,
+    unlocked: master.filter((m) => m.earned).length,
+    platinum: master.filter((m) => m.earned && m.tier === "platinum").length,
+  };
 }
 
 /** Where a game comes from: the store on PC (Steam, Epic), else the console family. */
@@ -152,9 +264,10 @@ function isCovered(row, list) {
 
 /**
  * One card per IGDB game, so the same game from several platforms is one
- * card. Playtime is added up, last played is the newest and achievements come
- * from the platform with the most progress. Unmatched rows stay on their own.
- * `stores` lists where the game is owned, for the store filters.
+ * card. Playtime is added up and last played is the newest. Achievements are
+ * the stores' lists combined (see combineLists), leaving out a store that
+ * hides the player's progress when another shows it. Unmatched rows stay on
+ * their own. `stores` lists where the game is owned, for the store filters.
  */
 function mergeByGame(list) {
   const groups = new Map();
@@ -173,20 +286,25 @@ function mergeByGame(list) {
     const withList = group.filter((r) => count(r, "achievements") > 0);
     const visible = withList.filter((r) => !r.meta?.progress_hidden);
     const progress = (r) => count(r, "unlocked") / count(r, "achievements");
-    // Several stores can share one achievement list, so adding them up would
-    // double count: show the one with the most progress instead.
+    // Fallback when the lists aren't loaded: the store with most progress.
     const best = (visible.length ? visible : withList).sort(
       (a, b) =>
         progress(b) - progress(a) ||
         count(b, "unlocked") - count(a, "unlocked"),
     )[0];
+    const combined =
+      visible.length > 1 && visible.every((r) => lists.has(r.id))
+        ? combineLists(visible.map((r) => lists.get(r.id)))
+        : null;
     return {
       ...group[0],
       stores,
       sources: group
         .filter((r) => !isCovered(r, group))
         .map((r) => `${r.platform} · ${r.version ?? "unknown"}`),
-      trophies: (best ?? group[0]).platform === "playstation",
+      trophies: combined
+        ? visible.every((r) => r.platform === "playstation")
+        : (best ?? group[0]).platform === "playstation",
       playtime: times.length ? times.reduce((a, b) => a + Number(b), 0) : null,
       last_played:
         group
@@ -194,10 +312,18 @@ function mergeByGame(list) {
           .filter(Boolean)
           .sort()
           .pop() ?? null,
-      meta: { progress_hidden: Boolean(best?.meta?.progress_hidden) },
-      achievements: [{ count: best ? count(best, "achievements") : 0 }],
-      unlocked: [{ count: best ? count(best, "unlocked") : 0 }],
-      platinum: [{ count: best ? count(best, "platinum") : 0 }],
+      meta: {
+        progress_hidden: !combined && Boolean(best?.meta?.progress_hidden),
+      },
+      achievements: [
+        { count: combined?.total ?? (best ? count(best, "achievements") : 0) },
+      ],
+      unlocked: [
+        { count: combined?.unlocked ?? (best ? count(best, "unlocked") : 0) },
+      ],
+      platinum: [
+        { count: combined?.platinum ?? (best ? count(best, "platinum") : 0) },
+      ],
     };
   });
 }

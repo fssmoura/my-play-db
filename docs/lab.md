@@ -45,8 +45,16 @@ The search tab was removed; search lives in the app at `/`.
 **Library tab.** These rules are for the lab only. It is one list with one
 card per IGDB game, so the same game from several platforms is one card. Its
 playtime is added up and its last played is the newest. Its achievements are
-taken from the platform with the most progress, not added up, because several
-stores can share one achievement list (Steam and Xbox do). The store buttons
+the stores' lists combined, for display only: the same achievement on two
+stores counts once, earned if earned on either, and one only a store has (a
+PlayStation platinum) is added. Stores name the same achievement slightly
+differently, and one list can hold two that differ only by punctuation
+("BB" and "BB..." in Death Stranding), so pairs are scored on name, then
+description, settled best first and used once; low scores stay separate. On
+the owner's library (Nov 2026) this paired renamed ones correctly ("A Road
+Called Steve" / "It's Called Steve") and made no wrong pairings, where adding
+the lists up doubled them. A store hiding the player's progress is left out
+when another shows it. The store buttons
 next to the sort buttons narrow the list to games owned on any of the chosen
 stores; the cards stay merged. A versionless row whose game another platform
 has is only a date ([database.md](database.md#sync-model)): it feeds that date
