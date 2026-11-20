@@ -42,14 +42,15 @@ The search tab was removed; search lives in the app at `/`.
 
 ## Decisions worth not undoing
 
-**Library tab.** These rules are for the lab only. The All tab shows one card
-per IGDB game, so the same game from several platforms is one card. Its
+**Library tab.** These rules are for the lab only. It is one list with one
+card per IGDB game, so the same game from several platforms is one card. Its
 playtime is added up and its last played is the newest. Its achievements are
 taken from the platform with the most progress, not added up, because several
-stores can share one achievement list (Steam and Xbox do). A versionless row
-whose game another platform has is only a date
-([database.md](database.md#sync-model)): it feeds that date but isn't listed
-as a platform or under Unknown.
+stores can share one achievement list (Steam and Xbox do). The store buttons
+next to the sort buttons narrow the list to games owned on any of the chosen
+stores; the cards stay merged. A versionless row whose game another platform
+has is only a date ([database.md](database.md#sync-model)): it feeds that date
+but doesn't count as a store, so it isn't under Unknown.
 
 **Game tab.** Freshness is a plain 24-hour timer (why there is no "has it
 changed?" check:

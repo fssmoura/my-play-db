@@ -46,21 +46,27 @@ let rows = [];
 let summary = "";
 let syncing = false;
 let sortBy = "recent";
-let shown = "all";
+// Stores to narrow the list to; empty means every game.
+const filters = new Set();
 
 export async function mount(el) {
   root = el;
   root.innerHTML = `
     <div class="library">
-      <nav class="subtabs" id="l-platform" aria-label="Platform"></nav>
       <div class="library-toolbar">
-        <div class="library-sorts" id="l-sort" role="group" aria-label="Sort by">
-          ${Object.entries(SORT_LABELS)
-            .map(
-              ([key, label]) =>
-                `<button type="button" data-sort="${key}" aria-label="${label}" title="${label}" aria-pressed="${String(key === sortBy)}">${SORT_ICONS[key]}</button>`,
-            )
-            .join("")}
+        <div class="library-controls">
+          <div class="library-sorts" id="l-sort" role="group" aria-label="Sort by">
+            ${Object.entries(SORT_LABELS)
+              .map(
+                ([key, label]) =>
+                  `<button type="button" data-sort="${key}" aria-label="${label}" title="${label}" aria-pressed="${String(key === sortBy)}">${SORT_ICONS[key]}</button>`,
+              )
+              .join("")}
+          </div>
+          <details class="library-filters" id="l-filter">
+            <summary>All stores</summary>
+            <div class="library-filter-list" role="group" aria-label="Stores"></div>
+          </details>
         </div>
         <button id="l-reload" class="library-sync" type="button">Sync now</button>
       </div>
@@ -68,11 +74,17 @@ export async function mount(el) {
       <p class="library-toast meta" id="l-status" role="status" aria-live="polite" hidden></p>
     </div>
   `;
-  root.querySelector("#l-platform").addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-platform]");
-    if (!button) return;
-    shown = button.dataset.platform;
+  root.querySelector("#l-filter").addEventListener("change", (event) => {
+    const box = event.target.closest("input[data-store]");
+    if (!box) return;
+    if (box.checked) filters.add(box.dataset.store);
+    else filters.delete(box.dataset.store);
     render();
+  });
+  // Clicking anywhere else closes the list.
+  document.addEventListener("click", (event) => {
+    const list = root.querySelector("#l-filter");
+    if (list?.open && !list.contains(event.target)) list.open = false;
   });
   root.querySelector("#l-sort").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-sort]");
@@ -139,10 +151,10 @@ function isCovered(row, list) {
 }
 
 /**
- * The All tab: one card per IGDB game, so the same game from several
- * platforms is one card. Playtime is added up, last played is the newest and
- * achievements come from the platform with the most progress. Unmatched rows
- * stay on their own.
+ * One card per IGDB game, so the same game from several platforms is one
+ * card. Playtime is added up, last played is the newest and achievements come
+ * from the platform with the most progress. Unmatched rows stay on their own.
+ * `stores` lists where the game is owned, for the store filters.
  */
 function mergeByGame(list) {
   const groups = new Map();
@@ -152,7 +164,10 @@ function mergeByGame(list) {
     groups.get(key).push(row);
   }
   return [...groups.values()].map((group) => {
-    if (group.length === 1) return group[0];
+    const stores = [
+      ...new Set(group.filter((r) => !isCovered(r, group)).map(source)),
+    ];
+    if (group.length === 1) return { ...group[0], stores };
     const count = (r, field) => r[field]?.[0]?.count ?? 0;
     const times = group.map((r) => r.playtime).filter((t) => t != null);
     const withList = group.filter((r) => count(r, "achievements") > 0);
@@ -167,6 +182,7 @@ function mergeByGame(list) {
     )[0];
     return {
       ...group[0],
+      stores,
       sources: group
         .filter((r) => !isCovered(r, group))
         .map((r) => `${r.platform} · ${r.version ?? "unknown"}`),
@@ -187,27 +203,30 @@ function mergeByGame(list) {
 }
 
 function render() {
-  const tabRows = rows.filter((r) => !isCovered(r, rows));
-  const sources = [...new Set(tabRows.map(source))].sort((a, b) =>
+  const games = mergeByGame(rows);
+  const counts = new Map();
+  for (const g of games)
+    for (const s of g.stores) counts.set(s, (counts.get(s) ?? 0) + 1);
+  const stores = [...counts.keys()].sort((a, b) =>
     platformName(a).localeCompare(platformName(b)),
   );
-  if (shown !== "all" && !sources.includes(shown)) shown = "all";
-  root.querySelector("#l-platform").innerHTML = ["all", ...sources]
-    .map((key) => {
-      const count =
-        key === "all"
-          ? mergeByGame(rows).length
-          : tabRows.filter((r) => source(r) === key).length;
-      const label = key === "all" ? "All" : platformName(key);
-      return `<button type="button" data-platform="${escapeHtml(key)}" aria-selected="${String(key === shown)}">${escapeHtml(label)} <span class="meta">${count}</span></button>`;
-    })
+  // A store that no longer has games (after a sync) stops filtering.
+  for (const f of [...filters]) if (!counts.has(f)) filters.delete(f);
+  root.querySelector("#l-filter .library-filter-list").innerHTML = stores
+    .map(
+      (key) =>
+        `<label><input type="checkbox" data-store="${escapeHtml(key)}"${filters.has(key) ? " checked" : ""} /> ${escapeHtml(platformName(key))} <span class="meta">${counts.get(key)}</span></label>`,
+    )
     .join("");
+  const chosen = stores.filter((s) => filters.has(s)).map(platformName);
+  root.querySelector("#l-filter summary").textContent = chosen.length
+    ? chosen.join(", ")
+    : "All stores";
 
   const sort = SORTS[sortBy] ?? SORTS.recent;
-  const list =
-    shown === "all"
-      ? mergeByGame(rows)
-      : tabRows.filter((row) => source(row) === shown);
+  const list = filters.size
+    ? games.filter((g) => g.stores.some((s) => filters.has(s)))
+    : games;
   root.querySelector("#l-grid").innerHTML = list.sort(sort).map(card).join("");
 }
 
