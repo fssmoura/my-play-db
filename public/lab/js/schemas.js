@@ -267,9 +267,13 @@ export const SCHEMAS = {
       {
         name: "achievementSetOverride",
         type: "string",
-        required: true,
         hint: "From `library`. Null there means the game has no achievements.",
         placeholder: "50072_194927_50844",
+      },
+      {
+        name: "raw",
+        type: "boolean",
+        hint: "Return EA's response untouched.",
       },
       {
         name: "sandboxName",

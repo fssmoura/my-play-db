@@ -181,7 +181,7 @@ No env vars needed - the Microsoft OAuth client ID is the Xbox app's consumer ID
 
 ## API (api/ea.js)
 
-Uses EA's internal GraphQL API (`service-aggregation-layer.juno.ea.com`) plus the legacy achievements REST API (`achievements.gameservices.ea.com`). Auth via OAuth implicit token flow - user visits EA auth URL while logged into EA in their browser, gets a Bearer access token directly.
+Uses EA's internal GraphQL API (`service-aggregation-layer.juno.ea.com`). Auth via OAuth implicit token flow - user visits EA auth URL while logged into EA in their browser, gets a Bearer access token directly.
 
 **Auth URL** (user must visit while logged into their EA account):
 
@@ -191,12 +191,12 @@ https://accounts.ea.com/connect/auth?client_id=ORIGIN_JS_SDK&response_type=token
 
 Returns `{ access_token, token_type, expires_in }`. Pass the `access_token` value to all actions.
 
-| Action         | What it needs                                                    | Returns                                                                                                                                                                                                   |
-| -------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `refresh`      | cookies (a `name=value; ...` line)                               | accessToken + expiresAt + the cookie line after EA's rotations + refreshExpiresAt. Tokens only - never identity                                                                                           |
-| `auth`         | accessToken                                                      | accessToken + pidId + personaId + displayName                                                                                                                                                             |
-| `library`      | accessToken                                                      | Owned games with metadata merged. Each record: `originOfferId`, `productId`, `name`, `gameSlug`, `contentId`, `displayType`, `achievementSetOverride`, `playtimeSeconds`, `lastPlayedDate`                |
-| `achievements` | accessToken + personaId + achievementSetOverride [+ sandboxName] | Full achievement list with `name`, `description`, `howTo`, `xp`, `hidden`, `rarity`, `iconUrl`, `unlocked`, `unlockDate`. Uses legacy REST API (icons+descriptions) when available, falls back to GraphQL |
+| Action         | What it needs                                                         | Returns                                                                                                                                                                                                                                                                                               |
+| -------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `refresh`      | cookies (a `name=value; ...` line)                                    | accessToken + expiresAt + the cookie line after EA's rotations + refreshExpiresAt. Tokens only - never identity                                                                                                                                                                                       |
+| `auth`         | accessToken                                                           | accessToken + pidId + personaId + displayName                                                                                                                                                                                                                                                         |
+| `library`      | accessToken                                                           | Owned games with metadata merged. Each record: `originOfferId`, `productId`, `name`, `gameSlug`, `contentId`, `displayType`, `achievementSetOverride`, `ownershipMethods`, `addedDate`, `releaseDate`, `playtimeSeconds`, `lastPlayedDate`. Full games from any storefront EA links (EA, Steam, Epic) |
+| `achievements` | accessToken + personaId + achievementSetOverride [+ sandboxName, raw] | Full list, locked included: `name`, `description`, `howTo`, `iconUrl`, `unlocked`, `unlockDate`. `raw` returns EA's response untouched. Why the older achievements service isn't used: [api-responses.md](api-responses.md#achievements-2)                                                            |
 
 ### Field identity guide
 

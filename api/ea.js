@@ -3,7 +3,6 @@ const { setCorsHeaders, handlePreflight } = require("./_cors");
 const { requireUser } = require("./_auth");
 
 const GQL_HOST = "service-aggregation-layer.juno.ea.com";
-const ACH_HOST = "achievements.gameservices.ea.com";
 
 // Minting a token from stored EA session cookies. This is the same request the
 // ea.com website makes to keep itself signed in.
@@ -26,6 +25,29 @@ const EA_AUTH_URL =
 // The cookies worth carrying. Everything else EA sets is consent/analytics
 // noise that made no difference when removed.
 const EA_COOKIE_NAMES = ["remid", "sid", "_nx_mpcid"];
+
+// Every ownership method the EA app itself asks for (Playnite EA library
+// plugin). Grouped there as: bought/linked = UNKNOWN..PRE_ORDER_PURCHASE,
+// STEAM, EPIC; EA Play = VAULT, STEAM_VAULT, STEAM_SUBSCRIPTION, EPIC_VAULT,
+// EPIC_SUBSCRIPTION; Game Pass = XGP_VAULT.
+const OWNERSHIP_METHODS = [
+  "UNKNOWN",
+  "ASSOCIATION",
+  "PURCHASE",
+  "REDEMPTION",
+  "GIFT_RECEIPT",
+  "ENTITLEMENT_GRANT",
+  "DIRECT_ENTITLEMENT",
+  "PRE_ORDER_PURCHASE",
+  "VAULT",
+  "XGP_VAULT",
+  "STEAM",
+  "STEAM_VAULT",
+  "STEAM_SUBSCRIPTION",
+  "EPIC",
+  "EPIC_VAULT",
+  "EPIC_SUBSCRIPTION",
+];
 
 // EA rejects requests that don't look like a browser.
 const BROWSER_UA =
@@ -175,8 +197,9 @@ function urlEncode(str) {
   return encodeURIComponent(str);
 }
 
-async function eaGraphQL(query, accessToken) {
-  const url = `https://${GQL_HOST}/graphql?query=${urlEncode(query)}`;
+async function eaGraphQL(query, accessToken, variables) {
+  let url = `https://${GQL_HOST}/graphql?query=${urlEncode(query)}`;
+  if (variables) url += `&variables=${urlEncode(JSON.stringify(variables))}`;
   const { status, data } = await httpsRequest(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -223,60 +246,22 @@ const actions = {
   },
 
   async achievements(options = {}) {
-    const { accessToken, personaId, achievementSetOverride, sandboxName } =
-      options;
+    const {
+      accessToken,
+      personaId,
+      achievementSetOverride,
+      sandboxName,
+      raw = false,
+    } = options;
     if (!accessToken) throw new Error("accessToken is required");
     if (!personaId) throw new Error("personaId is required");
     if (!achievementSetOverride)
       throw new Error("achievementSetOverride is required");
 
-    // Try legacy REST API first (has icons, descriptions)
-    const { status, data } = await httpsRequest(
-      `https://${ACH_HOST}/achievements/personas/${personaId}/all?lang=en_US`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Accept-Language": "en-US",
-        },
-      },
-    );
-
-    let legacySet = null;
-    if (status === 200 && data?.[achievementSetOverride]) {
-      legacySet = data[achievementSetOverride];
-    }
-
-    if (legacySet) {
-      const entries = Object.entries(legacySet.achievements || {}).map(
-        ([id, a]) => ({
-          id,
-          name: a.name,
-          description: a.desc || null,
-          howTo: a.howto || null,
-          xp: a.xp || 0,
-          hidden: a.hidden || false,
-          rarity: a.achievedPercentage
-            ? parseFloat(a.achievedPercentage)
-            : null,
-          iconUrl: a.icons?.["208"] || a.icons?.["416"] || null,
-          unlocked: a.complete || false,
-          unlockDate: a.u ? new Date(a.u * 1000).toISOString() : null,
-        }),
-      );
-      const unlocked = entries.filter((a) => a.unlocked);
-      return {
-        sandboxName: sandboxName || null,
-        achievementSetId: achievementSetOverride,
-        totalAchievements: entries.length,
-        totalUnlocked: unlocked.length,
-        achievements: entries,
-      };
-    }
-
-    // Fallback to GraphQL API (no icons/descriptions, but data is always there)
     const ids = JSON.stringify([achievementSetOverride]);
-    const gql = `query{achievements(achievementSetIds:${ids},playerPsd:"${personaId}",showHidden:true){id achievements{id name awardCount date}}}`;
+    const gql = `query{achievements(achievementSetIds:${ids},playerPsd:"${personaId}",showHidden:true){id achievements{id name description howTo awardCount date images{path}}}}`;
     const gqlData = await eaGraphQL(gql, accessToken);
+    if (raw) return gqlData;
     const set = gqlData.achievements?.[0];
 
     if (!set) {
@@ -299,97 +284,109 @@ const actions = {
       achievements: all.map((a) => ({
         id: a.id,
         name: a.name,
+        description: a.description || null,
+        howTo: a.howTo || null,
+        iconUrl: a.images?.at(-1)?.path || null,
         unlocked: a.awardCount === 1,
+        // Locked achievements carry the current time as their date.
         unlockDate: a.awardCount === 1 ? a.date : null,
       })),
     };
   },
 
+  /**
+   * Every full game EA lists for the account, from any storefront (EA, and
+   * Steam/Epic copies linked to EA) and any ownership method, with playtime
+   * and catalogue details merged in. Same request as the EA app's
+   * `getPreloadedOwnedGames` (Maxima launcher).
+   */
   async library(options = {}) {
     const { accessToken } = options;
     if (!accessToken) throw new Error("accessToken is required");
 
-    const entitlementsQuery = `query getPreloadedOwnedGames {
+    const ownedQuery = `query owned($next: String, $ownershipMethods: [OwnershipMethod!]) {
       me {
-        ownedGameProducts(
-          storefronts: [EA]
-          locale: "DEFAULT"
-          paging: {limit: 9999}
-          productFound: true
-          ownershipMethod: [PURCHASE, REDEMPTION, ENTITLEMENT_GRANT]
-          type: [DIGITAL_FULL_GAME, PACKAGED_FULL_GAME]
-          downloadableOnly: false
-          platforms: [PC]
-        ) {
+        ownedGameProducts(storefronts: [EA, STEAM, EPIC], locale: "DEFAULT", paging: {limit: 100, next: $next}, productFound: true, ownershipMethod: $ownershipMethods, type: [DIGITAL_FULL_GAME, PACKAGED_FULL_GAME], downloadableOnly: false, platforms: [PC]) {
+          next
           items {
-            id: originOfferId
+            originOfferId
             product {
               id
               name
               gameSlug
+              baseItem(availabilities: [VISIBLE]) { title gameType }
+              gameProductUser(storefronts: [EA, STEAM, EPIC]) { ownershipMethods initialEntitlementDate }
             }
           }
         }
       }
     }`;
+    const items = [];
+    let next = null;
+    for (let page = 0; page < 50; page++) {
+      const data = await eaGraphQL(ownedQuery, accessToken, {
+        next,
+        ownershipMethods: OWNERSHIP_METHODS,
+      });
+      const res = data.me.ownedGameProducts;
+      items.push(...res.items);
+      // A repeated cursor would loop forever.
+      if (!res.next || res.next === next) break;
+      next = res.next;
+    }
+    // Bonus content can come through as a "full game" product.
+    const games = items.filter(
+      (i) => i.product.baseItem?.gameType !== "MICRO_CONTENT",
+    );
 
-    const data = await eaGraphQL(entitlementsQuery, accessToken);
-    const items = data.me.ownedGameProducts.items;
-
-    const slugs = items.map((i) => i.product.gameSlug).filter(Boolean);
-    let ptMap = {};
-    if (slugs.length > 0) {
-      try {
-        const ptQuery = `query{me{recentGames(gameSlugs:${JSON.stringify(slugs)}){items{gameSlug totalPlayTimeSeconds lastSessionEndDate}}}}`;
-        const ptData = await eaGraphQL(ptQuery, accessToken);
-        if (ptData?.me?.recentGames?.items) {
-          for (const g of ptData.me.recentGames.items) {
-            ptMap[g.gameSlug] = {
-              playtimeSeconds: g.totalPlayTimeSeconds,
-              lastPlayedDate: g.lastSessionEndDate || null,
-            };
-          }
-        }
-      } catch {
-        // playtime is optional
-      }
+    const ptMap = {};
+    const slugs = [...new Set(games.map((i) => i.product.gameSlug))].filter(
+      Boolean,
+    );
+    for (let i = 0; i < slugs.length; i += 100) {
+      const data = await eaGraphQL(
+        `query pt($gameSlugs: [String!]!) { me { recentGames(gameSlugs: $gameSlugs, paging: {limit: 100}) { items { gameSlug lastSessionEndDate totalPlayTimeSeconds } } } }`,
+        accessToken,
+        { gameSlugs: slugs.slice(i, i + 100) },
+      );
+      for (const g of data.me.recentGames.items) ptMap[g.gameSlug] = g;
     }
 
-    const offerIds = items.map((i) => i.id).filter(Boolean);
-    let offerMap = {};
-    if (offerIds.length > 0) {
-      try {
-        const oIds = JSON.stringify(offerIds);
-        const offerQuery = `query{legacyOffers(offerIds:${oIds},locale:"DEFAULT"){offerId:id displayName displayType contentId achievementSetOverride}gameProducts(offerIds:${oIds},locale:"DEFAULT"){items{id name originOfferId baseItem{gameType}gameSlug}}}`;
-        const offerData = await eaGraphQL(offerQuery, accessToken);
-        if (offerData?.legacyOffers) {
-          for (const o of offerData.legacyOffers) {
-            offerMap[o.offerId] = {
-              displayName: o.displayName || null,
-              displayType: o.displayType || null,
-              contentId: o.contentId || null,
-              achievementSetOverride: o.achievementSetOverride || null,
-            };
-          }
-        }
-      } catch {
-        // metadata is optional
-      }
+    const offerMap = {};
+    const offerIds = games.map((i) => i.originOfferId).filter(Boolean);
+    for (let i = 0; i < offerIds.length; i += 100) {
+      const data = await eaGraphQL(
+        `query offers($offerIds: [String!]!) { legacyOffers(offerIds: $offerIds, locale: "DEFAULT") { offerId: id displayName displayType contentId achievementSetOverride releaseDate } }`,
+        accessToken,
+        { offerIds: offerIds.slice(i, i + 100) },
+      );
+      for (const o of data.legacyOffers) offerMap[o.offerId] = o;
     }
 
     return {
-      records: items.map((i) => {
-        const meta = offerMap[i.id] || {};
+      records: games.map((i) => {
+        const meta = offerMap[i.originOfferId] || {};
+        const pt = ptMap[i.product.gameSlug];
+        const user = i.product.gameProductUser || {};
+        // EA sends 1970-01-01 when it has no last-played date.
+        const last = pt?.lastSessionEndDate;
         return {
-          originOfferId: i.id,
+          originOfferId: i.originOfferId,
           productId: i.product.id,
-          name: meta.displayName || i.product.name,
+          name: (
+            i.product.baseItem?.title ||
+            meta.displayName ||
+            i.product.name
+          ).trim(),
           gameSlug: i.product.gameSlug,
           contentId: meta.contentId || null,
           displayType: meta.displayType || null,
           achievementSetOverride: meta.achievementSetOverride || null,
-          playtimeSeconds: ptMap[i.product.gameSlug]?.playtimeSeconds ?? null,
-          lastPlayedDate: ptMap[i.product.gameSlug]?.lastPlayedDate ?? null,
+          ownershipMethods: user.ownershipMethods || [],
+          addedDate: user.initialEntitlementDate || null,
+          releaseDate: meta.releaseDate || null,
+          playtimeSeconds: pt?.totalPlayTimeSeconds ?? null,
+          lastPlayedDate: last && Date.parse(last) > 0 ? last : null,
         };
       }),
     };
@@ -426,3 +423,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 };
+
+module.exports.eaGraphQL = eaGraphQL;
+module.exports.actions = actions;

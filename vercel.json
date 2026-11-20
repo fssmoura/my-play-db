@@ -23,6 +23,10 @@
     {
       "path": "/api/library-sync?platform=xbox",
       "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/library-sync?platform=ea",
+      "schedule": "0 22 * * *"
     }
   ],
   "rewrites": [

@@ -429,6 +429,10 @@ What each platform gives (checked against the real library, Nov 2026):
   achievements come with their real description. One earned with Xbox's
   "never" date (`0001-01-01`) is stored locked, as for PSN. Titles Xbox only
   saw launched have no achievements through Xbox.
+- **EA specifics:** the full list, locked included, with descriptions and
+  icons. No groups, rarity, points or secret flag (`secret` is false).
+  Locked achievements carry the current time as their date, so a date is
+  stored only for earned ones.
 
 ## `player_games` columns
 
@@ -442,7 +446,7 @@ What each platform gives (checked against the real library, Nov 2026):
 | `last_played`  | timestamptz         |                                                                                                                          |
 | `first_played` | timestamptz         | PSN only - most platforms don't provide this                                                                             |
 | `play_count`   | integer             | PSN only - most platforms don't provide this                                                                             |
-| `acquisition`  | timestamptz         | Epic only - `acquisitionDate` (when the game was added to library)                                                       |
+| `acquisition`  | timestamptz         | When the game was added to the library: Epic `acquisitionDate`, EA `addedDate`                                           |
 | `meta`         | jsonb               | Platform-specific IDs and data needed for re-syncing. Shape varies per platform - see below                              |
 | `synced_at`    | timestamptz         | Last time this row was written                                                                                           |
 
@@ -452,7 +456,8 @@ instead: unique indexes on `meta->>'appid'` for Steam rows and
 `meta->>'namespace'` for Epic rows. PSN rows have three: `(version,
 meta->>'concept_id')` when there is a concept, the first of `meta.title_ids`
 (PS4/PS5), and the first trophy list (PS3). Xbox rows use
-`meta->>'title_id'`, whatever their version. Nulls count as distinct, so
+`meta->>'title_id'`, whatever their version, and EA rows
+`meta->>'origin_offer_id'`. Nulls count as distinct, so
 versionless rows never clash with each other or with a versioned row.
 
 ### `player_games.meta` shape per platform
@@ -557,19 +562,30 @@ versionless rows never clash with each other or with a versioned row.
 - `has_achievements` - `totalGamerscore` above 0 in the games list.
 - `name` - Xbox's name, kept only until a match exists, as for Steam.
 
-**EA** (planned):
+**EA**:
 
 ```json
 {
   "origin_offer_id": "Origin.OFR.50.0003428",
   "game_slug": "need-for-speed-heat",
-  "content_id": "195133",
-  "achievement_set_override": "50317_195133_50844"
+  "achievement_set_override": "50317_195133_50844",
+  "name": "Example"
 }
 ```
 
-- `achievement_set_override` - null means no achievements. Non-null is passed directly to `achievements` action.
-- `game_slug` was used for playtime lookups in the library response.
+- `origin_offer_id` - EA's id for the game; the import and updater find the
+  row by it.
+- `game_slug` - what EA's playtime lookup takes.
+- `achievement_set_override` - absent when the game has no achievements;
+  otherwise passed to the `achievements` action.
+- `name` - EA's name, kept only until a match exists, as for Steam.
+
+EA rows: every full game EA lists, including Steam-linked copies (EA also
+times those); the owner ignores what isn't wanted. `acquisition` holds
+`addedDate`; `last_played` is EA's date where it has a real one, which is
+almost never, so as for Epic it comes from playtime going up. An Xbox row the
+owner had labelled `ea` by hand goes back to versionless when EA adds the
+game, as for the other launched-only Xbox rows.
 
 ### Has achievements? (per platform)
 
@@ -581,7 +597,7 @@ No dedicated boolean column - derive it from `meta`:
 | Steam    | `meta.has_stats = true`                                         |
 | Epic     | `meta.has_achievements = true` (the game appears in `progress`) |
 | Xbox     | `meta.has_achievements = true`                                  |
-| EA       | `meta.achievement_set_override` is non-null                     |
+| EA       | `meta.achievement_set_override` is present                      |
 
 ## Sync model
 
@@ -599,7 +615,10 @@ plus `groups` for names; every list matched the per-tier counts in `titles`); Xb
 one-time first import, matched with the same matcher, and its achievements
 (`_xbox-achievements.js`, one call per store title flagged
 `has_achievements`; earned counts and gamerscore matched the games list) and
-the [Xbox updater](#the-xbox-updater). Trophies
+the [Xbox updater](#the-xbox-updater); and EA's one-time first import, matched
+with the same matcher, and its achievements (`_ea-achievements.js`, one call
+per game with an achievement set; counts matched EA's) and the
+[EA updater](#the-ea-updater). Trophies
 go to rows that were played or bought (`ps_plus` false) or whose list is on the
 owner's account; unplayed PS Plus rows get none until played or bought.
 
@@ -626,7 +645,7 @@ deletes it from `player_games` and adds it here; imports and matching skip
 anything listed. Nothing is auto-detected by name.
 
 **The matcher** (`api/_match.js`, one small adapter per platform:
-`_match-steam.js`, `_match-epic.js`, `_match-psn.js`, `_match-xbox.js`) is server code, not an endpoint: the
+`_match-steam.js`, `_match-epic.js`, `_match-psn.js`, `_match-xbox.js`, `_match-ea.js`) is server code, not an endpoint: the
 [Steam updater](#the-steam-updater) calls `matchPlatform(platform, options)`
 after adding new rows, and it can also be run by hand with node.
 It runs as `service_role`. It links only on certainty, and real data about the
@@ -833,11 +852,30 @@ the import paired them by `productId`; and a bought, unplayed game first played
 on its other console keeps its old row next to the new one, because that row's
 locked trophy list can't be deleted.
 
+### The EA updater
+
+`api/_ea-update.js`, same shape and summary as Epic's, called by the same
+endpoint, which first calls `ensureFreshAccess(db, "ea")` (EA access lasts
+about four hours). One `library` call gives every full game with its playtime.
+
+1. New games (not in `ignored_games`) are added exactly as the first import
+   added them, then matched.
+2. Every game whose playtime went **up** gets its achievements re-read
+   (`loadEaAchievements`), then its playtime, and `last_played` = the moment
+   of the run, or EA's own date when it has one from the last two days. A
+   lower playtime is ignored as a glitch.
+3. Games with an achievement set but no list yet get a full load; a set EA
+   adds later is picked up and kept.
+
+Tested Nov 2026 against the real account, including through the cron
+endpoint: a run with nothing new, a game wound back (restored with its
+achievements re-read), and a game removed then re-added and matched.
+
 ### library_sync and the nightly runs
 
 **`library_sync`** (`platform` PK, `running_since`, `last_finished_at`,
 `last_result` jsonb, `state` jsonb): one row per platform (`steam`, `epic`,
-`playstation`, `xbox`); a new platform needs its row inserted. `state` is the
+`playstation`, `xbox`, `ea`); a new platform needs its row inserted. `state` is the
 updater's own bookkeeping between runs (PSN: `purchases_checked_at`,
 `purchase_entries`). Each platform runs on its own: the endpoint skips one
 if its last run finished under 15 minutes ago (unless `force`), and takes its
@@ -856,7 +894,7 @@ Two ways in, same code:
   arrive all at once at the end; live streaming on Vercel is untested.
 - **Nightly** (Vercel Cron `GET` with `CRON_SECRET`): one cron entry per
   platform (`?platform=steam`, `?platform=epic`, `?platform=playstation`,
-  `?platform=xbox`), each its own function call
+  `?platform=xbox`, `?platform=ea`), each its own function call
   with its own 300 s, at `0 22 * * *` UTC. Vercel fires anywhere in that hour,
   so in Porto it's 22:00-23:00 in winter and 23:00-24:00 in summer: late, but
   before midnight, so a date stamped then is still that day. Without
@@ -865,13 +903,22 @@ Two ways in, same code:
 
 ### IGDB bridging per platform
 
-| Platform | Bridge method                                                               |
-| -------- | --------------------------------------------------------------------------- |
-| PSN      | `by_external(psn, concept_id)`, then `igdb search(name)` (below)            |
-| Steam    | `by_external(steam, appid)` - 1:1                                           |
-| Epic     | store bridge (below), then `igdb search(name)`                              |
-| Xbox     | `by_external(microsoft, productId)` for MS titles, else `igdb search(name)` |
-| EA       | `igdb search(name)` - no EA source in IGDB                                  |
+| Platform | Bridge method                                                                                     |
+| -------- | ------------------------------------------------------------------------------------------------- |
+| PSN      | `by_external(psn, concept_id)`, then `igdb search(name)` (below)                                  |
+| Steam    | `by_external(steam, appid)` - 1:1                                                                 |
+| Epic     | store bridge (below), then `igdb search(name)`                                                    |
+| Xbox     | `by_external(microsoft, productId)` for MS titles, else `igdb search(name)`                       |
+| EA       | the same game's Steam / Microsoft Store ids from EA's catalogue, then `igdb search(name)` (below) |
+
+**EA.** IGDB has no EA source. EA's offer details list the same game on other
+stores (`firstParties`); IGDB files some of them: the Steam app id
+(`CONTENT_ID`; the `OFFER_ID` is a package and the Epic ids matched nothing,
+Nov 2026) and Microsoft Store product ids (partner `UNKNOWN`). These are EA's
+cross-references, not what the owner bought there - NFS Heat's Microsoft id is
+IGDB's Deluxe Edition - so an exact hit is refined like PSN's: an edition only
+when EA's name contains its `version_title`, else the base game. The rest go to
+the name search on EA's name and release date, PC games only.
 
 **PSN.** IGDB's PSN source holds only Sony concept ids (no per-console codes,
 nothing at edition level), and each concept points at one IGDB game. A concept

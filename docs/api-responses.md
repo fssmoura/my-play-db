@@ -953,40 +953,34 @@ auth -> access_token + refresh_token (36h / 365d)
 {
   "records": [
     {
-      "originOfferId": "offer-8a172204-3e5a-4325-820a-e4a2c41cdb39",
-      "productId": "prod-1003-cfea34b7-0d68-410b-9173-5d7e6800b6d2",
-      "name": "Need for Speed Heat",
-      "gameSlug": "need-for-speed-heat",
-      "contentId": "1005-cfea34b7-0d68-410b-9173-5d7e6800b6d2",
+      "originOfferId": "Origin.OFR.50.0004222",
+      "productId": "...",
+      "name": "FIFA 21",
+      "gameSlug": "fifa-21",
+      "contentId": "...",
       "displayType": "FULL_GAME",
-      "achievementSetOverride": "50317_195133_50844",
-      "playtimeSeconds": 116315,
-      "lastPlayedDate": "1970-01-01T00:00:00.000Z"
+      "achievementSetOverride": "50072_195853_50844",
+      "ownershipMethods": ["STEAM"],
+      "addedDate": "2020-11-28T...",
+      "releaseDate": "2020-10-08T...",
+      "playtimeSeconds": 206143,
+      "lastPlayedDate": null
     }
   ]
 }
 ```
 
-**Key observations**:
+**Key observations** (measured 20 Nov 2026):
 
-- Owned games from the EA app (formerly Origin)
-- Playtime in **seconds** (like Epic)
-- `gameSlug` is the URL-friendly name used for playtime lookups
-- `achievementSetOverride` is `null` for games without achievements (e.g. The Sims 4)
-- `lastPlayedDate` is `1970-01-01` for most games - EA resets timestamps for games not played recently (or this is a bug in the API)
-- Three GraphQL queries fire sequentially: entitlements -> recentGames (playtime) -> legacyOffers (metadata)
-
-**Full library:**
-
-| Name                     | Slug                    | Playtime (s) | Hours | Achievement Set       | Last Played |
-| ------------------------ | ----------------------- | ------------ | ----- | --------------------- | ----------- |
-| Need for Speed Heat      | need-for-speed-heat     | 116,315      | ~32h  | `50317_195133_50844`  | 1970-01-01  |
-| EA SPORTS FIFA 20        | fifa-20                 | 904,685      | ~251h | `50072_194927_50844`  | 2020-10-20  |
-| The Sims 4               | the-sims-4              | 5,247        | ~1.5h | (null)                | 1970-01-01  |
-| Apex Legends             | apex-legends            | 9,059        | ~2.5h | `193634_194908_50844` | 1970-01-01  |
-| STAR WARS Battlefront II | star-wars-battlefront-2 | 75,184       | ~21h  | `75158_193864_50844`  | 1970-01-01  |
-| FIFA 19                  | fifa-19                 | 1,027,878    | ~285h | `50072_193612_50844`  | 1970-01-01  |
-| FIFA 18                  | fifa-18                 | 1,811,150    | ~503h | `50072_193608_50844`  | 1970-01-01  |
+- Asks for every ownership method and the EA, Steam and Epic storefronts, as the EA app does. An earlier version asked only for games bought, redeemed or granted on EA and missed games linked from Steam (FIFA 21 here)
+- Full games only, and products whose `baseItem.gameType` is `MICRO_CONTENT` are dropped: a Steam-linked game's bonus content came through as a separate "full game"
+- `ownershipMethods` seen: `PURCHASE`, `REDEMPTION`, `ENTITLEMENT_GRANT`, `STEAM`; a game can have several (The Sims 4: `STEAM` + `PURCHASE`). EA Play (`VAULT`) games drop out of the list once the subscription ends, even if played
+- `addedDate` (`initialEntitlementDate`) is the date the game was added, present for every game
+- `name` is `baseItem.title`, the cleanest EA has ("FIFA 20" where `displayName` is "EA SPORTS FIFA 20"). It keeps ™ marks and was trimmed because The Sims 4's ends in a newline
+- Playtime in **seconds**, also for Steam-linked games. No first-played field
+- EA sends `1970-01-01` as last played when it has none - here every game but one - so the handler returns `null`
+- `achievementSetOverride` is `null` for games without achievements (The Sims 4)
+- EA's offer details also carry other stores' ids (`firstParties`: Steam app ids, Epic slugs, Microsoft Store ids) and an EA Play end date (`subscriptionUseEndDate`, set even for games kept after it). Not requested; add them if matching ever needs them
 
 **Field identity guide**:
 
@@ -1002,36 +996,7 @@ auth -> access_token + refresh_token (36h / 365d)
 
 ### `achievements`
 
-**Request**: `{ accessToken, personaId, achievementSetOverride }` + optional `{ sandboxName }`
-
-Has **two tiers** depending on whether the legacy REST API has data for the given achievement set:
-
-**Tier 1 - Legacy REST API** (older Origin-era games: FIFA 19 and before):
-
-```json
-{
-  "sandboxName": "FIFA 19",
-  "achievementSetId": "50072_193612_50844",
-  "totalAchievements": 22,
-  "totalUnlocked": 22,
-  "achievements": [
-    {
-      "id": "1",
-      "name": "The Historian",
-      "description": "Score a left foot volley against Coventry City in The Journey",
-      "howTo": "Score a left foot volley against Coventry City in The Journey",
-      "xp": 15,
-      "hidden": false,
-      "rarity": 30.92,
-      "iconUrl": "https://achievements.gameservices.ea.com/achievements/icons/50072_193612_50844-1-208.png",
-      "unlocked": true,
-      "unlockDate": "2019-08-13T23:04:45.000Z"
-    }
-  ]
-}
-```
-
-**Tier 2 - GraphQL fallback** (newer games: FIFA 20, NFS Heat, Apex Legends):
+**Request**: `{ accessToken, personaId, achievementSetOverride }` + optional `{ sandboxName, raw }`
 
 ```json
 {
@@ -1043,6 +1008,9 @@ Has **two tiers** depending on whether the legacy REST API has data for the give
     {
       "id": "4",
       "name": "Home from Home",
+      "description": "...",
+      "howTo": null,
+      "iconUrl": "https://achievements.gameservices.ea.com/achievements/icons/50317_195133_50844-4-416.png",
       "unlocked": true,
       "unlockDate": "2020-02-10T16:02:41.000Z"
     }
@@ -1050,24 +1018,12 @@ Has **two tiers** depending on whether the legacy REST API has data for the give
 }
 ```
 
-**Key observations**:
+**Key observations** (measured 20 Nov 2026, every set on this account):
 
-- Handler tries legacy REST API first - if the achievement set ID exists there, returns rich data
-- Falls back to GraphQL if legacy API doesn't have the set - returns minimal data
-- **Rich data fields**: `description`, `howTo`, `xp`, `hidden`, `rarity` (global %), `iconUrl`, `unlocked`, `unlockDate`
-- **Minimal data fields**: `id`, `name`, `unlocked`, `unlockDate`
-- The cutoff is roughly **2020** - older Origin-era games have legacy data, newer games use GraphQL only
-
-**Achievement data quality by game on this account:**
-
-| Game           | Rich?        | Total | Unlocked | Notes                                       |
-| -------------- | ------------ | ----- | -------- | ------------------------------------------- |
-| FIFA 18        | Yes (legacy) | ?     | ?        | Not directly tested, likely rich            |
-| FIFA 19        | Yes (legacy) | 22    | 22       | Icons, descriptions, rarity, XP all present |
-| FIFA 20        | No (GraphQL) | 31    | 15       | Name + status only                          |
-| NFS Heat       | No (GraphQL) | 42    | 16       | Name + status only                          |
-| Apex Legends   | ?            | ?     | ?        | Live service, likely GraphQL                |
-| Battlefront II | ?            | ?     | ?        | 2017 game, could go either way              |
+- Uses GraphQL only. It gives the full list, locked ones included, with `description`, `howTo` (often empty) and `images` (40/208/416 px; the handler keeps the largest). `showHidden: true` is needed
+- GraphQL `awardCount` is only 1 or 0. **Locked achievements carry the current time as their `date`**, so a date only counts when earned
+- No rarity, XP or hidden flag
+- **EA's older achievements REST service (`achievements.gameservices.ea.com/.../personas/<id>/all`) was dropped.** It lists only earned achievements with no total, so games looked 100% complete (FIFA 19 showed 22/22, really 22/41). Its only extras were rarity, XP and the hidden flag, for earned achievements and only some games. Its earned dates matched GraphQL exactly, and it held no sets beyond owned games
 
 ---
 
@@ -1080,11 +1036,10 @@ refresh (stored cookies) -> accessToken (4h expiry) -> auth
   |
   `-> achievements -> per-game details
         |
-        |-- Legacy REST (older games) -> icons, descriptions, rarity, XP
-        `-- GraphQL (newer games) ----> name + status only
+        `-- achievements -> full list (locked too), descriptions, icons
 ```
 
-**For sync**: `library` is the entry point. Compare `playtimeSeconds` against previous run for incremental detection (lastPlayedDate is unreliable). Each record includes `achievementSetOverride` - `null` means no achievements exist. Achievements data quality varies by game age: pre-2020 games get full details, post-2020 games get minimal data.
+**For sync**: `library` is the entry point. Compare playtime against the previous run for incremental detection (last played is almost always empty). An `achievementSetOverride` of `null` means no achievements.
 
 ---
 
@@ -1704,7 +1659,7 @@ platform game -> IGDB by_external(platform, platformId) -> store IGDB game ID (c
 | Store metadata      | In `games`                | Separate `game`            | Separate `catalog`      | In `library`             | In `games` response      |
 | Achievements total  | `titles`                  | `game`                     | `progress`              | In achievements          | In achievements response |
 | Achievement details | `trophies` (merged)       | `schemas` + `achievements` | `achievements` (merged) | `achievements` (merged)  | `achievements` (merged)  |
-| Rarity              | `%` + tier 0/1/2          | Not available              | `%`                     | `%` (legacy)             | `%` + Common/Rare        |
+| Rarity              | `%` + tier 0/1/2          | Not available              | `%`                     | Not available            | `%` + Common/Rare        |
 | Trophy type         | bronze/silver/gold/plat   | N/A (all equal)            | N/A (XP-based)          | N/A (XP-based)           | Gamerscore               |
 | Auth expiry         | 1h / 10d refresh          | Static API key             | 36h / 365d refresh      | 4h, renewed from cookies | 1h / refresh available   |
 
@@ -1717,7 +1672,7 @@ platform game -> IGDB by_external(platform, platformId) -> store IGDB game ID (c
 - PSN: ISO 8601 datetime
 - Steam: unix timestamp (`rtime_last_played`, 0 = never)
 - Epic: no last-played timestamp
-- EA: ISO datetime (but often returns `1970-01-01` - unreliable)
+- EA: ISO datetime, but almost always empty
 - Xbox: ISO 8601 datetime (`titleHistory.lastTimePlayed`)
 
 **Playtime**: Five different formats:
@@ -1733,7 +1688,7 @@ platform game -> IGDB by_external(platform, platformId) -> store IGDB game ID (c
 - PSN: merges definitions+earned in one `trophies` call
 - Steam: requires two calls (`schemas` + `achievements`) + client-side merge
 - Epic: merges definitions+earned in one `achievements` call
-- EA: merges in one call, but data quality varies (legacy API vs GraphQL fallback)
+- EA: merges in one call (GraphQL), locked achievements included
 - Xbox: merges in one call - includes description, icon URL, gamerscore, progress state
 
 **Incremental sync**:
@@ -1749,7 +1704,7 @@ platform game -> IGDB by_external(platform, platformId) -> store IGDB game ID (c
 - PSN: absolute URLs in response
 - Steam: `img_icon_url` hashes - construct URL
 - Epic: absolute URLs (`shared-static-prod.epicgames.com/epic-achievements/...`)
-- EA: absolute URLs (`achievements.gameservices.ea.com/achievements/icons/...`) - legacy only
+- EA: absolute URLs (`achievements.gameservices.ea.com/achievements/icons/...`)
 - Xbox: absolute URLs (`images-eds-ssl.xboxlive.com/image?url=...`) - via `mediaAssets`
 
 **Auth patterns**:

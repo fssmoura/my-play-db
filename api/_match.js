@@ -39,8 +39,10 @@
  *   storeIds(id)   the ids to look up in IGDB's store-id table for this row:
  *                  a plain list, or tiers [{ ids, how, owned }] tried in order
  *                  (what the owner owns before what the store page sells);
- *                  `how` is reported in the run's result, and
- *                  `owned` makes an edition win over its base game
+ *                  `how` is reported in the run's result,
+ *                  `owned` makes an edition win over its base game, and
+ *                  `source` looks the tier up under another store's IGDB
+ *                  source (EA: the same game's Steam or Microsoft ids)
  *   prefer(games, id)  narrows several exact hits using the store's own data
  *   upgrade(game, id, igdb)  async; after an owned exact hit, the IGDB edition
  *                  of that game the owner owns but no store id leads to, or
@@ -512,11 +514,11 @@ function chunk(list, size) {
   return out;
 }
 
-/** The adapter's store ids as tiers [{ ids, how, owned }], most exact first. */
+/** The adapter's store ids as tiers [{ ids, how, owned, source }], most exact first. */
 function storeTiers(adapter, id) {
   const raw = adapter.storeIds ? adapter.storeIds(id) : [id];
   if (raw.every((t) => typeof t === "string"))
-    return [{ ids: raw, how: "store_id" }];
+    return raw.length ? [{ ids: raw, how: "store_id" }] : [];
   return raw.filter((t) => t.ids.length);
 }
 
@@ -578,18 +580,36 @@ async function runMatch({ adapter, db, igdb, options = {} }) {
 
   if (adapter.prepare) await adapter.prepare(batch, { db });
 
-  /* Step 2 - exact, by store id: each tier in turn, first one with a hit wins. */
+  /* Step 2 - exact, by store id: each tier in turn, first one with a hit wins.
+     A tier may name its own IGDB source (EA files no ids of its own, only
+     the same game's ids on other stores). */
   const decisions = new Map();
-  if (adapter.igdbSource) {
+  if (adapter.igdbSource || adapter.storeIds) {
     const tiersOf = new Map(
       batch.map(({ id }) => [id, storeTiers(adapter, id)]),
     );
-    const hits = await igdb.byExternalMany(adapter.igdbSource, [
-      ...new Set([...tiersOf.values()].flat().flatMap((t) => t.ids)),
-    ]);
+    const bySource = new Map();
+    for (const tier of [...tiersOf.values()].flat()) {
+      const source = tier.source ?? adapter.igdbSource;
+      if (!source) continue;
+      const set = bySource.get(source) ?? new Set();
+      tier.ids.forEach((uid) => set.add(uid));
+      bySource.set(source, set);
+    }
+    const hits = new Map();
+    for (const [source, uids] of bySource) {
+      const found = await igdb.byExternalMany(source, [...uids]);
+      for (const [uid, games] of Object.entries(found))
+        hits.set(`${source}|${uid}`, games);
+    }
     for (const { id } of batch) {
       for (const tier of tiersOf.get(id)) {
-        const games = [...new Set(tier.ids.flatMap((uid) => hits[uid] ?? []))];
+        const source = tier.source ?? adapter.igdbSource;
+        const games = [
+          ...new Set(
+            tier.ids.flatMap((uid) => hits.get(`${source}|${uid}`) ?? []),
+          ),
+        ];
         let verdict = null;
         if (games.length === 1) verdict = { linkId: games[0], how: tier.how };
         else if (games.length > 1)
@@ -838,6 +858,7 @@ const ADAPTERS = {
   epic: () => require("./_match-epic")(),
   playstation: () => require("./_match-psn")(),
   xbox: () => require("./_match-xbox")(),
+  ea: () => require("./_match-ea")(),
 };
 
 function serviceClient() {
