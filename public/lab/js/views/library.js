@@ -383,6 +383,7 @@ const PLATFORM_NAMES = {
   ea: "EA",
   battlenet: "Battle.net",
   riot: "Riot",
+  rockstar: "Rockstar",
   other: "Other",
   unknown: "Unknown",
 };

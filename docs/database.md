@@ -721,9 +721,15 @@ stay empty. `ignored_games` uses `platform = 'xbox'` and the `title_id`.
 A versionless row means "only a date". After matching, if another row has the
 same IGDB game (the same game on another store) it stays versionless and,
 when rows are merged by IGDB game, adds its date to that game (newest wins).
-If no other row has the game (a launcher we don't import), the owner sets the
-version by hand (`riot`); it can't be a version the game already has, which
-the unique constraint refuses. The updater finds rows by `title_id` and never changes
+If no other row has the game (a launcher we don't import), or the owner says
+it was a separate copy from another launcher, the owner sets the version by
+hand (`riot`, `rockstar`); it can't be a version the game already has, which
+the unique constraint refuses. Playtime the owner reads off that launcher can
+be set by hand too: the updater writes playtime only for store titles. So can
+achievements (GTA V's `rockstar` row: earned ones from Rockstar's Social Club
+accomplishments page, the locked ones from the same game's PSN list, minus
+the platinum); the updater never touches a launched title's list. The
+updater finds rows by `title_id` and never changes
 `version`, so hand-set versions stay. A future Riot import should take over a
 hand-labelled `riot` row rather than add one.
 
