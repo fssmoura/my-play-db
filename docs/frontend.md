@@ -196,6 +196,9 @@ For large originals, use the host's own resize parameter if it has one.
   `player_games` (once a minute at most, on entering search) and searches it
   locally with the same ranking. It skips `platforms` and `release_dates`,
   which made up most of the ~1 MB download and that cards don't need.
+- **Each app load syncs the stores** (`library.sync()`, the same endpoint as
+  the lab, so its 15-minute rule stops repeats), silently, then reloads the
+  library.
 - After a search finishes, the type counts describe the current results, so a
   filtered search shows 0 for every unselected type. That is deliberate, not a
   bug.

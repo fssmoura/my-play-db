@@ -61,8 +61,9 @@ Values live in Vercel; how to get them locally is in
   and, for the database grants it needs,
   [database.md](database.md#grants-read-before-adding-a-table-or-function).
 - **`api/library-sync.js`** - runs the library updaters (Steam, Epic,
-  PlayStation). Signed-in
-  `POST` (the lab) runs every platform and streams progress; `GET` with
+  PlayStation, Xbox, EA). Signed-in
+  `POST` (the lab's Library tab, and the app once each time it loads) runs
+  every platform and streams progress; `GET` with
   `CRON_SECRET` is the nightly Vercel Cron, one entry per platform
   (`?platform=`). Unlike the handlers it writes to the database itself. See
   [database.md](database.md#library_sync-and-the-nightly-runs).

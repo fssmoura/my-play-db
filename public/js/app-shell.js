@@ -172,6 +172,9 @@ export function mountApp() {
   const filter = createFilterState();
   const library = createLibrary();
   library.load();
+  // Signed in by now (mountApp runs only with a session): bring the stores up
+  // to date in the background, once per app load.
+  library.sync();
   const session = createSearchSession({
     searchState,
     filter,

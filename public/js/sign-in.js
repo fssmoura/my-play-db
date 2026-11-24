@@ -47,7 +47,7 @@ function returnPath() {
   const next = nextPath();
   if (next) return next;
   const params = new URLSearchParams(location.search);
-  return params.has("q") || params.has("game")
+  return params.has("q") || params.has("game") || params.has("library")
     ? `${location.pathname}${location.search}`
     : null;
 }

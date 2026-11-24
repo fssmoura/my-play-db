@@ -5,6 +5,7 @@
 //
 // Events: "change" (the list was loaded or reloaded).
 import { supabase } from "/js/supabase.js";
+import { getAccessToken } from "/js/session.js";
 import { fromDbRow } from "/js/games-cache.js";
 import { matchScore, rankGames } from "/js/ranking.js";
 
@@ -59,10 +60,12 @@ export function createLibrary() {
   let loadedAt = 0;
   const listeners = new Set();
 
-  // Loads (or reloads, if it's over a minute old) the list. What is held stays
-  // usable meanwhile; a failed reload keeps it.
-  function load() {
-    if (ready && Date.now() - loadedAt < FRESH_MS) return Promise.resolve();
+  // Loads (or reloads, if it's over a minute old or `force`) the list. What is
+  // held stays usable meanwhile; a failed reload keeps it.
+  function load({ force = false } = {}) {
+    if (!force && ready && Date.now() - loadedAt < FRESH_MS) {
+      return Promise.resolve();
+    }
     loading ??= (async () => {
       try {
         games = toList(await fetchRows());
@@ -77,6 +80,30 @@ export function createLibrary() {
       }
     })();
     return loading;
+  }
+
+  // Asks every store for new games and play times (/api/library-sync, which
+  // skips a store synced in the last 15 minutes), then reloads the list. Silent:
+  // a failure just leaves what is held.
+  async function sync() {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const res = await fetch("/api/library-sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: "{}",
+      });
+      if (!res.ok) return;
+      // Progress streams line by line; only the end matters here.
+      await res.text();
+      await load({ force: true });
+    } catch (error) {
+      console.warn("Library sync failed", error);
+    }
   }
 
   return {
@@ -102,6 +129,7 @@ export function createLibrary() {
       );
     },
     load,
+    sync,
     on(event, fn) {
       if (event !== "change") return () => {};
       listeners.add(fn);
