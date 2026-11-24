@@ -59,6 +59,44 @@ function renderers() {
   return [...all].filter((r) => !r._destroyed);
 }
 
+// The page background as the glass sees it: liquidGL's own rule (the root's
+// colour, else the body's, laid over white).
+function pageBackground() {
+  const clear = (c) => c === "transparent" || /,\s*0\)$/.test(c);
+  const root = getComputedStyle(document.documentElement);
+  let color = root.backgroundColor;
+  if (clear(color) && root.backgroundImage === "none")
+    color = getComputedStyle(document.body).backgroundColor;
+  return clear(color) ? "#fff" : color;
+}
+
+// Swaps every photo of the page for a plain one of its background, at once.
+// For a cover that hides the whole page (the game sheet): a real photo takes a
+// moment, and until it lands the glass would keep showing the page behind.
+// Follow with refreshGlass() for what the cover itself puts there.
+export function blankGlass() {
+  const body = document.body;
+  const w = body.scrollWidth;
+  const h = body.scrollHeight;
+  if (!w || !h) return;
+  const color = pageBackground();
+  for (const renderer of renderers()) {
+    if (!renderer.hasTexture || renderer.snapshotTarget !== body) continue;
+    const scale = renderer.scaleFactor || 1;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(w * scale));
+    canvas.height = Math.max(1, Math.round(h * scale));
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Drops any photo still being taken of the old page.
+    renderer._captureGeneration = (renderer._captureGeneration || 0) + 1;
+    renderer._uploadTexture?.(canvas, true);
+  }
+}
+
 export function refreshGlass() {
   if (queued) return;
   queued = true;

@@ -194,7 +194,10 @@ const MENU_ITEMS = [
 const BEVEL_REFERENCE_PX = 380;
 const GLASS_CONFIG = {
   snapshot: "body",
-  resolution: 2,
+  // The photo under the glass, in pixels per CSS px. The 8px blur hides
+  // any finer detail, so a quarter-size photo looks the same and takes about
+  // a sixteenth of the work of the owner's original 2.
+  resolution: 0.5,
   refraction: 0.04,
   aberration: 0,
   bevelDepth: 0.06,

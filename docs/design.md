@@ -64,11 +64,11 @@ Rules a redesign must keep, with the HIG reason where there is one.
 - Typing and clearing never open or close anything. The results page appears
   as soon as Search is tapped. On opening, with nothing typed, it shows
   what's popular right now (recent releases, refreshed daily) at half
-  opacity, as a stand-in rather than results (a card comes up to full on
-  hover). The cards fade in from slightly below each time. The first action
-  (typing or a filter change) replaces it for the rest of that visit to
-  search: clearing the text then leaves the page blank, as before. With In
-  Library ticked the library shows instead.
+  opacity, as a stand-in rather than results (a card comes up to full under a
+  mouse, never from a tap). The cards fade in from slightly below each time.
+  The first action (typing or a filter change) replaces it for the rest of
+  that visit to search: clearing the text then leaves the page blank, as
+  before. With In Library ticked the library shows instead.
 - Focus rings are keyboard-only: a mouse or touch user never sees one.
 
 **Results**

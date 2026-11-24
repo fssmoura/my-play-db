@@ -16,6 +16,20 @@ html.is-game-open .overlay-scroll.is-page {
   opacity: 0;
 }
 
+/* The page behind, pinned where it was while the sheet is up (game-page.js
+   sets top to minus its scroll). Out of the flow, it no longer makes the
+   document long, so the glass's photos stay small; the body keeps a screen's
+   height for them to cover. */
+#app-content.is-frozen {
+  position: fixed;
+  inset-inline: 0;
+}
+
+html.is-game-open body {
+  min-height: 100vh;
+  min-height: 100lvh;
+}
+
 /* Fixed over the page, under the top bar (menu stage is z-index 100), and
    under the bottom toolbar (also in the menu stage). It slides up from below
    the viewport with --game-t; min() keeps the spring's overshoot from lifting

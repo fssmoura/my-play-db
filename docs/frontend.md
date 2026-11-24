@@ -110,6 +110,9 @@ changes, so anything else that changes what is under the glass needs
 `refreshGlass()` (why, and the per-layer detail, are in `glass-refresh.js`).
 
 - A capture measured about 10ms at 60 cards.
+- The photo is taken at half a pixel per CSS px (`resolution` in menu.js):
+  the blur hides finer detail, and at the original 2 every photo was about
+  16 times the work.
 - **Never recapture every frame.** Back-to-back captures caused the game page's
   scroll lag; inner scrollers go through the throttled
   `refreshGlassWhileScrolling()`.
@@ -128,6 +131,14 @@ changes, so anything else that changes what is under the glass needs
   14 captures of ~27ms each with the panes photographed, 3 of ~7ms without.
   The page's own glass,
   covered by the drawer, keeps its photo of the page for when it closes.
+- **The game page does the same for the results behind it.** While the sheet
+  is up, the content is pinned in place (`position: fixed` at minus its
+  scroll), so the document is only a screen tall, and is
+  `data-liquid-ignore`. The photo's size follows the document's height, so on
+  a phone a long results list made every photo under the sheet slow. On open,
+  `blankGlass()` swaps the photo for the plain background at once, so no
+  reflections of the list linger while the first real photo is taken. Closing
+  restores the scroll position before the glass retakes the list.
 - The overlay scroll indicator is `data-liquid-ignore`, so it stays out of the
   snapshot.
 

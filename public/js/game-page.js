@@ -19,7 +19,11 @@
 
 import { createSpring } from "/js/spring.js";
 import { createOverlayScroll } from "/js/overlay-scroll.js";
-import { refreshGlass, refreshGlassWhileScrolling } from "/js/glass-refresh.js";
+import {
+  blankGlass,
+  refreshGlass,
+  refreshGlassWhileScrolling,
+} from "/js/glass-refresh.js";
 import { resolveGameArt } from "/js/game-art.js";
 import { displayImageUrl, loadImageForGlass } from "/js/image-url.js";
 
@@ -72,6 +76,44 @@ export function createGamePage({ game, content, onProgress }) {
   let overlay = null;
   let opener = null;
 
+  // While the sheet is up, the page behind is pinned where it was and kept
+  // out of the glass's photos. Every photo used to redraw the whole results
+  // list (hidden, but still the longest thing on the page), which made each
+  // one slow on a phone; now the photos are of the sheet alone, and the glass
+  // drops the list's reflections the moment the sheet starts to open.
+  let frozenAt = null;
+  function freezeContent() {
+    if (frozenAt !== null) return;
+    frozenAt = window.scrollY;
+    content.style.top = `${-frozenAt}px`;
+    content.classList.add("is-frozen");
+    content.setAttribute("data-liquid-ignore", "");
+    blankGlass();
+  }
+  function unfreezeContent() {
+    if (frozenAt === null) return;
+    content.classList.remove("is-frozen");
+    content.style.top = "";
+    content.removeAttribute("data-liquid-ignore");
+    window.scrollTo(0, frozenAt);
+    frozenAt = null;
+  }
+
+  // Whether the last thing the person did was a tap or click (rather than a
+  // key). Focus handed back to the card after one is kept quiet: on a phone it
+  // otherwise counts as keyboard focus and leaves the card highlighted.
+  let pointerLast = false;
+  const onPointerDown = () => (pointerLast = true);
+  const onKeyDown = () => (pointerLast = false);
+  document.addEventListener("pointerdown", onPointerDown, true);
+  document.addEventListener("keydown", onKeyDown, true);
+  function quietFocus(button) {
+    button.dataset.quietFocus = "";
+    button.addEventListener("blur", () => delete button.dataset.quietFocus, {
+      once: true,
+    });
+  }
+
   const spring = createSpring({
     onUpdate: (v) => {
       parts?.layer.style.setProperty("--game-t", v.toFixed(4));
@@ -89,6 +131,7 @@ export function createGamePage({ game, content, onProgress }) {
       parts?.layer.remove();
       parts = null;
       unwireDrag = null;
+      unfreezeContent();
       document.documentElement.classList.remove("is-game-open");
       refreshGlass();
     },
@@ -235,6 +278,7 @@ export function createGamePage({ game, content, onProgress }) {
       lastTop = 0;
       parts.scroller.addEventListener("scroll", onScroll, { passive: true });
       document.documentElement.classList.add("is-game-open");
+      freezeContent();
       wireDrag(parts);
     }
     parts.layer.classList.remove("is-closing");
@@ -257,6 +301,7 @@ export function createGamePage({ game, content, onProgress }) {
       ? opener
       : content.querySelector(`.result-card[data-id="${id}"] .result-open`);
     opener = null;
+    if (card && pointerLast) quietFocus(card);
     card?.focus({ preventScroll: true });
     spring.to(0, { instant: reducedMotion() });
   }
@@ -381,10 +426,13 @@ export function createGamePage({ game, content, onProgress }) {
       offOpen();
       offClose();
       offArt();
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown, true);
       spring.destroy();
       overlay?.destroy();
       parts?.layer.remove();
       parts = null;
+      unfreezeContent();
       content.inert = false;
       document.documentElement.classList.remove("is-game-open");
     },

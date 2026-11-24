@@ -37,8 +37,11 @@ export function createPageSwitcher(container) {
     if (previous) display(previous);
   }
 
+  // Set as the element's own opacity, not a custom property: those are
+  // inherited, so changing one restyles everything in the content each frame.
   function setCovered(t) {
-    container.style.setProperty("--page-t", (1 - Math.min(t, 1)).toFixed(4));
+    const shown = 1 - Math.min(Math.max(t, 0), 1);
+    container.style.opacity = shown >= 1 ? "" : shown.toFixed(4);
   }
 
   return {

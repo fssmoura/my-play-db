@@ -5,11 +5,8 @@
 
 /* The rule for every page: when something covers the content (a sheet today,
    anything later), the content fades out instead of dimming, and fades back in
-   on return. pages.js drives --page-t (1 showing, 0 covered) from the cover's
-   own progress, so they move together. min/max keep a spring's overshoot out. */
-#app-content {
-  opacity: clamp(0, var(--page-t, 1), 1);
-}
+   on return. pages.js sets the content's opacity from the cover's own
+   progress, so they move together. */
 
 .page[hidden] {
   display: none;
@@ -49,8 +46,9 @@
 }
 
 /* The popular list shown before anything is typed: dimmed, to read as a
-   stand-in rather than results. A card comes up to full on hover or keyboard
-   focus (not the focus a closing game page hands back to its card). */
+   stand-in rather than results. A card comes up to full under a mouse or with
+   keyboard focus - not on a touch screen, where a tapped card stays "hovered",
+   and not for the focus a closing game page hands back after a tap. */
 .results-grid.is-placeholder .result-card {
   opacity: 0.5;
   animation: placeholder-enter 450ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
@@ -67,8 +65,14 @@
   }
 }
 
-.results-grid.is-placeholder .result-card:hover,
-.results-grid.is-placeholder .result-card:has(.result-open:focus-visible) {
+@media (hover: hover) {
+  .results-grid.is-placeholder .result-card:hover {
+    opacity: 1;
+  }
+}
+
+.results-grid.is-placeholder
+  .result-card:has(.result-open:focus-visible:not([data-quiet-focus])) {
   opacity: 1;
 }
 
@@ -83,7 +87,8 @@
 }
 
 /* An invisible button over the whole card: it opens the game page. The focus
-   ring shows for the keyboard only. */
+   ring shows for the keyboard only (game-page.js marks focus it hands back
+   after a tap with data-quiet-focus). */
 .result-open {
   position: absolute;
   inset: 0;
@@ -100,7 +105,7 @@
   outline: none;
 }
 
-.result-open:focus-visible {
+.result-open:focus-visible:not([data-quiet-focus]) {
   outline: 2px solid var(--light-gray);
   outline-offset: 2px;
 }
