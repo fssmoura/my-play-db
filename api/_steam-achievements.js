@@ -189,7 +189,7 @@ async function loadSteamAchievements({
       name: d.displayName || d.name,
       description:
         fromPage?.description || d.description || old?.description || null,
-      icon: d.icon || null,
+      icon: newestSteamIcon(d.icon),
       rarity: Number.isFinite(pct)
         ? Math.round(pct * 100) / 100
         : (old?.rarity ?? null),
@@ -219,6 +219,19 @@ async function loadSteamAchievements({
 
 const ROW_COLUMNS =
   "owned_game_id,platform_key,group_name,name,description,icon,rarity,tier,points,secret,unlocked_at";
+
+/**
+ * Steam's schema still points icons at its older image host, which lacks some
+ * games' images (Risk of Rain 2, One Piece: Grand Gourmet); the newer host had
+ * every one of the owner's 62 games (Nov 2026). Same path, different prefix.
+ */
+function newestSteamIcon(icon) {
+  if (!icon) return null;
+  const path = icon.match(/\/steamcommunity\/public\/images\/apps\/(.+)$/);
+  return path
+    ? `https://shared.fastly.steamstatic.com/community_assets/images/apps/${path[1]}`
+    : icon;
+}
 
 /**
  * The cheap path for a game that was played and is already loaded: one call
