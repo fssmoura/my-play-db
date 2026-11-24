@@ -35,15 +35,24 @@ const TYPE_LABELS = new Map(TYPES.map((type) => [type.value, type.label]));
 export const displayCoverUrl = (url) => displayImageUrl(url, "cover");
 
 // Image loads can arrive in a burst; ask liquidGL to retake its snapshot once
-// the burst settles rather than per image.
+// the burst settles rather than per image. A snapshot is expensive, so none is
+// taken while the popular cards are sliding in (glassHoldUntil).
 let glassTimer = null;
+let glassHoldUntil = 0;
 function refreshGlassSoon() {
   if (glassTimer) return;
+  const wait = Math.max(120, glassHoldUntil - performance.now());
   glassTimer = setTimeout(() => {
     glassTimer = null;
     refreshGlass();
-  }, 120);
+  }, wait);
 }
+
+// The popular cards' entrance (pages.css, placeholder-enter): each card starts
+// ENTER_STAGGER_MS after the one before, up to ENTER_STAGGER_CARDS of them.
+const ENTER_MS = 450;
+const ENTER_STAGGER_MS = 35;
+const ENTER_STAGGER_CARDS = 15;
 
 // Puts a cover into a tile. liquidGL snapshots the page, so images ask for CORS
 // (crossOrigin) and set src last; hosts that send no CORS headers fail that
@@ -75,6 +84,11 @@ function setCover(card, art, url) {
       card.classList.add("is-no-cover");
     },
   });
+  // Already in memory (preloaded): no shimmer, not even for the frame before
+  // the load event arrives.
+  if (img.complete && img.naturalWidth > 0) {
+    card.classList.remove("is-cover-loading");
+  }
   art.append(img);
 }
 
@@ -99,6 +113,8 @@ export function renderCard(game, owned = false) {
   art.className = "result-cover";
   const name = document.createElement("p");
   name.className = "result-title";
+  // The text sits in its own span so a long title can scroll (titleMarquee).
+  name.append(document.createElement("span"));
   const meta = document.createElement("p");
   meta.className = "result-meta";
   const open = document.createElement("button");
@@ -131,7 +147,8 @@ function updateCard(card, game, owned) {
   if (open.getAttribute("aria-label") !== label) {
     open.setAttribute("aria-label", label);
   }
-  if (name.textContent !== title) name.textContent = title;
+  const text = name.firstElementChild;
+  if (text.textContent !== title) text.textContent = title;
   if (metaLine.textContent !== meta) metaLine.textContent = meta;
   setCover(card, art, game.cover?.url);
   setOwned(art, owned);
@@ -164,6 +181,7 @@ export function syncCards(list, games, pending = 0, isOwned = () => false) {
   }
 
   let previous = null;
+  let index = 0;
   for (const game of games) {
     const id = String(game.id);
     let node = existing.get(id);
@@ -173,6 +191,9 @@ export function syncCards(list, games, pending = 0, isOwned = () => false) {
     } else {
       node = renderCard(game, isOwned(game.id));
     }
+    // Position in the list, for the staggered entrance.
+    const i = String(Math.min(index++, ENTER_STAGGER_CARDS));
+    if (node.style.getPropertyValue("--i") !== i) node.style.setProperty("--i", i);
     const target = previous ? previous.nextSibling : list.firstChild;
     if (node !== target) list.insertBefore(node, target);
     previous = node;
@@ -206,6 +227,96 @@ function syncShimmer(node) {
     animation.startTime = 0;
   }
 }
+// A cut-off title, hovered with a mouse: after a short wait it scrolls to its
+// end, rests, fades, and starts over from the beginning. Leaving fades it back
+// to where it started. Off under reduced motion, and on touch (no hover).
+const MARQUEE = {
+  waitMs: 700, // before each scroll
+  pxPerSecond: 22,
+  minScrollMs: 1600, // so a few pixels still glide rather than jump
+  restMs: 1400, // at the end
+  fadeMs: 300,
+  // Sine in-out: starts and stops gently.
+  easing: "cubic-bezier(0.37, 0, 0.63, 1)",
+};
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+
+function titleMarquee(list) {
+  const running = new Map(); // title element -> its animation
+
+  function start(title) {
+    const text = title.firstElementChild;
+    const overflow = title.scrollWidth - title.clientWidth;
+    if (overflow <= 1 || running.has(title)) return;
+    const scroll = Math.max(
+      MARQUEE.minScrollMs,
+      (overflow / MARQUEE.pxPerSecond) * 1000,
+    );
+    const { waitMs, restMs, fadeMs } = MARQUEE;
+    const total = waitMs + scroll + restMs + fadeMs * 2;
+    const at = (ms) => ms / total;
+    const end = `translateX(${-overflow}px)`;
+    title.classList.add("is-scrolling");
+    running.set(
+      title,
+      text.animate(
+        [
+          { offset: 0, transform: "translateX(0)", opacity: 1 },
+          { offset: at(waitMs), transform: "translateX(0)", opacity: 1, easing: MARQUEE.easing },
+          { offset: at(waitMs + scroll), transform: end, opacity: 1 },
+          { offset: at(waitMs + scroll + restMs), transform: end, opacity: 1 },
+          { offset: at(waitMs + scroll + restMs + fadeMs), transform: end, opacity: 0 },
+          { offset: at(waitMs + scroll + restMs + fadeMs), transform: "translateX(0)", opacity: 0 },
+          { offset: 1, transform: "translateX(0)", opacity: 1 },
+        ],
+        { duration: total, iterations: Infinity },
+      ),
+    );
+  }
+
+  function stop(title) {
+    const scrolling = running.get(title);
+    if (!scrolling) return;
+    running.delete(title);
+    scrolling.pause();
+    const text = title.firstElementChild;
+    const fadeOut = text.animate([{ opacity: getComputedStyle(text).opacity }, { opacity: 0 }], {
+      duration: MARQUEE.fadeMs,
+      fill: "forwards",
+    });
+    fadeOut.onfinish = () => {
+      // Hovered again meanwhile: that run owns the title now.
+      if (running.has(title)) return fadeOut.cancel();
+      scrolling.cancel();
+      title.classList.remove("is-scrolling");
+      fadeOut.cancel();
+      text.animate([{ opacity: 0 }, { opacity: 1 }], { duration: MARQUEE.fadeMs });
+    };
+  }
+
+  const titleOf = (event) =>
+    event.target.matches?.(".result-card[data-id]")
+      ? event.target.querySelector(".result-title")
+      : null;
+  const onEnter = (event) => {
+    if (event.pointerType === "touch" || reducedMotion.matches) return;
+    const title = titleOf(event);
+    if (title) start(title);
+  };
+  const onLeave = (event) => {
+    const title = titleOf(event);
+    if (title) stop(title);
+  };
+  // Enter/leave don't bubble; a capturing listener still sees each card's.
+  list.addEventListener("pointerenter", onEnter, true);
+  list.addEventListener("pointerleave", onLeave, true);
+  return () => {
+    list.removeEventListener("pointerenter", onEnter, true);
+    list.removeEventListener("pointerleave", onLeave, true);
+    for (const scrolling of running.values()) scrolling.cancel();
+  };
+}
+
 // `session` is a search session (see search-session.js): { status, visible,
 // generation, on("change") }. Nothing here knows how results are found.
 export function createResultsPage(session, { onOpen, isOwned } = {}) {
@@ -262,6 +373,13 @@ export function createResultsPage(session, { onOpen, isOwned } = {}) {
     const { status } = session;
     const visible = session.visible;
     const shown = visible.slice(0, revealed);
+    const entering =
+      session.placeholder === true && !list.classList.contains("is-placeholder");
+    list.classList.toggle("is-placeholder", session.placeholder === true);
+    if (entering) {
+      glassHoldUntil =
+        performance.now() + ENTER_MS + ENTER_STAGGER_MS * ENTER_STAGGER_CARDS;
+    }
 
     if (status === "blank") {
       syncCards(list, []);
@@ -282,7 +400,8 @@ export function createResultsPage(session, { onOpen, isOwned } = {}) {
       observeTrailing();
       note.hidden = !session.failed;
     }
-    refreshGlass();
+    if (performance.now() < glassHoldUntil) refreshGlassSoon();
+    else refreshGlass();
   }
 
   const onClick = (event) => {
@@ -304,6 +423,7 @@ export function createResultsPage(session, { onOpen, isOwned } = {}) {
     }
   };
   list.addEventListener("pointerdown", onPress);
+  const stopMarquee = titleMarquee(list);
 
   const off = session.on("change", render);
   render();
@@ -312,6 +432,7 @@ export function createResultsPage(session, { onOpen, isOwned } = {}) {
     element,
     destroy: () => {
       observer?.disconnect();
+      stopMarquee();
       list.removeEventListener("click", onClick);
       list.removeEventListener("pointerdown", onPress);
       off();

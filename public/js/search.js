@@ -187,3 +187,62 @@ export async function warmUp() {
     /* ignore */
   }
 }
+
+/* ---- popular right now ----------------------------------------------------
+ * What search shows before anything is typed (api/igdb.js popularGames()).
+ * The server rebuilds it once a day; the browser keeps a copy for the same
+ * day, so opening search shows it instantly. The day turns over at 01:00 UTC,
+ * after IGDB's daily recalculation. */
+const POPULAR_KEY = "popular-right-now";
+const popularDay = () =>
+  new Date(Date.now() - 60 * 60 * 1000).toISOString().slice(0, 10);
+let popularPromise = null;
+
+function readPopular() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(POPULAR_KEY));
+    return saved?.day === popularDay() && Array.isArray(saved.games)
+      ? saved.games
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Popular recent releases, best first, with the owner's chosen covers. */
+export function popular() {
+  const saved = readPopular();
+  if (saved) return Promise.resolve(saved);
+  popularPromise ??= (async () => {
+    try {
+      const { day, games } = await call("igdb", "popular", {});
+      const covers = await storedCovers(games.map((game) => game.id));
+      for (const game of games) {
+        const cover = covers.get(game.id);
+        if (cover) game.cover = cover;
+      }
+      try {
+        localStorage.setItem(POPULAR_KEY, JSON.stringify({ day, games }));
+      } catch {
+        // Full or blocked storage: it is just fetched again next time.
+      }
+      return games;
+    } finally {
+      popularPromise = null;
+    }
+  })();
+  return popularPromise;
+}
+
+/** A game's cover changed (Customize saved): the day's saved copy follows. */
+export function setPopularCover(id, cover) {
+  const games = readPopular();
+  const game = games?.find((g) => g.id === Number(id));
+  if (!game) return;
+  game.cover = cover;
+  try {
+    localStorage.setItem(POPULAR_KEY, JSON.stringify({ day: popularDay(), games }));
+  } catch {
+    // Next day's copy picks it up.
+  }
+}

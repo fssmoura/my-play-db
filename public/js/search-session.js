@@ -16,7 +16,10 @@
 //
 // IN LIBRARY follows the same rule, against the owner's library (library.js):
 //   - Ticked with nothing typed: the whole library shows, most recently played
-//     first.
+//     first. Unticked with nothing typed: what's popular right now
+//     (engine.popular(), refreshed daily), but only until the first action
+//     in this visit to search (typing or a filter change); after that,
+//     nothing typed is blank again, as before.
 //   - Ticked when a search starts: the search runs through the library only
 //     (locally, no IGDB). Unticking it re-runs the search over everything.
 //   - Ticked after a search started: games not owned are hidden.
@@ -33,10 +36,16 @@
 
 export function createSearchSession({ searchState, filter, engine, library }) {
   const DEBOUNCE_MS = engine.DEBOUNCE_MS ?? 300;
+  // About how long the search bar takes to open (spring.js defaults).
+  const POPULAR_SETTLE_MS = 300;
   const listeners = new Set();
 
   let status = "blank";
   let pool = [];
+  // The popular list stands in for results (nothing typed).
+  let placeholder = false;
+  // Something was typed or a filter changed since search opened.
+  let acted = false;
   let baked = [];
   // The search (or the empty-query browse) runs through the library only.
   let libraryBaked = false;
@@ -61,8 +70,11 @@ export function createSearchSession({ searchState, filter, engine, library }) {
   };
 
   // Each count is what ticking that filter would show, given the other one.
+  // The popular stand-in list has no counts: it isn't a result.
   function publishCounts() {
-    if (status !== "done" || !pool.length) return filter.setCounts(null);
+    if (status !== "done" || !pool.length || placeholder) {
+      return filter.setCounts(null);
+    }
     const counts = {};
     let owned = 0;
     for (const game of pool) {
@@ -79,7 +91,10 @@ export function createSearchSession({ searchState, filter, engine, library }) {
 
   function set(next, { restart = false } = {}) {
     status = next.status ?? status;
-    if ("pool" in next) pool = next.pool;
+    if ("pool" in next) {
+      pool = next.pool;
+      placeholder = next.placeholder === true;
+    }
     if (next.status && next.status !== "done") failed = false;
     if ("failed" in next) failed = next.failed;
     if (restart) generation++;
@@ -96,15 +111,40 @@ export function createSearchSession({ searchState, filter, engine, library }) {
     idle({ restart: true });
   }
 
-  // Nothing typed: blank, or the whole library when In Library is ticked.
+  // Leaving search: next time it opens, the popular list shows again.
+  function exit() {
+    acted = false;
+    blank();
+  }
+
+  // Nothing typed: the whole library when In Library is ticked, otherwise
+  // what's popular right now - but only until the first action (typing or a
+  // filter change) in this visit to search; after that it's blank, as before.
   function idle(options) {
     libraryBaked = searchState.active && filter.inLibrary;
-    if (!libraryBaked) return set({ status: "blank", pool: [] }, options);
-    set(
-      library.ready
-        ? { status: "done", pool: library.games }
-        : { status: "loading", pool: [] },
-      options,
+    if (libraryBaked) {
+      return set(
+        library.ready
+          ? { status: "done", pool: library.games }
+          : { status: "loading", pool: [] },
+        options,
+      );
+    }
+    if (!searchState.active || !engine.popular || acted) {
+      return set({ status: "blank", pool: [] }, options);
+    }
+    const mine = ++run;
+    // Blank (no skeletons) while the search bar's opening animation runs:
+    // painting a grid of covers mid-animation makes it stutter.
+    set({ status: "blank", pool: [] }, options);
+    const settled = new Promise((done) => setTimeout(done, POPULAR_SETTLE_MS));
+    Promise.all([engine.popular(), settled]).then(
+      ([games]) => {
+        if (mine === run) set({ status: "done", pool: games, placeholder: true });
+      },
+      () => {
+        if (mine === run) set({ status: "blank", pool: [] });
+      },
     );
   }
 
@@ -148,6 +188,7 @@ export function createSearchSession({ searchState, filter, engine, library }) {
     if (!searchState.active) return;
     const query = searchState.query.trim();
     if (!query) return blank();
+    acted = true;
 
     if (!hasQuery) {
       hasQuery = true;
@@ -185,10 +226,10 @@ export function createSearchSession({ searchState, filter, engine, library }) {
     if (!typesChanged && !libraryChanged) return;
 
     if (!searchState.active) return;
+    acted = true;
     const query = searchState.query.trim();
     if (!query || !hasQuery) {
-      if (libraryChanged) idle({ restart: true });
-      else set({}, { restart: true });
+      idle({ restart: true });
       return;
     }
 
@@ -225,6 +266,7 @@ export function createSearchSession({ searchState, filter, engine, library }) {
     const options = { restart: status === "loading" };
     if (!query || !hasQuery) {
       if (libraryBaked) idle(options);
+      else set({});
     } else if (libraryBaked) {
       searchLibrary(query, options);
     } else {
@@ -236,7 +278,7 @@ export function createSearchSession({ searchState, filter, engine, library }) {
   const offs = [
     searchState.on("enter", onQuery),
     searchState.on("query", onQuery),
-    searchState.on("exit", blank),
+    searchState.on("exit", exit),
     filter.on("change", onFilter),
     library.on("change", onLibrary),
   ];
@@ -251,6 +293,10 @@ export function createSearchSession({ searchState, filter, engine, library }) {
     },
     get generation() {
       return generation;
+    },
+    // True while the popular list stands in for results (nothing typed).
+    get placeholder() {
+      return placeholder;
     },
     // Everything currently passing the filter, best first.
     get visible() {

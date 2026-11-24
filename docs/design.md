@@ -62,8 +62,13 @@ Rules a redesign must keep, with the HIG reason where there is one.
   morph, in the same glass, with no browser search-field chrome. A clear
   button shows only while there is text.
 - Typing and clearing never open or close anything. The results page appears
-  as soon as Search is tapped, blank until something is typed (or showing the
-  library, when In Library is ticked).
+  as soon as Search is tapped. On opening, with nothing typed, it shows
+  what's popular right now (recent releases, refreshed daily) at half
+  opacity, as a stand-in rather than results (a card comes up to full on
+  hover). The cards fade in from slightly below each time. The first action
+  (typing or a filter change) replaces it for the rest of that visit to
+  search: clearing the text then leaves the page blank, as before. With In
+  Library ticked the library shows instead.
 - Focus rings are keyboard-only: a mouse or touch user never sees one.
 
 **Results**
@@ -72,6 +77,9 @@ Rules a redesign must keep, with the HIG reason where there is one.
   merge in. More load as you scroll.
 - A card is the cover plus title and a dimmer "type - year" line. A game with
   no cover gets a quiet placeholder, not an empty hole.
+- A cut-off title, hovered with a mouse, scrolls after a short wait to show
+  the rest, rests, fades and starts over; leaving fades it back to the start.
+  Not on touch, and off under reduced motion.
 - Empty and error states are one short dim line, no illustration: "No
   results" or "Couldn't search. Try again." If IGDB fails while cached results
   are showing, they stay, with a small note under the last card.

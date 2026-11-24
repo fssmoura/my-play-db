@@ -329,10 +329,99 @@ function enrichImages(data) {
   }
 }
 
+/**
+ * "Popular right now": recent releases ranked the way igdb.com's own
+ * homepage row seems to be (see api.md). Two IGDB requests:
+ *
+ * 1. Games released in the last 90 days: the 100 most hyped plus the 100 most
+ *    rated (~160). Rated is what catches early-access games leaving early
+ *    access, which nobody "hypes".
+ * 2. Their visits, want to play, playing and played values.
+ *
+ * Each game is placed on each of the four lists; a place earns 1/(10+place)
+ * and the sum orders them. Being high on several lists beats being top of one,
+ * so curiosity visits alone don't get in.
+ *
+ * IGDB recalculates popularity once a day (~00:35 UTC), so the list is kept
+ * until the next 01:00 UTC.
+ */
+const POPULAR_WINDOW_DAYS = 90;
+const POPULAR_POOL = 100;
+const POPULAR_LIMIT = 50;
+let popularCache = { day: null, games: null };
+
+// The popularity "day" a moment belongs to: it turns over at 01:00 UTC.
+const popularDay = (now = Date.now()) =>
+  new Date(now - 60 * 60 * 1000).toISOString().slice(0, 10);
+
+async function popularGames() {
+  const day = popularDay();
+  if (popularCache.day === day) return popularCache.games;
+
+  const now = Math.floor(Date.now() / 1000);
+  const from = now - POPULAR_WINDOW_DAYS * 86400;
+  const recent = `first_release_date >= ${from} & first_release_date <= ${now}`;
+  const fields = SEARCH_FIELDS.replace(/^fields /, "");
+  const pools = await igdbFetch(
+    "multiquery",
+    `query games "hyped" { fields ${fields}; where ${recent} & hypes > 0; sort hypes desc; limit ${POPULAR_POOL}; };
+query games "rated" { fields ${fields}; where ${recent} & total_rating_count > 0; sort total_rating_count desc; limit ${POPULAR_POOL}; };`,
+  );
+  const byId = new Map();
+  for (const pool of pools) for (const game of pool.result) byId.set(game.id, game);
+  const games = [...byId.values()];
+  if (!games.length) return [];
+
+  // Up to 4 rows per game, 500 per page.
+  const ids = games.map((g) => g.id).join(",");
+  const pages = Math.ceil((games.length * 4) / 500);
+  const rows = await igdbFetch(
+    "multiquery",
+    Array.from(
+      { length: pages },
+      (_, i) =>
+        `query popularity_primitives "p${i}" { fields game_id,popularity_type,value; where game_id = (${ids}) & popularity_type = (1,2,3,4); sort id asc; limit 500; offset ${i * 500}; };`,
+    ).join("\n"),
+  );
+  const values = {};
+  for (const page of rows) {
+    for (const r of page.result) {
+      (values[r.game_id] ??= {})[r.popularity_type] = r.value;
+    }
+  }
+
+  const score = new Map(games.map((g) => [g.id, 0]));
+  for (const type of [1, 2, 3, 4]) {
+    games
+      .filter((g) => values[g.id]?.[type] != null)
+      .sort((a, b) => values[b.id][type] - values[a.id][type])
+      .forEach((g, place) => score.set(g.id, score.get(g.id) + 1 / (11 + place)));
+  }
+
+  const top = games
+    .filter((g) => score.get(g.id) > 0)
+    .sort((a, b) => score.get(b.id) - score.get(a.id))
+    .slice(0, POPULAR_LIMIT);
+  enrichImages(top);
+  for (const game of top) {
+    game.popularity = {
+      visits: values[game.id]?.[1],
+      want_to_play: values[game.id]?.[2],
+    };
+  }
+  popularCache = { day, games: top };
+  return top;
+}
+
 const actions = {
   async auth() {
     const token = await getAccessToken();
     return { accessToken: token, expiresAt: tokenCache.expiresAt };
+  },
+
+  /** Popular recent releases, best first, in search's shape. See popularGames(). */
+  async popular() {
+    return { day: popularDay(), games: await popularGames() };
   },
 
   /**

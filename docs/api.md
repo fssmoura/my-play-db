@@ -237,6 +237,30 @@ The handler reshapes images, renames fields and merges popularity, so its output
 | `search`      | query [+ limit=200] [+ offset] [+ type] | Everything a result card needs, in one request: `name`, `slug`, `summary`, `game_type`, `first_release_date`, `cover.url` (t_1080p), `platforms`, plus `alternative_names`, `total_rating_count`, `hypes` and `popularity` `{ visits, want_to_play }` for ranking. `type` filters by game_type (a number, or an array of 0-14) |
 | `game`        | ids (single int or array of ints)       | Array of full game records by IGDB id. **A strict superset of `search`** - see below. `external_games` bundled in response with `source` name (enriched from numeric ID). See [game response fields](api-responses.md#game) in api-responses.md.                                                                               |
 | `by_external` | source + uid                            | Lightweight lookup: `{ id }` (IGDB game ID) or `null`. Use `game(id)` for full record. `source` accepts name or number.                                                                                                                                                                                                        |
+| `popular`     | nothing                                 | `{ day, games }` - up to 50 recent releases, best first, in `search`'s shape. See [Popular](#popular).                                                                                                                                                                                                                        |
+
+### Popular
+
+What search shows before anything is typed. igdb.com's own "Popular right
+now" row isn't in the public API, but comparing it with the
+[PopScore](https://api-docs.igdb.com/#popscore) lists showed what it is:
+games released in roughly the last 90 days, ranked across several signals.
+Big older games (Roblox, GTA V) never appear, however many visits they get.
+
+Two IGDB requests (both `multiquery`), cached until the next 01:00 UTC since
+IGDB recalculates popularity once a day (~00:35 UTC):
+
+1. Released in the last 90 days: the 100 most hyped plus the 100 most rated
+   (~160 games). Rated is what catches early-access games leaving early
+   access (Valheim, Enshrouded), which nobody "hypes".
+2. Their Visits, Want to Play, Playing and Played values.
+
+Each game is placed on each of the four lists, a place earns `1/(10+place)`,
+and the sum orders them. Being high on several lists beats being top of one,
+so games that only draw curiosity visits stay out without any filtering.
+Checked Nov 2026: the top 12 were exactly igdb.com's 12, with GTA VI first.
+Visits alone let in joke and adult games; adding Steam, sellers or Twitch
+signals pulled the list away from igdb.com's.
 
 **`game` must stay a strict superset of `search`.** Both write to the same
 `games` row - `search` through `cache_search_games()`, a detail page through

@@ -199,6 +199,15 @@ For large originals, use the host's own resize parameter if it has one.
 - **Each app load syncs the stores** (`library.sync()`, the same endpoint as
   the lab, so its 15-minute rule stops repeats), silently, then reloads the
   library.
+- **Popular right now** (nothing typed) is built by `igdb.popular`, once per
+  day, and the browser keeps that day's copy in `localStorage`, so opening
+  search shows it instantly. The day turns over at 01:00 UTC, after IGDB's
+  daily recalculation. How it's ranked: [api.md](api.md#popular).
+- **Its entrance is kept smooth on purpose:** it paints only after the search
+  bar has opened (~300ms) and its first 20 covers are decoded (2s at most,
+  warmed from home on idle), and no glass snapshot (`refreshGlass`) is taken
+  until the staggered slide-in ends. Each of those, happening mid-animation,
+  made it stutter.
 - After a search finishes, the type counts describe the current results, so a
   filtered search shows 0 for every unselected type. That is deliberate, not a
   bug.

@@ -13,6 +13,7 @@ import { createGamePage } from "/js/game-page.js";
 import { createSearchSession } from "/js/search-session.js";
 import { createLibrary } from "/js/library.js";
 import { storedCovers } from "/js/games-cache.js";
+import { preloadImage } from "/js/image-url.js";
 import * as searchEngine from "/js/search.js";
 import { readUrl, wireUrl } from "/js/url-state.js";
 import { createPageSwitcher } from "/js/pages.js";
@@ -175,10 +176,27 @@ export function mountApp() {
   // Signed in by now (mountApp runs only with a session): bring the stores up
   // to date in the background, once per app load.
   library.sync();
+  // The popular list, resolved only once its first page of covers is
+  // downloaded and decoded (2s at most), so the cards slide in with their
+  // images rather than shimmering after. Custom covers are big SteamGridDB
+  // images and need it most.
+  const POPULAR_COVERS = 20;
+  const popularWithCovers = async () => {
+    const games = await searchEngine.popular();
+    await Promise.race([
+      Promise.all(
+        games
+          .slice(0, POPULAR_COVERS)
+          .map((game) => preloadImage(game.cover?.url, "cover")),
+      ),
+      new Promise((done) => setTimeout(done, 2000)),
+    ]);
+    return games;
+  };
   const session = createSearchSession({
     searchState,
     filter,
-    engine: searchEngine,
+    engine: { ...searchEngine, popular: popularWithCovers },
     library,
   });
   const results = createResultsPage(session, {
@@ -225,9 +243,14 @@ export function mountApp() {
       if (!cover) return;
       library.setCover(id, cover);
       session.setCover(id, cover);
+      searchEngine.setPopularCover(id, cover);
     }),
   );
   searchEngine.warmUp();
+  // Started while the app sits on home, so opening search doesn't wait.
+  const warmPopular = () => popularWithCovers().catch(() => {});
+  if ("requestIdleCallback" in window) requestIdleCallback(warmPopular);
+  else setTimeout(warmPopular, 500);
 
   // A link with ?game= is a game page on its own (any q is ignored): there is
   // no search underneath. Otherwise a link with ?q= or ?library=1 opens
