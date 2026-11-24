@@ -192,8 +192,15 @@ export async function warmUp() {
  * What search shows before anything is typed (api/igdb.js popularGames()).
  * The server rebuilds it once a day; the browser keeps a copy for the same
  * day, so opening search shows it instantly. The day turns over at 01:00 UTC,
- * after IGDB's daily recalculation. */
-const POPULAR_KEY = "popular-right-now";
+ * after IGDB's daily recalculation. The copy keeps IGDB's covers only: the
+ * owner's chosen covers are looked up on every call, so a cover changed on
+ * another device shows here too. */
+const POPULAR_KEY = "popular-right-now-2";
+try {
+  localStorage.removeItem("popular-right-now");
+} catch {
+  // Blocked storage: nothing to tidy.
+}
 const popularDay = () =>
   new Date(Date.now() - 60 * 60 * 1000).toISOString().slice(0, 10);
 let popularPromise = null;
@@ -209,18 +216,12 @@ function readPopular() {
   }
 }
 
-/** Popular recent releases, best first, with the owner's chosen covers. */
-export function popular() {
+function popularList() {
   const saved = readPopular();
   if (saved) return Promise.resolve(saved);
   popularPromise ??= (async () => {
     try {
       const { day, games } = await call("igdb", "popular", {});
-      const covers = await storedCovers(games.map((game) => game.id));
-      for (const game of games) {
-        const cover = covers.get(game.id);
-        if (cover) game.cover = cover;
-      }
       try {
         localStorage.setItem(POPULAR_KEY, JSON.stringify({ day, games }));
       } catch {
@@ -234,15 +235,12 @@ export function popular() {
   return popularPromise;
 }
 
-/** A game's cover changed (Customize saved): the day's saved copy follows. */
-export function setPopularCover(id, cover) {
-  const games = readPopular();
-  const game = games?.find((g) => g.id === Number(id));
-  if (!game) return;
-  game.cover = cover;
-  try {
-    localStorage.setItem(POPULAR_KEY, JSON.stringify({ day: popularDay(), games }));
-  } catch {
-    // Next day's copy picks it up.
-  }
+/** Popular recent releases, best first, with the owner's chosen covers. */
+export async function popular() {
+  const games = await popularList();
+  const covers = await storedCovers(games.map((game) => game.id));
+  return games.map((game) => ({
+    ...game,
+    cover: covers.get(game.id) ?? game.cover,
+  }));
 }

@@ -213,7 +213,10 @@ For large originals, use the host's own resize parameter if it has one.
 - **Popular right now** (nothing typed) is built by `igdb.popular`, once per
   day, and the browser keeps that day's copy in `localStorage`, so opening
   search shows it instantly. The day turns over at 01:00 UTC, after IGDB's
-  daily recalculation. How it's ranked: [api.md](api.md#popular).
+  daily recalculation. How it's ranked: [api.md](api.md#popular). The copy
+  holds IGDB's covers only; the owner's chosen covers are looked up each time
+  it shows, since a saved copy kept a cover changed on another device out
+  until the next day.
 - **Its entrance is kept smooth on purpose:** it paints only after the search
   bar has opened (~300ms) and its first 20 covers are decoded (2s at most,
   warmed from home on idle), and no glass snapshot (`refreshGlass`) is taken

@@ -243,7 +243,6 @@ export function mountApp() {
       if (!cover) return;
       library.setCover(id, cover);
       session.setCover(id, cover);
-      searchEngine.setPopularCover(id, cover);
     }),
   );
   searchEngine.warmUp();
