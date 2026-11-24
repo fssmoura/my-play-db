@@ -8,9 +8,9 @@ import { combineLists } from "../achievements.js";
  * A read-only look at everything owned (player_games), joined to the IGDB
  * details where a match exists. Read-only; a matched card opens its game page.
  *
- * Opening this tab asks the server to sync every platform (each skips if its
- * last sync was under 15 minutes ago); Sync now skips that wait. The sync
- * itself lives in /api/library-sync; this tab only shows its progress.
+ * Sync now asks the server to sync every platform, ignoring its 15-minute
+ * rule (the app at / syncs on load, within the rule). The sync itself lives
+ * in /api/library-sync; this tab only shows its progress.
  */
 
 const SORT_LABELS = {
@@ -112,16 +112,6 @@ export async function mount(el) {
     if (event.key === "Enter") openCard(event);
   });
   await load();
-  // Sync whenever this tab is shown (the server skips it if the last sync
-  // was under 15 minutes ago), not whenever the lab loads.
-  const visible = () => !root.classList.contains("hidden");
-  let wasVisible = visible();
-  new MutationObserver(() => {
-    const now = visible();
-    if (now && !wasVisible) sync(false);
-    wasVisible = now;
-  }).observe(root, { attributes: true, attributeFilter: ["class"] });
-  if (wasVisible) sync(false);
 }
 
 async function load() {
