@@ -139,6 +139,36 @@
   object-fit: cover;
 }
 
+/* "In Library": a small dark pill bottom left inside the cover, icon then label.
+   Content, not a control, so no glass; dark enough to read on any cover. */
+.result-owned {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 12px);
+  padding: 3px 7px 3px 6px;
+  border-radius: 999px;
+  background: rgba(9, 9, 11, 0.72);
+  color: var(--light-gray);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.result-owned svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
+
 /* No cover (or the image failed): a darker tile with a "no image" glyph,
    about 28% of the tile width, centred. Real cards only; skeletons and the
    loading shimmer are separate. */

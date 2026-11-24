@@ -62,7 +62,8 @@ Rules a redesign must keep, with the HIG reason where there is one.
   morph, in the same glass, with no browser search-field chrome. A clear
   button shows only while there is text.
 - Typing and clearing never open or close anything. The results page appears
-  as soon as Search is tapped, blank until something is typed.
+  as soon as Search is tapped, blank until something is typed (or showing the
+  library, when In Library is ticked).
 - Focus rings are keyboard-only: a mouse or touch user never sees one.
 
 **Results**
@@ -86,7 +87,11 @@ Rules a redesign must keep, with the HIG reason where there is one.
 - Filters set before a search shape it, and while one is shaping it any
   filter change re-runs the search; if the search started unfiltered, filters
   set afterwards only hide cards.
-- In Library is not wired to results yet.
+- In Library follows the same rule: ticked before a search, the search looks
+  only through the library; ticked after, games not owned are hidden. Ticked
+  with nothing typed, the whole library shows, most recently played first.
+- Owned games carry a small check-badge icon and "In Library" pill at the
+  bottom left of the cover, filter or not.
 
 **Game page**
 

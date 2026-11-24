@@ -14,6 +14,14 @@
 //   - Baked set empty: filter changes only hide or show results client-side.
 //   - Emptying the query resets baking.
 //
+// IN LIBRARY follows the same rule, against the owner's library (library.js):
+//   - Ticked with nothing typed: the whole library shows, most recently played
+//     first.
+//   - Ticked when a search starts: the search runs through the library only
+//     (locally, no IGDB). Unticking it re-runs the search over everything.
+//   - Ticked after a search started: games not owned are hidden.
+//   Types always only hide cards in a library search, since nothing is asked.
+//
 // Status: "blank" (nothing typed), "loading" (nothing to show yet), "partial"
 // (a head start or narrowed list is showing, the real answer is pending),
 // "done" (`failed` is set when IGDB failed and the head start or narrowed list
@@ -23,37 +31,49 @@
 //
 // Events: "change" (anything above changed).
 
-export function createSearchSession({ searchState, filter, engine }) {
+export function createSearchSession({ searchState, filter, engine, library }) {
   const DEBOUNCE_MS = engine.DEBOUNCE_MS ?? 300;
   const listeners = new Set();
 
   let status = "blank";
   let pool = [];
   let baked = [];
+  // The search (or the empty-query browse) runs through the library only.
+  let libraryBaked = false;
   let hasQuery = false;
   let generation = 0;
   let failed = false;
   let run = 0;
   let seenTypes = filter.values.join(",");
+  let seenLibrary = filter.inLibrary;
   const emit = () => {
     for (const fn of [...listeners]) fn();
   };
 
   const typeOf = (game) => game.game_type;
-  const visibleList = () =>
-    baked.length
-      ? pool
-      : filter.count
-        ? pool.filter((game) => filter.matches(typeOf(game)))
-        : pool;
+  const typesHide = () => (libraryBaked || !baked.length) && filter.count > 0;
+  const libraryHides = () => filter.inLibrary && !libraryBaked;
+  const visibleList = () => {
+    let list = pool;
+    if (typesHide()) list = list.filter((game) => filter.matches(typeOf(game)));
+    if (libraryHides()) list = list.filter((game) => library.has(game.id));
+    return list;
+  };
 
+  // Each count is what ticking that filter would show, given the other one.
   function publishCounts() {
     if (status !== "done" || !pool.length) return filter.setCounts(null);
     const counts = {};
+    let owned = 0;
     for (const game of pool) {
       const type = typeOf(game);
-      if (type != null) counts[type] = (counts[type] ?? 0) + 1;
+      const mine = library.has(game.id);
+      if (type != null && (!libraryHides() || mine)) {
+        counts[type] = (counts[type] ?? 0) + 1;
+      }
+      if (mine && (!typesHide() || filter.matches(type))) owned++;
     }
+    counts.inLibrary = owned;
     filter.setCounts(counts);
   }
 
@@ -73,7 +93,28 @@ export function createSearchSession({ searchState, filter, engine }) {
     engine.cancelSearch?.();
     hasQuery = false;
     baked = [];
-    set({ status: "blank", pool: [] }, { restart: true });
+    idle({ restart: true });
+  }
+
+  // Nothing typed: blank, or the whole library when In Library is ticked.
+  function idle(options) {
+    libraryBaked = searchState.active && filter.inLibrary;
+    if (!libraryBaked) return set({ status: "blank", pool: [] }, options);
+    set(
+      library.ready
+        ? { status: "done", pool: library.games }
+        : { status: "loading", pool: [] },
+      options,
+    );
+  }
+
+  function searchLibrary(query, options) {
+    set(
+      library.ready
+        ? { status: "done", pool: library.search(query) }
+        : { status: "loading", pool: [] },
+      options,
+    );
   }
 
   async function execute(query) {
@@ -111,11 +152,17 @@ export function createSearchSession({ searchState, filter, engine }) {
     if (!hasQuery) {
       hasQuery = true;
       baked = filter.values;
+      libraryBaked = filter.inLibrary;
     }
 
     // Whatever is still in flight was for an older query: its head start and
     // answer must not paint over this one.
     run++;
+
+    if (libraryBaked) {
+      debounced.cancel();
+      return searchLibrary(query, { restart: true });
+    }
 
     // Re-rank what we already have for an instant answer, then let the debounce
     // decide when to actually ask.
@@ -130,16 +177,37 @@ export function createSearchSession({ searchState, filter, engine }) {
   }
 
   function onFilter() {
-    // In Library changes the same event but is not a result filter.
     const key = filter.values.join(",");
-    if (key === seenTypes) return;
+    const typesChanged = key !== seenTypes;
+    const libraryChanged = filter.inLibrary !== seenLibrary;
     seenTypes = key;
+    seenLibrary = filter.inLibrary;
+    if (!typesChanged && !libraryChanged) return;
 
     if (!searchState.active) return;
     const query = searchState.query.trim();
-    if (!query || !hasQuery) return;
+    if (!query || !hasQuery) {
+      if (libraryChanged) idle({ restart: true });
+      else set({}, { restart: true });
+      return;
+    }
 
-    if (baked.length) {
+    if (libraryBaked) {
+      if (libraryChanged) {
+        // The search only looked through the library: unticking it searches
+        // everything, keeping the types if they were shaping it.
+        libraryBaked = false;
+        if (baked.length) baked = filter.values;
+        debounced.cancel();
+        set({ status: "loading", pool: [] }, { restart: true });
+        execute(query);
+        return;
+      }
+      set({}, { restart: true });
+      return;
+    }
+
+    if (typesChanged && baked.length) {
       baked = filter.values;
       debounced.cancel();
       set({ status: "loading", pool: [] }, { restart: true });
@@ -150,11 +218,27 @@ export function createSearchSession({ searchState, filter, engine }) {
     set({}, { restart: true });
   }
 
+  // The library arrived or was reloaded: whatever depends on it is redrawn.
+  function onLibrary() {
+    if (!searchState.active) return;
+    const query = searchState.query.trim();
+    const options = { restart: status === "loading" };
+    if (!query || !hasQuery) {
+      if (libraryBaked) idle(options);
+    } else if (libraryBaked) {
+      searchLibrary(query, options);
+    } else {
+      // Pills and the In Library filter read the new list.
+      set({});
+    }
+  }
+
   const offs = [
     searchState.on("enter", onQuery),
     searchState.on("query", onQuery),
     searchState.on("exit", blank),
     filter.on("change", onFilter),
+    library.on("change", onLibrary),
   ];
 
   return {
@@ -174,6 +258,18 @@ export function createSearchSession({ searchState, filter, engine }) {
     },
     get bakedTypes() {
       return [...baked];
+    },
+    // A game's cover changed (Customize saved): its card shows the new one.
+    // The result objects are shared with the engine's cache, so a repeat of
+    // this search shows it too.
+    setCover(id, cover) {
+      let hit = false;
+      for (const game of pool) {
+        if (game.id !== Number(id)) continue;
+        game.cover = cover;
+        hit = true;
+      }
+      if (hit) emit();
     },
     on(event, fn) {
       if (event !== "change") return () => {};

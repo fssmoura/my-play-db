@@ -11,6 +11,8 @@ import { createFilterState } from "/js/filter-state.js";
 import { createGameState } from "/js/game-state.js";
 import { createGamePage } from "/js/game-page.js";
 import { createSearchSession } from "/js/search-session.js";
+import { createLibrary } from "/js/library.js";
+import { storedCovers } from "/js/games-cache.js";
 import * as searchEngine from "/js/search.js";
 import { readUrl, wireUrl } from "/js/url-state.js";
 import { createPageSwitcher } from "/js/pages.js";
@@ -168,18 +170,26 @@ export function mountApp() {
 
   const game = createGameState();
   const filter = createFilterState();
+  const library = createLibrary();
+  library.load();
   const session = createSearchSession({
     searchState,
     filter,
     engine: searchEngine,
+    library,
   });
   const results = createResultsPage(session, {
     onOpen: (id) => game.open(id),
+    isOwned: library.has,
   });
   pages.register("results", results.element);
 
   const offs = [
-    searchState.on("enter", () => pages.show("results")),
+    // Refreshed (when over a minute old) so covers and new games are current.
+    searchState.on("enter", () => {
+      library.load();
+      pages.show("results");
+    }),
     searchState.on("exit", () => {
       filter.clear();
       pages.back();
@@ -206,20 +216,29 @@ export function mountApp() {
   offs.push(
     game.on("open", () => searchState.cover()),
     game.on("close", () => searchState.uncover()),
+    // Customize saved new art: the card underneath shows the chosen cover.
+    game.on("art", async ({ id }) => {
+      const cover = (await storedCovers([id])).get(id);
+      if (!cover) return;
+      library.setCover(id, cover);
+      session.setCover(id, cover);
+    }),
   );
   searchEngine.warmUp();
 
   // A link with ?game= is a game page on its own (any q is ignored): there is
-  // no search underneath. Otherwise a link with ?q= opens straight into that
-  // search, filters applied first, so they count as set before the search.
+  // no search underneath. Otherwise a link with ?q= or ?library=1 opens
+  // straight into that search, filters applied first, so they count as set
+  // before the search.
   const initial = readUrl();
   if (initial.game) {
     const url = `${location.pathname}?game=${initial.game}`;
     if (location.pathname + location.search !== url)
       history.replaceState(history.state, "", url);
     history_.openWithoutPush(() => game.open(initial.game));
-  } else if (initial.query) {
+  } else if (initial.query || initial.library) {
     filter.set(initial.types);
+    filter.setInLibrary(initial.library);
     searchState.setQuery(initial.query);
     history_.enterWithoutPush(() => searchState.enter());
   }

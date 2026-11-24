@@ -15,7 +15,8 @@ those files.
   the logic without rewriting it.
 - **Functional still has to be usable:** wireframe means unstyled, not awkward.
 - **State modules have no DOM.** `search-state.js`, `game-state.js`,
-  `filter-state.js`, `search-session.js` and `game-art.js` hold state and emit
+  `filter-state.js`, `search-session.js`, `library.js` and `game-art.js` hold
+  state and emit
   events; pages and controls only render state and report clicks. This is what
   makes the principle above possible.
 - **Behaviour in JS, looks in CSS.** JS sets only CSS variables (the springs
@@ -180,14 +181,21 @@ For large originals, use the host's own resize parameter if it has one.
   copy it was first shown with (`rankBasis`), so cards never reshuffle when
   IGDB's newer popularity arrives. Why the cache stores the ranking fields:
   [database.md](database.md#games-is-a-cache-not-a-list-of-games-owned).
-- **A held game keeps its cached cover** (the first `cover` entry is the
-  owner's choice) while IGDB's copy wins for everything else.
+- **Every result shows the owner's chosen cover**, however it was found. The
+  head start only holds games whose name matched the query, and IGDB also
+  matches nicknames ("gta" finds Grand Theft Auto VI), so after IGDB answers,
+  the remaining results' covers are looked up by id (`storedCovers()`). IGDB's
+  copy wins for everything else.
 - Skeletons already on screen are kept and cards are reconciled by id, so the
   shimmer doesn't restart and images aren't rebuilt on each keystroke.
-- **The filter rules** (what a filter set before or after a search does, In
-  Library not wired yet) are in
+- **The filter rules** (what a filter set before or after a search does,
+  including In Library) are in
   [design.md](design.md#decisions-so-far); the implementation is the header of
   `search-session.js`.
+- **In Library never asks IGDB.** `library.js` loads the whole library from
+  `player_games` (once a minute at most, on entering search) and searches it
+  locally with the same ranking. It skips `platforms` and `release_dates`,
+  which made up most of the ~1 MB download and that cards don't need.
 - After a search finishes, the type counts describe the current results, so a
   filtered search shows 0 for every unselected type. That is deliberate, not a
   bug.

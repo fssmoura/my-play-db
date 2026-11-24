@@ -178,6 +178,28 @@ export async function setSgdbId(id, value) {
   if (error) throw error;
 }
 
+/**
+ * The chosen cover (first entry of `cover`) of each of these games we hold,
+ * by id. Never throws: on failure the results just keep IGDB's covers.
+ */
+export async function storedCovers(ids) {
+  const covers = new Map();
+  if (!ids.length) return covers;
+  try {
+    const { data, error } = await supabase
+      .from("games")
+      .select("id, cover")
+      .in("id", ids);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      if (row.cover?.[0]) covers.set(row.id, { url: row.cover[0] });
+    }
+  } catch {
+    // IGDB's covers it is.
+  }
+  return covers;
+}
+
 /** DB row -> the shape IGDB search returns. */
 export function fromDbRow(row) {
   if (!row) return null;

@@ -1,5 +1,5 @@
 // Adapted from the lab's old search (since removed) (no typeahead; a type set
-// instead of one type; a sequence guard inside; head-start covers kept). No DOM.
+// instead of one type; a sequence guard inside; chosen covers kept). No DOM.
 //
 // One IGDB request per query, ranked, with the local `games` cache asked at the
 // same moment as a head start. The head start arrives through `onPartial`; the
@@ -9,6 +9,7 @@ import { rankGames, scoreGame, narrow, mergeById } from "/js/ranking.js";
 import {
   searchCached,
   saveSearchResults,
+  storedCovers,
   clearCache as clearGamesCache,
 } from "/js/games-cache.js";
 
@@ -55,11 +56,16 @@ function begin(term, types, key) {
     const raw = await call("igdb", "search", options);
     const fresh = Array.isArray(raw) ? raw : [];
     const head = await cached;
-    // A game we hold keeps the head-start copy's cover (the owner's chosen
-    // image, the first entry of its `cover`); IGDB's copy wins for the rest.
-    const held = new Map(head.map((game) => [game.id, game]));
+    // A game we hold keeps its chosen cover (the first entry of its `cover`),
+    // however IGDB found it; IGDB's copy wins for the rest. The head start
+    // only holds games whose name matched, so the rest are looked up by id.
+    const held = new Map(head.map((game) => [game.id, game.cover]));
+    const unheld = fresh
+      .map((game) => game.id)
+      .filter((id) => id != null && !held.has(id));
+    for (const [id, cover] of await storedCovers(unheld)) held.set(id, cover);
     for (const game of fresh) {
-      const cover = held.get(game.id)?.cover;
+      const cover = held.get(game.id);
       if (cover) game.cover = cover;
     }
     const merged = mergeById(head, fresh);

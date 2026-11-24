@@ -90,7 +90,7 @@ function cardText(game) {
 // One card: a cover tile, then title, then "type · year", and an invisible
 // button over the whole card that opens the game page (a real button, so Tab,
 // Enter and Space work). The card carries its game id.
-export function renderCard(game) {
+export function renderCard(game, owned = false) {
   const card = document.createElement("li");
   card.className = "result-card";
   card.dataset.id = String(game.id);
@@ -105,19 +105,36 @@ export function renderCard(game) {
   open.type = "button";
   open.className = "result-open";
   card.append(art, name, meta, open);
-  updateCard(card, game);
+  updateCard(card, game, owned);
   return card;
 }
 
-function updateCard(card, game) {
+const OWNED_PILL = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.965 8.521Q20 8.26 20 8c0-2.379-2.143-4.288-4.521-3.965C14.786 2.802 13.466 2 12 2s-2.786.802-3.479 2.035C6.138 3.712 4 5.621 4 8q0 .26.035.521C2.802 9.215 2 10.535 2 12s.802 2.785 2.035 3.479A4 4 0 0 0 4 16c0 2.379 2.138 4.283 4.521 3.965C9.214 21.198 10.534 22 12 22s2.786-.802 3.479-2.035C17.857 20.283 20 18.379 20 16q0-.26-.035-.521C21.198 14.785 22 13.465 22 12s-.802-2.785-2.035-3.479m-9.01 7.895l-3.667-3.714l1.424-1.404l2.257 2.286l4.327-4.294l1.408 1.42z" /></svg>In Library`;
+
+// The "In Library" pill, bottom left inside the cover, on games the owner has.
+function setOwned(art, owned) {
+  const pill = art.querySelector(".result-owned");
+  if (owned && !pill) {
+    const span = document.createElement("span");
+    span.className = "result-owned";
+    span.innerHTML = OWNED_PILL;
+    art.prepend(span);
+  } else if (!owned && pill) {
+    pill.remove();
+  }
+}
+
+function updateCard(card, game, owned) {
   const { title, meta } = cardText(game);
   const [art, name, metaLine, open] = card.children;
-  if (open.getAttribute("aria-label") !== title) {
-    open.setAttribute("aria-label", title);
+  const label = owned ? `${title}, in library` : title;
+  if (open.getAttribute("aria-label") !== label) {
+    open.setAttribute("aria-label", label);
   }
   if (name.textContent !== title) name.textContent = title;
   if (metaLine.textContent !== meta) metaLine.textContent = meta;
   setCover(card, art, game.cover?.url);
+  setOwned(art, owned);
 }
 
 // A skeleton card: same grid cell and shape as a real card, quiet shimmer.
@@ -137,7 +154,8 @@ export function renderSkeletonCard() {
 
 // Makes the list hold exactly these games, in this order, followed by `pending`
 // skeletons. Cards already there (matched by id) are moved, not rebuilt.
-export function syncCards(list, games, pending = 0) {
+// `isOwned(id)` says which get the In Library pill.
+export function syncCards(list, games, pending = 0, isOwned = () => false) {
   const existing = new Map();
   const skeletons = [];
   for (const node of [...list.children]) {
@@ -151,9 +169,9 @@ export function syncCards(list, games, pending = 0) {
     let node = existing.get(id);
     if (node) {
       existing.delete(id);
-      updateCard(node, game);
+      updateCard(node, game, isOwned(game.id));
     } else {
-      node = renderCard(game);
+      node = renderCard(game, isOwned(game.id));
     }
     const target = previous ? previous.nextSibling : list.firstChild;
     if (node !== target) list.insertBefore(node, target);
@@ -190,7 +208,7 @@ function syncShimmer(node) {
 }
 // `session` is a search session (see search-session.js): { status, visible,
 // generation, on("change") }. Nothing here knows how results are found.
-export function createResultsPage(session, { onOpen } = {}) {
+export function createResultsPage(session, { onOpen, isOwned } = {}) {
   const element = document.createElement("section");
   element.className = "results";
   element.setAttribute("aria-label", "Results");
@@ -254,13 +272,13 @@ export function createResultsPage(session, { onOpen } = {}) {
       showMessage("Couldn't search. Try again.");
     } else if (status === "partial") {
       // The real answer is still coming: the rest of the grid is skeletons.
-      syncCards(list, shown, TRAILING);
+      syncCards(list, shown, TRAILING, isOwned);
     } else if (!visible.length) {
       syncCards(list, []);
       showMessage("No results");
     } else {
       const remaining = visible.length - shown.length;
-      syncCards(list, shown, Math.min(TRAILING, remaining));
+      syncCards(list, shown, Math.min(TRAILING, remaining), isOwned);
       observeTrailing();
       note.hidden = !session.failed;
     }

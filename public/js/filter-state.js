@@ -51,14 +51,18 @@ export function createFilterState() {
       inLibrary = !inLibrary;
       emit();
     },
+    setInLibrary(on) {
+      if (inLibrary === Boolean(on)) return;
+      inLibrary = Boolean(on);
+      emit();
+    },
     clear() {
       if (!selected.size && !inLibrary) return;
       selected.clear();
       inLibrary = false;
       emit();
     },
-    // Does a result of this type pass the type filter? (In Library is not a
-    // result filter yet.)
+    // Does a result of this type pass the type filter?
     matches: (value) => selected.size === 0 || selected.has(value),
     // How many results there are of each type ({ [value]: n }), or null while
     // there are none to count. Set by the search session, shown by the menu.

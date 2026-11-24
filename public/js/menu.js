@@ -730,9 +730,8 @@ function wireFilter({
         counts?.[value],
       );
     }
-    // Not wired to results yet, so the session never reports it: always 0.
     library.querySelector(".menu-panel-count").textContent = text(
-      counts?.inLibrary ?? 0,
+      counts?.inLibrary,
     );
   }
 
