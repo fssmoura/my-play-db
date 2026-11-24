@@ -3,6 +3,7 @@ import * as connections from "./views/connections.js";
 import * as library from "./views/library.js";
 import * as game from "./views/game.js";
 import * as media from "./views/media.js";
+import * as achievements from "./views/achievements.js";
 import * as apiConsole from "./views/console.js";
 import { onNavigate } from "./navigate.js";
 
@@ -14,6 +15,7 @@ const VIEWS = {
   library,
   game,
   media,
+  achievements,
 };
 
 const el = {
@@ -69,6 +71,7 @@ async function applySession(session) {
 function tabFromUrl() {
   const params = new URLSearchParams(location.search);
   if (params.has("media")) return "media";
+  if (params.has("achievements")) return "achievements";
   if (params.has("game")) return "game";
   const tab = params.get("tab");
   if (tab && tab in VIEWS) return tab;
@@ -81,16 +84,17 @@ const lastQuery = {};
 function selectTab(view) {
   const button = document.querySelector(`nav.tabs button[data-view="${view}"]`);
   if (!button) return;
-  // Media has no tab of its own until a game sends you there. Once it has, it
-  // stays visible so you can step back into it.
+  // Game, Media and Achievements have no tab of their own until something
+  // sends you there. Game then stays visible so you can step back into it;
+  // the other two close behind you (see wireTabs).
   button.classList.remove("hidden");
   button.click();
 }
 
 function wireTabs() {
   const buttons = document.querySelectorAll("nav.tabs button");
-  const mediaButton = document.querySelector(
-    'nav.tabs button[data-view="media"]',
+  const detours = ["media", "achievements"].map((id) =>
+    document.querySelector(`nav.tabs button[data-view="${id}"]`),
   );
   buttons.forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -117,9 +121,10 @@ function wireTabs() {
           .getElementById(`view-${id}`)
           .classList.toggle("hidden", btn.dataset.view !== id);
       }
-      // The media picker is a detour, not a destination: the moment you step
-      // anywhere else, its tab closes behind you.
-      if (btn.dataset.view !== "media") mediaButton?.classList.add("hidden");
+      // The media picker and the achievements list are detours, not
+      // destinations: the moment you step anywhere else, their tab closes.
+      for (const detour of detours)
+        if (detour && detour !== btn) detour.classList.add("hidden");
     });
   });
 }

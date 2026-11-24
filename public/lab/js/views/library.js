@@ -1,10 +1,12 @@
 import { supabase } from "/js/supabase.js";
 import { getAccessToken } from "/js/session.js";
 import { gameTypeLabel, releaseYear } from "../ranking.js";
+import { go } from "../navigate.js";
+import { combineLists } from "../achievements.js";
 
 /**
  * A read-only look at everything owned (player_games), joined to the IGDB
- * details where a match exists. Nothing here is clickable.
+ * details where a match exists. Read-only; a matched card opens its game page.
  *
  * Opening this tab asks the server to sync every platform (each skips if its
  * last sync was under 15 minutes ago); Sync now skips that wait. The sync
@@ -43,6 +45,7 @@ const SORTS = {
 
 let root;
 let rows = [];
+let games = [];
 let summary = "";
 let syncing = false;
 let sortBy = "recent";
@@ -67,6 +70,7 @@ export async function mount(el) {
             <summary>All stores</summary>
             <div class="library-filter-list" role="group" aria-label="Stores"></div>
           </details>
+          <input type="search" id="l-search" class="library-search" placeholder="Search" aria-label="Search the library" />
         </div>
         <button id="l-reload" class="library-sync" type="button">Sync now</button>
       </div>
@@ -74,6 +78,7 @@ export async function mount(el) {
       <p class="library-toast meta" id="l-status" role="status" aria-live="polite" hidden></p>
     </div>
   `;
+  root.querySelector("#l-search").addEventListener("input", applySearch);
   root.querySelector("#l-filter").addEventListener("change", (event) => {
     const box = event.target.closest("input[data-store]");
     if (!box) return;
@@ -96,6 +101,16 @@ export async function mount(el) {
     render();
   });
   root.querySelector("#l-reload").addEventListener("click", () => sync(true));
+  // A matched card opens its game page; an unmatched one has nothing to open.
+  const grid = root.querySelector("#l-grid");
+  const openCard = (event) => {
+    const target = event.target.closest("[data-game]");
+    if (target) go("game", { game: Number(target.dataset.game) });
+  };
+  grid.addEventListener("click", openCard);
+  grid.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") openCard(event);
+  });
   await load();
   // Sync whenever this tab is shown (the server skips it if the last sync
   // was under 15 minutes ago), not whenever the lab loads.
@@ -129,6 +144,8 @@ async function load() {
     title: row.games?.name ?? row.meta?.name ?? "?",
   }));
   await loadSharedLists();
+  // Combining is the slow part, so it runs once per load, not per redraw.
+  games = mergeByGame(rows);
   const unmatched = rows.filter((r) => !r.igdb_id).length;
   summary = unmatched ? `${unmatched} not matched to IGDB.` : "";
   render();
@@ -172,79 +189,15 @@ async function loadSharedLists() {
   lists = next;
 }
 
-/* Combining achievement lists. Stores often list the same achievement with a
-   slightly different name or description (a typo, punctuation, a reworded
-   title), and a list can hold two achievements that differ only by
-   punctuation ("BB" and "BB..."). So every pair across two lists is scored -
-   name mostly, description as backup - and pairs are settled best first, each
-   achievement used once; pairs scoring under MATCH_FLOOR stay separate
-   (a PlayStation platinum, a store-only extra). Display only: nothing stored
-   changes. Measured on the owner's library (Nov 2026): no wrong pairings. */
-
-const MATCH_FLOOR = 0.6;
-const loose = (s) => (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-const wordSet = (s) =>
-  new Set(
-    (s ?? "")
-      .toLowerCase()
-      .replace(/[^a-z0-9 ]/g, " ")
-      .split(/\s+/)
-      .filter(Boolean),
-  );
-const pairsOf = (s) => {
-  const t = loose(s);
-  const out = new Set();
-  for (let i = 0; i < t.length - 1; i++) out.add(t.slice(i, i + 2));
-  return out;
-};
-const dice = (a, b) => {
-  if (!a.size || !b.size) return 0;
-  let shared = 0;
-  for (const x of a) if (b.has(x)) shared++;
-  return (2 * shared) / (a.size + b.size);
-};
-const nameScore = (a, b) =>
-  a === b
-    ? 1
-    : loose(a) === loose(b)
-      ? 0.95
-      : dice(pairsOf(a), pairsOf(b)) * 0.9;
-const descScore = (a, b) => (!a || !b ? 0.5 : dice(wordSet(a), wordSet(b)));
-const pairScore = (x, y) =>
-  0.6 * nameScore(x.name, y.name) +
-  0.4 * descScore(x.description, y.description);
-
-/** One list from several: { total, unlocked, platinum } (earned on any store). */
-function combineLists(all) {
-  let master = all[0].map((a) => ({ ...a, earned: !!a.unlocked_at }));
-  for (const list of all.slice(1)) {
-    const pairs = [];
-    master.forEach((m, i) =>
-      list.forEach((a, j) => {
-        const s = pairScore(m, a);
-        if (s >= MATCH_FLOOR) pairs.push([s, i, j]);
-      }),
-    );
-    pairs.sort((p, q) => q[0] - p[0]);
-    const usedM = new Set();
-    const usedL = new Set();
-    for (const [, i, j] of pairs) {
-      if (usedM.has(i) || usedL.has(j)) continue;
-      usedM.add(i);
-      usedL.add(j);
-      if (list[j].unlocked_at) master[i].earned = true;
-    }
-    list.forEach((a, j) => {
-      if (!usedL.has(j)) master.push({ ...a, earned: !!a.unlocked_at });
-    });
-  }
+/** Totals for one game across stores: { total, unlocked, platinum }. */
+function combinedCounts(all) {
+  const master = combineLists(all);
   return {
     total: master.length,
     unlocked: master.filter((m) => m.earned).length,
     platinum: master.filter((m) => m.earned && m.tier === "platinum").length,
   };
 }
-
 /** Where a game comes from: the store on PC (Steam, Epic), else the console family. */
 function source(row) {
   return row.platform === "pc" ? (row.version ?? "unknown") : row.platform;
@@ -265,7 +218,7 @@ function isCovered(row, list) {
 /**
  * One card per IGDB game, so the same game from several platforms is one
  * card. Playtime is added up and last played is the newest. Achievements are
- * the stores' lists combined (see combineLists), leaving out a store that
+ * the stores' lists combined (see achievements.js), leaving out a store that
  * hides the player's progress when another shows it. Unmatched rows stay on
  * their own. `stores` lists where the game is owned, for the store filters.
  */
@@ -294,7 +247,7 @@ function mergeByGame(list) {
     )[0];
     const combined =
       visible.length > 1 && visible.every((r) => lists.has(r.id))
-        ? combineLists(visible.map((r) => lists.get(r.id)))
+        ? combinedCounts(visible.map((r) => lists.get(r.id)))
         : null;
     return {
       ...group[0],
@@ -329,7 +282,6 @@ function mergeByGame(list) {
 }
 
 function render() {
-  const games = mergeByGame(rows);
   const counts = new Map();
   for (const g of games)
     for (const s of g.stores) counts.set(s, (counts.get(s) ?? 0) + 1);
@@ -353,7 +305,21 @@ function render() {
   const list = filters.size
     ? games.filter((g) => g.stores.some((s) => filters.has(s)))
     : games;
-  root.querySelector("#l-grid").innerHTML = list.sort(sort).map(card).join("");
+  root.querySelector("#l-grid").innerHTML = [...list]
+    .sort(sort)
+    .map(card)
+    .join("");
+  applySearch();
+}
+
+/** Plain title match on the drawn cards, ignoring case and punctuation. */
+function applySearch() {
+  const query = loose(root.querySelector("#l-search").value);
+  for (const el of root.querySelectorAll("#l-grid .library-card"))
+    el.classList.toggle(
+      "hidden",
+      Boolean(query) && !el.dataset.title.includes(query),
+    );
 }
 
 let toastTimer;
@@ -505,8 +471,13 @@ function card(row) {
     ? [year, gameTypeLabel(game.game_type)].filter(Boolean).join(" · ")
     : "not matched";
 
+  const link =
+    row.igdb_id != null
+      ? ` library-card-link" data-game="${row.igdb_id}" role="link" tabindex="0`
+      : "";
+
   return `
-    <article class="library-card">
+    <article class="library-card${link}" data-title="${escapeHtml(loose(row.title))}">
       <div class="library-cover">
         ${cover ? `<img src="${escapeHtml(cover)}" alt="" loading="lazy" />` : `<span class="meta">no art</span>`}
       </div>
@@ -542,6 +513,10 @@ function achievementLine(row) {
       : "achievements";
   const platinum = row.platinum?.[0]?.count ? " · platinum" : "";
   return `<p class="meta">${unlocked}/${total} ${noun} · ${Math.floor(completion(row) * 100)}%${platinum}</p>`;
+}
+
+function loose(s) {
+  return (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 function byTitle(a, b) {

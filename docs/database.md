@@ -408,8 +408,9 @@ old CS:GO achievements would have survived CS2 taking over Steam app 730.
 What each platform gives (checked against the real library, Nov 2026):
 
 - **Group names:** PSN yes (`getTitleTrophyGroups`, e.g. "Watcher", "1.6 Update";
-  the `default` group is the base game). Steam only on the community page below,
-  for some games. Epic no: every achievement carries its set id and `isBase`, so
+  the `default` group is the base game, and add-on groups often repeat the
+  game's name: "Marvel's Midnight Suns: Blood Storm"). Steam only on the
+  community page below, for some games, with no order between groups. Epic no: every achievement carries its set id and `isBase`, so
   base game and each add-on can be told apart, but sets have no name field at
   all (the API rejects `name`, `title`, `displayName`).
 - **Secret text:** PSN (`trophyDetail`) and Epic (`unlockedDescription`) give it

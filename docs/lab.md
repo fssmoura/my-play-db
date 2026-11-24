@@ -9,10 +9,13 @@ share the API, the sign-in and the database.
 The lab has no sign-in of its own: when signed out it redirects to
 `/?next=<its own path>`. See [auth.md](auth.md#gate-1---who-can-sign-in).
 
-Tabs: Connections, API console, Library, Game, and Media (the artwork picker,
-which has no visible tab - it is reached from a game's "Select media" button
-as `?media=<igdb id>`). Every tab is in the address (`?tab=<id>`, or
-`?game=`/`?media=`), so a refresh stays on it. All views mount at page load,
+Tabs: Connections, API console, Library, Game, Media and Achievements. The last
+three have no visible tab until reached: Game from clicking a matched library
+card (`?game=<igdb id>`; unmatched cards don't open), Media and Achievements
+from a game's buttons (`?media=<igdb id>`, `?achievements=<igdb id>`). Game's
+tab then stays for the visit; the other two close as soon as you leave them.
+Every tab is in the address (`?tab=<id>`, or `?game=`/`?media=`/
+`?achievements=`), so a refresh stays on it. All views mount at page load,
 hidden or not, so anything a view should do only when seen (the Library's
 sync) must watch for its section being shown.
 
@@ -58,14 +61,37 @@ when another shows it. The store buttons
 next to the sort buttons narrow the list to games owned on any of the chosen
 stores; the cards stay merged. A versionless row whose game another platform
 has is only a date ([database.md](database.md#sync-model)): it feeds that date
-but doesn't count as a store, so it isn't under Unknown.
+but doesn't count as a store, so it isn't under Unknown. The matching lives in
+`public/lab/js/achievements.js`, shared with the Achievements tab, so a card
+and its game's list always agree.
+
+**Achievements tab.** One list per game, combined across stores by the same
+matching as the Library cards. The base list is the store with the most
+information (PlayStation, then Xbox/Epic, then Steam, then EA); name, image,
+group, grade and rarity come from it, and the other stores' copies only add
+whether and when it was earned (the first time, on any store; which store isn't
+shown). Groups follow the base store's order (PlayStation's trophy order; Steam keeps none ([database.md](database.md#achievements-columns)), so its largest group leads), the first open. PlayStation's first
+group, and any unnamed one, is always "Base Game"; achievements no copy matched
+go together in "Other". A group name starting with the game's name (IGDB's, or
+the base group's as the store spells it) shows only the rest ("Marvel's
+Midnight Suns: Blood Storm" -> "Blood Storm"), unless nothing would be left,
+the rest starts with a number or roman numeral (a sequel: Hitman 3's "HITMAN
+2"), or with a bracket. The line under the title adds "Platinum in" or
+"Completed in" (100%): from the first play (PlayStation's `first_played`) or
+the first unlock on any store, whichever is earlier, since the game may have
+been started on another store; to the platinum or last unlock. Sort buttons
+order within each group, never across groups. The rarity label is ours, the
+same for every store (under 5% ultra rare, 10% very rare, 20% rare, 50%
+uncommon). Only locked secret achievements are blurred; unlocked ones are no
+longer spoilers.
 
 **Game tab.** Freshness is a plain 24-hour timer (why there is no "has it
 changed?" check:
 [api.md](api.md#updated_at-and-checksum-are-not-change-signals); the two sync
 clocks: [database.md](database.md#fully_synced_at-and-the-daily-refresh)). It
 shows every column of the row, including empty ones, so you can see exactly
-what we hold.
+what we hold. Its sections start collapsed; ones you open stay open for the
+visit, across games.
 
 **Media picker.**
 

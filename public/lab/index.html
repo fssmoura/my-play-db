@@ -30,11 +30,17 @@
         </button>
         <button data-view="console" aria-selected="false">API console</button>
         <button data-view="library" aria-selected="false">Library</button>
-        <button data-view="game" aria-selected="false">Game</button>
-        <!-- Only reachable from a game page's "Select media" button, so it
-             stays hidden until you have been there. -->
+        <!-- Game is only reachable from a library card, and Media and
+             Achievements only from a game page's buttons, so each stays
+             hidden until you have been there. -->
+        <button data-view="game" aria-selected="false" class="hidden">
+          Game
+        </button>
         <button data-view="media" aria-selected="false" class="hidden">
           Media
+        </button>
+        <button data-view="achievements" aria-selected="false" class="hidden">
+          Achievements
         </button>
       </nav>
 
@@ -44,6 +50,7 @@
         <section id="view-library" class="hidden"></section>
         <section id="view-game" class="hidden"></section>
         <section id="view-media" class="hidden"></section>
+        <section id="view-achievements" class="hidden"></section>
       </main>
     </div>
 

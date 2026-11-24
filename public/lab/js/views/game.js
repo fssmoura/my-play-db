@@ -225,24 +225,30 @@ function renderGame(row, source, stale) {
     : null;
 
   const status = stale
-    ? `IGDB unreachable - showing stored copy from ${age} ago`
+    ? `IGDB unreachable - stored copy from ${age} ago`
     : source === "igdb"
       ? "just pulled from IGDB"
-      : `from the database - synced ${age} ago`;
+      : `synced ${age} ago`;
 
   el().innerHTML = `
     <header class="game-head">
-      <div class="game-artset">${renderArt(row)}</div>
-      <div class="game-head-body">
+      <button type="button" id="g-refresh" class="link-button game-reload" title="Pull this game from IGDB again">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>
+        Reload
+      </button>
+      <div class="game-title">
         <h2>${escapeHtml(row.name ?? "(no name)")}</h2>
         <p class="meta">
-          IGDB ${row.id} &middot; ${escapeHtml(gameTypeLabel(row.game_type))}
+          ${escapeHtml(gameTypeLabel(row.game_type))}
           ${row.first_release_date ? ` &middot; ${new Date(row.first_release_date * 1000).getFullYear()}` : ""}
+          &middot; <span class="${stale ? "error" : ""}">${escapeHtml(status)}</span>
         </p>
-        <p class="meta ${stale ? "error" : ""}">${escapeHtml(status)}</p>
+      </div>
+      <div class="game-artset">${renderArt(row)}</div>
+      <div class="game-head-body">
         <div class="button-row">
-          <button type="button" id="g-refresh">Force refresh</button>
           <button type="button" id="g-media">Select media</button>
+          <button type="button" id="g-achievements">Achievements</button>
           <button type="button" id="g-hltb-refresh">Refresh playtimes</button>
         </div>
       </div>
@@ -251,6 +257,7 @@ function renderGame(row, source, stale) {
     ${renderSections(row)}
   `;
 
+  rememberOpen(el());
   el()
     .querySelector("#g-refresh")
     ?.addEventListener("click", async () => {
@@ -266,6 +273,12 @@ function renderGame(row, source, stale) {
   el()
     .querySelector("#g-media")
     ?.addEventListener("click", () => go("media", { media: row.id }));
+
+  el()
+    .querySelector("#g-achievements")
+    ?.addEventListener("click", () =>
+      go("achievements", { achievements: row.id }),
+    );
 
   el()
     .querySelectorAll("[data-game-id]")
@@ -299,12 +312,32 @@ function renderSections(row) {
     2,
     0,
     `
-    <section class="game-section" id="g-hltb">
-      <h3>HowLongToBeat</h3>
+    <details class="game-section" id="g-hltb"${openAttr("HowLongToBeat")}>
+      <summary><h3>HowLongToBeat</h3></summary>
       <div id="g-hltb-body"><p class="meta">Checking&hellip;</p></div>
-    </section>`,
+    </details>`,
   );
   return rendered.join("");
+}
+
+/**
+ * Sections start collapsed. Ones you open stay open for the visit, across
+ * games and refreshes, so the page keeps showing what you're looking at.
+ */
+const openSections = new Set();
+
+function openAttr(title) {
+  return openSections.has(title) ? " open" : "";
+}
+
+function rememberOpen(target) {
+  target.querySelectorAll("details.game-section").forEach((node) =>
+    node.addEventListener("toggle", () => {
+      const title = node.querySelector("summary").textContent.trim();
+      if (node.open) openSections.add(title);
+      else openSections.delete(title);
+    }),
+  );
 }
 
 /* ----------------------------------------------------------- howlongtobeat -- */
@@ -446,10 +479,10 @@ function renderSection(row, section) {
     .join("");
 
   return `
-    <section class="game-section">
-      <h3>${escapeHtml(section.title)}</h3>
+    <details class="game-section"${openAttr(section.title)}>
+      <summary><h3>${escapeHtml(section.title)}</h3></summary>
       <dl class="game-fields">${rows}</dl>
-    </section>`;
+    </details>`;
 }
 
 /** Returns HTML, or null when there is genuinely nothing stored. */
