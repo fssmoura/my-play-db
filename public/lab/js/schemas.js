@@ -303,7 +303,7 @@ export const SCHEMAS = {
       {
         name: "type",
         type: "json",
-        hint: "Filter by game_type: one number or an array of them (integers 0-14). 0 = main game, 1 = DLC, 2 = expansion, 3 = bundle.",
+        hint: "Filter by game_type: one number or an array of them (integers 0-14). 0 = base game, 1 = DLC, 2 = expansion, 3 = bundle.",
         placeholder: "0 or [0,1]",
       },
     ],

@@ -1,7 +1,7 @@
 // The game types a result can be filtered by: IGDB's category numbers (0-14)
 // with their labels, in display order. No presentation in here.
 export const TYPES = [
-  { value: 0, label: "Main Game" },
+  { value: 0, label: "Base Game" },
   { value: 1, label: "DLC" },
   { value: 2, label: "Expansion" },
   { value: 3, label: "Bundle" },

@@ -16,7 +16,7 @@
 
 /** IGDB `game_type` enum. Value -> human label. */
 export const GAME_TYPES = {
-  0: "main game",
+  0: "base game",
   1: "dlc / addon",
   2: "expansion",
   3: "bundle",
@@ -138,12 +138,12 @@ function popularityScore(game) {
 }
 
 /**
- * Nudge by game type: a main game should outrank the DLC, bundle and
+ * Nudge by game type: a base game should outrank the DLC, bundle and
  * "Collector's Edition" entries sharing its name, and mods and content updates
  * are almost never what you meant.
  */
 const TYPE_WEIGHT = {
-  0: 60, // main game
+  0: 60, // base game
   1: 10, // dlc / addon
   2: 10, // expansion
   3: 0, // bundle

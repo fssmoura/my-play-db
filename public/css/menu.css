@@ -576,7 +576,7 @@
   visibility: visible;
 }
 
-/* Per-type result counts: "Main Game (39)", in the label's own size but dimmer,
+/* Per-type result counts: "Base Game (39)", in the label's own size but dimmer,
    only once there are results. */
 .menu-panel-count {
   display: none;
