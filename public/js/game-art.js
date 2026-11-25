@@ -1,7 +1,8 @@
 // Game art for the game page, no DOM.
 //
-//   resolveGameArt(id) -> { banner, cover, logo, status }
+//   resolveGameArt(id) -> { banner, cover, logo, status, game }
 //
+// game is the games row it read (or null), for the page's other details.
 // banner / cover / logo are the first entry of each stored array (the chosen
 // image), or null. status: "ready" (resolved), "none" (SteamGridDB has no
 // match for this game) or "error" (something failed; the art is whatever we
@@ -103,6 +104,7 @@ const artOf = (row, status) => ({
   cover: first(row, "cover"),
   logo: first(row, "logo"),
   status,
+  game: row ?? null,
 });
 
 async function run(id, injected) {

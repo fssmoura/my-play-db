@@ -60,9 +60,13 @@
   }
 }
 
-/* Back, title block, Save: the circles sit 25px from the top and sides, like
-   the app's top bar. */
+/* Back, title block, then the relink (search) circle; on Preview, Reset and
+   Save slide in from off-screen right with --actions-t and the relink circle
+   moves left to make room (112px: two 44px circles and their 12px gaps). The
+   circles sit 25px from the top and sides, like the app's top bar. */
 .customize-header {
+  --actions-t: 0;
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -73,6 +77,29 @@
   flex: none;
   width: 44px;
   padding: 0;
+}
+
+#customize-relink {
+  margin-right: calc(112px * var(--actions-t));
+}
+
+/* 125px puts Reset (the further in) fully past the drawer's right edge. */
+.menu.customize-action {
+  position: absolute;
+  top: 25px;
+  display: none;
+}
+
+.customize-header.has-actions .customize-action {
+  display: flex;
+}
+
+.menu.customize-save {
+  right: calc(25px - 125px * (1 - var(--actions-t)));
+}
+
+.menu.customize-reset {
+  right: calc(81px - 125px * (1 - var(--actions-t)));
 }
 
 /* Reset to Defaults: Apple's critical red on the icon (as Sign Out). */
@@ -94,16 +121,18 @@
 }
 
 .customize-title {
-  font-size: 17px;
+  color: var(--white);
+  font-size: 15px;
   font-weight: 600;
-  line-height: 22px;
+  line-height: 20px;
 }
 
+/* The linked SteamGridDB entry. Subheadline over footnote (HIG text styles). */
 .customize-meta {
-  margin-top: 1px;
+  min-height: 18px;
   color: rgba(244, 244, 244, 0.6);
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 13px;
+  line-height: 18px;
 }
 
 /* Tabs: centred at the bottom, where the game page's toolbar sits, floating

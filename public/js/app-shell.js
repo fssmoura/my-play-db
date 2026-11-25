@@ -230,6 +230,7 @@ export function mountApp() {
   const gamePage = createGamePage({
     game,
     content,
+    library,
     onProgress: pages.setCovered,
   });
   // The game page sits on top of search: search keeps its query, results and

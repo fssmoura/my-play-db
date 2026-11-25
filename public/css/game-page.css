@@ -63,7 +63,65 @@ html.is-game-open body {
 }
 
 .game-spacer {
+  position: relative;
   height: 85px;
+}
+
+/* The name over type · date, in the top bar between Back (25px + 44px + 12px
+   gap) and the menu pill (--heading-right, measured in game-page.js), like the
+   Customize header: subheadline over footnote (HIG typography). It is in the
+   spacer, so the rising sheet scrolls it away. */
+.game-heading {
+  position: absolute;
+  top: 25px;
+  left: 81px;
+  right: var(--heading-right, 177px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 44px;
+  /* Stays put while the layer slides, and dissolves instead: in over the
+     second half of opening, out over the first half of closing. */
+  transform: translateY(calc((1 - min(var(--game-t), 1)) * -100dvh));
+  opacity: clamp(0, calc(var(--game-t) * 2 - 1), 1);
+}
+
+/* Arriving after the sheet is open (once the game's details load). */
+.game-heading > * {
+  animation: game-heading-in 0.3s ease-out;
+}
+
+@keyframes game-heading-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-heading > * {
+    animation: none;
+  }
+}
+
+.game-title,
+.game-meta {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.game-title {
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.game-meta {
+  color: rgba(244, 244, 244, 0.6);
+  font-size: 12px;
+  line-height: 16px;
 }
 
 /* At least a screen tall, with the grid's side inset (full width on phones).
@@ -129,11 +187,9 @@ html.is-game-open body {
    the banner's bottom edge (the head isn't clipped, so it hangs below); with no
    banner it sits at the top with 32px of space. It pins with the banner. */
 .game-logo {
-  --logo-ratio: 3;
-  --logo-side: clamp(96px, 30vw, 190px);
   position: relative;
   width: min(72%, calc(var(--logo-side) * sqrt(var(--logo-ratio))));
-  height: min(26vw, 150px, calc(var(--logo-side) / sqrt(var(--logo-ratio))));
+  height: var(--logo-h);
   margin: 0 auto;
   opacity: 0;
   transition: opacity 0.25s ease-out;
@@ -231,12 +287,150 @@ html.is-game-open body {
   opacity: 1;
 }
 
+/* The platform marks under the logo (game-info.js). They are content, so they
+   scroll; their top clears the logo's half that hangs below the banner,
+   following the logo's height. */
+.game-info {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  margin: 20px 16px 0;
+  color: rgba(244, 244, 244, 0.6);
+  transition: margin-top 0.25s ease-out;
+}
+
+.game-info:first-child {
+  margin-top: 32px;
+}
+
+.game-info-label {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.game-head.has-banner:has(.game-logo) + .game-info {
+  margin-top: calc(var(--logo-h) / 2 - 8px + 40px);
+}
+/* An icon in the line's own grey. Every icon gets the
+   same width, centred, so they sit evenly however much of it their shape fills;
+   20px fits the widest. */
+.game-platform {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+}
+
+.game-info-label {
+  margin-right: 4px;
+}
+
+.game-platform svg {
+  width: auto;
+  height: calc(15px * var(--icon-scale, 1));
+  /* Crops are exact, so edge anti-aliasing would otherwise be clipped. */
+  overflow: visible;
+}
+
+/* Owned (in the library on this platform or store): white, not grey. */
+.game-platform.is-owned {
+  color: #f4f4f4;
+  border-color: #f4f4f4;
+}
+
+/* The tooltip: a small dark label centred under the mark, shown on hover
+   (mouse) or after a tap (.is-tip). */
+.game-platform {
+  position: relative;
+}
+
+.game-tip {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  z-index: 2;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(40, 40, 44, 0.92);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  color: #f4f4f4;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -2px);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.game-tip-line {
+  display: block;
+  text-align: center;
+}
+
+.game-tip-line + .game-tip-line {
+  margin-top: 3px;
+}
+
+.game-tip:has(svg) {
+  padding: 8px 12px;
+}
+
+.game-tip-line:has(svg) + .game-tip-line {
+  margin-top: 8px;
+}
+
+.game-platform .game-tip-line svg {
+  display: block;
+  margin: 0 auto;
+  height: calc(13px * var(--icon-scale, 1));
+}
+
+.game-platform.is-tip .game-tip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (hover: hover) {
+  .game-platform:hover .game-tip {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-tip {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-info {
+    transition: none;
+  }
+}
+
 /* Loading state, at sheet level (not tied to the banner): while .game-sheet has
    .is-loading the whole surface shimmers and the content is hidden; when it
    ends the content fades in and the shimmer fades out. Same shimmer as the
    result cards (result-shimmer / result-pulse in pages.css). Covers the first
    sheet; the edge stroke (z-index 2) stays on top. */
 .game-sheet-body {
+  /* The logo's size (see .game-logo), here so the info line can follow it.
+     --logo-ratio is set on this element once the logo loads. */
+  --logo-ratio: 3;
+  --logo-side: clamp(96px, 30vw, 190px);
+  --logo-h: min(26vw, 150px, calc(var(--logo-side) / sqrt(var(--logo-ratio))));
   transition: opacity 0.3s ease-out;
 }
 

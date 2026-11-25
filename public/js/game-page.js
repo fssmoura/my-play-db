@@ -2,18 +2,21 @@
 // results. Behaviour only - the look lives in css/game-page.css, and the one
 // number that animates it is --game-t (0 hidden, 1 open) on the layer.
 //
-//   createGamePage({ game, content })
+//   createGamePage({ game, content, library })
 //
 // - game: the game state (game-state.js). The sheet opens and closes in
 //   response to its "open" / "close" events; nothing here touches the address
 //   or the top bar.
 // - content: the page behind (#app-content). It stays mounted and keeps its
 //   scroll position, but is made inert while the sheet is open.
+// - library: the owner's library (library.js), for which platforms and stores
+//   the platform marks show as owned.
 // - onProgress(t): called with the sheet's progress (0 hidden, 1 open) on every
 //   frame, including while a finger drags it, so the page behind can fade in
 //   step (pages.js `setCovered`).
 //
-// The sheet is empty apart from the game's banner, when it has one, and shows a
+// The sheet holds the game's banner and logo, when it has them, and the info
+// line under them (game-info.js); it shows a
 // whole-sheet shimmer (.is-loading) while the game's art resolves. Closing hands focus back to the card that opened
 // it. Dragging it down (touch, pen or mouse) dismisses it like Back.
 
@@ -26,6 +29,7 @@ import {
 } from "/js/glass-refresh.js";
 import { resolveGameArt } from "/js/game-art.js";
 import { displayImageUrl, loadImageForGlass } from "/js/image-url.js";
+import { gameHeading, gameInfoLine } from "/js/game-info.js";
 
 const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -60,7 +64,7 @@ function buildLayer() {
   scroller.append(spacer, sheet);
 
   layer.append(scroller);
-  return { layer, sheet, scroller, body };
+  return { layer, sheet, scroller, body, spacer };
 }
 
 // Past this fraction of the sheet's visible height, or flicked faster than
@@ -71,7 +75,7 @@ const SLOP = 8;
 // The sheet's resting top, px from the viewport top (css: .game-spacer).
 const REST_TOP = 85;
 
-export function createGamePage({ game, content, onProgress }) {
+export function createGamePage({ game, content, library, onProgress }) {
   let parts = null;
   let overlay = null;
   let opener = null;
@@ -145,22 +149,40 @@ export function createGamePage({ game, content, onProgress }) {
   // arrives; a failed one removes its box. An answer for a game that is no
   // longer the open one is dropped (it touches no UI state).
   let artRun = 0;
+  // The open game's row, for redrawing its platform marks.
+  let shown = null;
   function setLoading(on) {
     parts?.sheet.classList.toggle("is-loading", on);
     game.reportLoading(on);
   }
   async function loadArt(id) {
     const run = ++artRun;
+    shown = null;
     parts?.body.querySelector(".game-head")?.remove();
+    parts?.body.querySelector(".game-info")?.remove();
+    parts?.spacer.querySelector(".game-heading")?.remove();
+    parts?.body.style.removeProperty("--logo-ratio");
     setLoading(true);
     let banner = null;
     let logo = null;
+    let row = null;
     try {
-      ({ banner, logo } = await resolveGameArt(id));
+      ({ banner, logo, game: row } = await resolveGameArt(id));
     } catch {
       // resolveGameArt does not throw; stay defensive so loading always ends.
     }
     if (run !== artRun || !parts) return;
+    // The heading sits in the spacer, between Back and the menu pill, so the
+    // rising sheet scrolls it away.
+    const heading = gameHeading(row);
+    if (heading) {
+      fitHeading();
+      parts.spacer.append(heading);
+    }
+    // The platform marks go under the header (or at the top when there is
+    // none) and scroll with the content rather than pinning.
+    shown = row ? { id, row } : null;
+    placeInfo();
     const bannerUrl = banner ? displayImageUrl(banner, "banner") : null;
     const logoUrl = logo ? displayImageUrl(logo, "logo") : null;
     if (!bannerUrl && !logoUrl) return finishLoading(run);
@@ -195,7 +217,8 @@ export function createGamePage({ game, content, onProgress }) {
         onLoad: () => {
           if (run !== artRun) return;
           if (cls === "game-logo" && img.naturalWidth && img.naturalHeight) {
-            box.style.setProperty(
+            // On the body, so the info line below can follow the logo's height.
+            parts.body.style.setProperty(
               "--logo-ratio",
               String(img.naturalWidth / img.naturalHeight),
             );
@@ -223,6 +246,27 @@ export function createGamePage({ game, content, onProgress }) {
     if (logoUrl) addImage("game-logo", logoUrl);
     overlay?.update();
     finishLoading(run);
+  }
+
+  // The platform marks, redrawn in place (after the header, if any).
+  function placeInfo() {
+    if (!parts) return;
+    parts.body.querySelector(".game-info")?.remove();
+    if (!shown) return;
+    const info = gameInfoLine(shown.row, library?.copies(shown.id) ?? []);
+    if (!info) return;
+    const head = parts.body.querySelector(".game-head");
+    if (head) head.after(info);
+    else parts.body.prepend(info);
+  }
+
+  // The heading ends 12px short of the menu pill, whose width follows its
+  // button count, so it is measured (on open and on resize).
+  function fitHeading() {
+    const pill = document.querySelector(".menu-bar > :last-child");
+    if (!pill || !parts) return;
+    const gap = window.innerWidth - pill.getBoundingClientRect().left + 12;
+    parts.spacer.style.setProperty("--heading-right", `${Math.round(gap)}px`);
   }
 
   // Waits for the fade to finish before the lenses retake their picture.
@@ -420,12 +464,17 @@ export function createGamePage({ game, content, onProgress }) {
   const offArt = game.on("art", ({ id }) => {
     if (parts && id === game.id) loadArt(id);
   });
+  // The library may arrive after the page opened: the marks then show what is owned.
+  const offLibrary = library?.on("change", placeInfo);
+  window.addEventListener("resize", fitHeading);
 
   return {
     destroy() {
       offOpen();
       offClose();
       offArt();
+      offLibrary?.();
+      window.removeEventListener("resize", fitHeading);
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown, true);
       spring.destroy();

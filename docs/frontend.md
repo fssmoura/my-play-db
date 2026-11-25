@@ -237,6 +237,44 @@ For large originals, use the host's own resize parameter if it has one.
   bright banners.
 - The bottom bar's spring variables live on the stage, not the bar - a
   declaration on the bar would override the inherited value.
+- **Platform icons** (`game-info.js`) are cropped to their drawing: each
+  `viewBox` is the path's real bounds, measured with `getBBox()` in the
+  browser (the `svg-path-bounds` package gave wrong ones), so a common height
+  makes them match. Logos that still look too big or small get a `scale`.
+
+### Scrolling, once the page has content
+
+The sheet has only the platform line so far, so it is one screen tall and
+barely scrolls.
+The scroll behaviour was built against a temporary filler
+(`.game-sheet-body { min-height: 250dvh }`, added in 1dee22d, removed in
+1404f76); put it back locally to test scrolling before real content exists.
+What depends on the sheet being taller than the screen:
+
+- **One scroller for everything** (`.game-scroll`): an 85px spacer, then the
+  sheet. Scrolling first lifts the sheet to the top of the viewport, then
+  scrolls its content. Content goes inside `.game-sheet-body`, never in a
+  scroller of its own, or the rise, the indicator and the toolbar all stop
+  seeing it.
+- **Sticky header:** `.game-head` (banner and logo) pins at the top, and
+  content disappears under the banner's black. Content must stay below the
+  head (`z-index` under 1), and the sheet must stay `overflow: clip`.
+- **Edge stroke** (`.game-sheet::after`) covers only the first screenful
+  (`100dvh - 85px`), sized to the Figma frame; it is not meant to run the
+  sheet's full length.
+- **Scroll indicator** (`overlay-scroll.js`) starts below the banner
+  (`trackTop()`) and follows content height on its own (ResizeObserver).
+- **Bottom toolbar** goes compact after scrolling, and expands only at the top
+  or on tap (`game.reportScroll` -> `bottom-bar.js`). Not done yet: the end of
+  the content needs bottom padding so the floating toolbar doesn't cover it.
+- **Swipe down to close** only starts when the scroller is at the top.
+- **Glass:** scrolling during the rise retakes the top bar's glass (throttled);
+  past it, nothing under the lenses changes, so it doesn't. Content that
+  arrives or changes height after opening doesn't change the page's size, so
+  liquidGL won't notice: call `refreshGlass()` once it settles, as the banner
+  does (`settle()` in `game-page.js`).
+- **Loading:** `.game-sheet-body` is hidden while the sheet shimmers; new
+  content appears with the rest when `finishLoading()` runs.
 
 ### Game page art
 

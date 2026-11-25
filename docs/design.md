@@ -118,6 +118,22 @@ Rules a redesign must keep, with the HIG reason where there is one.
   banner as it scrolls. Banner and logo show only when the game has them.
 - Logos are sized to roughly the same area whatever their shape, so wide and
   squarer logos carry similar weight; they sit centred on the banner's edge.
+- Under the logo, "Available for" then one grey icon per platform family:
+  PC, PlayStation, Xbox, Switch, Wii, GameCube, Game Boy, Nintendo (every
+  other Nintendo system), Mac, Linux, Mobile, VR, Web Browser, then Other for
+  anything left, so no platform is left out. Families the owner has the game
+  on are white instead. Each icon's tooltip (below it, on hover or after a
+  tap) names its systems one per line, newest first, counting owned copies
+  IGDB doesn't list; PlayStation's shows each console's wordmark instead of
+  its name. On PC, owned copies show their stores' icons (Steam, Epic, EA...)
+  in place of Windows; a copy with no store recorded, or recorded only as
+  "other", keeps Windows. Every icon sits centred in the same width, so the
+  row looks evenly spaced whatever each logo's shape; equal gaps between
+  edges looked uneven. The line scrolls with the content.
+- In the top bar, between Back and the menu pill, the game's name in white
+  over type · first release date (earliest on any platform) in grey, like the
+  Customize header. It dissolves in and out as the game opens and closes
+  rather than sliding with the sheet, and scrolls away as the sheet rises.
 
 **Bottom toolbar (game page)**
 
@@ -134,13 +150,17 @@ Rules a redesign must keep, with the HIG reason where there is one.
   the game sheet going edge to edge) and a side panel 40% of the window wide
   over a dimmed page above that. Back reverses the slide; Escape and tapping
   the dimmed page also close it, and closing the game page closes it at once.
-- Header: Back circle, game title with "type · year" under it, a red Reset
-  circle (Apple's critical colour), and a circle that reads Next (arrow) on
-  Poster, Banner and Logo and Save (checkmark) on Preview. The tabs (Poster,
-  Banner, Logo, Preview) sit at the bottom where the game page's toolbar is,
+- Header: Back circle, then two lines: the game's "name (year)" in
+  white (subheadline, semibold), and under it the linked SteamGridDB entry
+  as `Match found: "name (year)"` in grey (footnote), or "No match found",
+  so a wrong match shows; then a search
+  circle that opens the SteamGridDB link pop-up (below). On Preview a red
+  Reset circle (Apple's critical colour) and a Save (checkmark) circle slide
+  in from the right, the search circle moving left to make room; on the other
+  tabs neither shows. The tabs (Poster, Banner, Logo, Preview) sit at the bottom where the game page's toolbar is,
   text only, with the active one on a glass pill that slides between them.
-  Tabs never advance on their own. Content ends above the tabs, so their glass
-  sits on plain black.
+  Tabs never advance on their own, and only tapping one changes tab.
+  Content ends above the tabs, so their glass sits on plain black.
 - Poster, Banner and Logo are grids of every SteamGridDB image of that type,
   in SteamGridDB's order (animated and NSFW included), each with its size on
   a thin dark band at its bottom left. Posters sit in a 2:3 box: 600x900 fills
@@ -165,13 +185,16 @@ Rules a redesign must keep, with the HIG reason where there is one.
   gets - the IGDB poster (or SteamGridDB's first static one) and
   SteamGridDB's first static banner and logo - and shows Preview; still only
   Save writes it.
-- A game SteamGridDB couldn't match (`sgdb_id` 0) shows a centred pop-up over
-  the whole drawer, dimmed and out of reach, header and tabs included: the
-  title in regular weight on the left, a plain close icon on the right, a
-  search field pre-filled with the game's name, and SteamGridDB's results as
-  "Name (year)". Choosing one links it for good (straight away, unlike image
-  picks) and fills the grids; closing it leaves them showing "No Results
-  Available". The pop-up is content, so it is a plain card, not glass.
+- The SteamGridDB link pop-up, "Select SteamGridDB Match", opens from the
+  search circle for any game, and on its own for a game SteamGridDB couldn't
+  match (`sgdb_id` 0). It is centred over the whole drawer, dimmed and out of
+  reach, header and tabs included: the title in regular weight on the left,
+  a plain close icon on the right, a search field pre-filled with the game's
+  name, and SteamGridDB's results as "Name (year)". Choosing one links it for
+  good (straight away, unlike image picks) and reloads the grids; picks
+  already made stay. Closing it (or Escape) leaves the link as it was (for an unmatched
+  game, grids showing "No Results Available"). The pop-up is content, so it
+  is a plain card, not glass.
 
 **Loading**
 
@@ -206,7 +229,7 @@ Google button also keeps Google's official dark-theme colours.
 Liquid glass is for the navigation/controls layer only (the top-right pill
 menu and its pull-downs, the Back circle, the search pill, the filter circle,
 panel and By Type submenu, the game page's bottom toolbar, and the Customize
-drawer's Back, Reset, Next/Save, tab pill and full-screen X), never for content
+drawer's Back, search, Reset, Save, tab pill and full-screen X), never for content
 such as the sign-in form. Apple
 reserves it for the layer that floats above content.
 

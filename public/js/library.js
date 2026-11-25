@@ -1,7 +1,7 @@
 // The owner's library: every game in `player_games`, one entry per IGDB game
 // (the same game on two stores is one entry), most recently played first, in
-// the shape search results use. No DOM. Used by search's In Library filter and
-// the results page's In Library pill.
+// the shape search results use. No DOM. Used by search's In Library filter,
+// the results page's In Library pill and the game page's store marks.
 //
 // Events: "change" (the list was loaded or reloaded).
 import { supabase } from "/js/supabase.js";
@@ -12,7 +12,7 @@ import { matchScore, rankGames } from "/js/ranking.js";
 // Cards and ranking need no platforms or release-date list, which are most of
 // the weight; the card's year comes from first_release_date.
 const COLUMNS =
-  "igdb_id, last_played, games(id, name, slug, game_type, first_release_date, " +
+  "igdb_id, platform, version, last_played, games(id, name, slug, game_type, first_release_date, " +
   "cover, alternative_names, popularity, hypes, rating_count)";
 const PAGE = 1000;
 // load() is called on every search; anything younger is reused.
@@ -46,15 +46,25 @@ function toList(rows) {
   }
   return [...byGame.values()]
     .sort(
-      (a, b) =>
-        b.played - a.played || a.game.name.localeCompare(b.game.name),
+      (a, b) => b.played - a.played || a.game.name.localeCompare(b.game.name),
     )
     .map((entry) => entry.game);
+}
+
+// Every copy held of each game: igdb_id -> [{ platform, version }].
+function toCopies(rows) {
+  const byGame = new Map();
+  for (const { igdb_id, platform, version } of rows) {
+    if (!byGame.has(igdb_id)) byGame.set(igdb_id, []);
+    byGame.get(igdb_id).push({ platform, version });
+  }
+  return byGame;
 }
 
 export function createLibrary() {
   let games = [];
   let ids = new Set();
+  let copies = new Map();
   let ready = false;
   let loading = null;
   let loadedAt = 0;
@@ -68,7 +78,9 @@ export function createLibrary() {
     }
     loading ??= (async () => {
       try {
-        games = toList(await fetchRows());
+        const rows = await fetchRows();
+        games = toList(rows);
+        copies = toCopies(rows);
         ids = new Set(games.map((game) => game.id));
         ready = true;
         loadedAt = Date.now();
@@ -115,6 +127,8 @@ export function createLibrary() {
       return games;
     },
     has: (id) => ids.has(Number(id)),
+    // The game's copies ({ platform, version }), one per store; empty if not owned.
+    copies: (id) => copies.get(Number(id)) ?? [],
     // The game's cover changed (Customize saved): updated in place.
     setCover(id, cover) {
       for (const game of games) if (game.id === Number(id)) game.cover = cover;

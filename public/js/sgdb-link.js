@@ -1,8 +1,9 @@
-// The "no SteamGridDB match" card in the Customize drawer. Shown when the
-// game's lookup found nothing (sgdb_id 0): a search field pre-filled with the
-// name the lookup used, SteamGridDB's results as "Name (year)", and picking
-// one stores it as the game's sgdb_id for good, and the drawer then loads its
-// images. Its close icon leaves it unlinked. The look is in css/customize.css.
+// The SteamGridDB link pop-up in the Customize drawer: opened from the
+// drawer's search circle, or on its own when the game's lookup found nothing
+// (sgdb_id 0). A search field pre-filled with the game's name,
+// SteamGridDB's results as "Name (year)", and picking one stores it as the
+// game's sgdb_id for good, and the drawer then loads its images. Its close
+// icon leaves the link as it was. The look is in css/customize.css.
 
 import { setSgdbId } from "/js/games-cache.js";
 import { createOverlayScroll } from "/js/overlay-scroll.js";
@@ -30,7 +31,7 @@ export function buildSgdbLink() {
   const title = document.createElement("h3");
   title.id = "sgdb-link-title";
   title.className = "sgdb-link-title";
-  title.textContent = "No SteamGridDB Match";
+  title.textContent = "Select SteamGridDB Match";
 
   const field = document.createElement("div");
   field.className = "field sgdb-link-field";
@@ -57,8 +58,8 @@ export function buildSgdbLink() {
   status.setAttribute("role", "status");
   results.append(scroller, status);
 
-  // Title on the left, a plain close icon on the right that leaves the game
-  // unlinked (the drawer stays usable without images).
+  // Title on the left, a plain close icon on the right that leaves the link
+  // as it was (the drawer stays usable without images).
   const head = document.createElement("div");
   head.className = "sgdb-link-head";
   const dismiss = document.createElement("button");

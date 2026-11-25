@@ -14,21 +14,21 @@
 //   with its own saved size on the slider above the tabs. Preview
 //   (customize-preview.js) shows the picks at full size and takes a URL by
 //   hand.
-// - Save moves to the next tab until Preview, where it writes each changed
+// - Save and Reset show only on Preview. Save writes each changed
 //   kind - the pick always first, one other image kept behind it - closes
 //   the drawer and has the game page reload its art. Nothing is written
 //   before that: Back drops every unsaved pick.
 // - Reset (red, beside Save) puts every pick back to the defaults an
 //   untouched game gets; still only Save writes them.
-// - A game with no SteamGridDB match shows a pop-up to link one by hand
-//   (sgdb-link.js); closing it leaves the pickers empty.
+// - The search circle opens a pop-up to link the game to another
+//   SteamGridDB entry by hand (sgdb-link.js). A game with no match gets it
+//   on opening; closing it then leaves the pickers empty.
 
 import { createSpring } from "/js/spring.js";
 import { refreshGlassWithin } from "/js/glass-refresh.js";
 import { loadGameRow, setGameArtArray } from "/js/games-cache.js";
 import { resolveGameArt, firstStaticArt, isIgdb } from "/js/game-art.js";
 import { releaseYear } from "/js/ranking.js";
-import { TYPES } from "/js/result-types.js";
 import { buildSgdbLink, wireSgdbLink } from "/js/sgdb-link.js";
 import { createPicker } from "/js/customize-picker.js";
 import { createPreview } from "/js/customize-preview.js";
@@ -74,8 +74,6 @@ function saveZoom(kind, value) {
   }
 }
 
-const TYPE_LABELS = new Map(TYPES.map((t) => [t.value, t.label]));
-
 const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -101,16 +99,24 @@ export function buildCustomize(buildCircleButton, iconSvg) {
     label: "Back",
     icon: "back",
   });
+  // Opens the SteamGridDB link pop-up, so any game can be linked to another.
+  const relink = buildCircleButton({
+    id: "customize-relink",
+    className: "customize-circle",
+    label: "Select SteamGridDB Match",
+    icon: "search",
+  });
+  // Reset and Save show only on Preview.
   const save = buildCircleButton({
     id: "customize-save",
-    className: "customize-circle",
-    label: "Next",
-    icon: "next",
+    className: "customize-circle customize-action customize-save",
+    label: "Save",
+    icon: "confirm",
   });
   // Puts every pick back to the defaults (not saved until Save).
   const reset = buildCircleButton({
     id: "customize-reset",
-    className: "customize-circle customize-reset",
+    className: "customize-circle customize-action customize-reset",
     label: "Reset to Defaults",
     icon: "reset",
   });
@@ -122,7 +128,7 @@ export function buildCustomize(buildCircleButton, iconSvg) {
   const meta = document.createElement("p");
   meta.className = "customize-meta";
   heading.append(title, meta);
-  header.append(back.circle, heading, reset.circle, save.circle);
+  header.append(back.circle, heading, relink.circle, reset.circle, save.circle);
   // Close for the full-screen image viewer (customize-viewer.js).
   const viewerClose = buildCircleButton({
     id: "customize-viewer-close",
@@ -199,11 +205,12 @@ export function buildCustomize(buildCircleButton, iconSvg) {
     drawer,
     bar,
     scrim,
+    header,
     back: back.button,
+    relink: relink.button,
     save: save.button,
     reset: reset.button,
     viewerClose,
-    iconSvg,
     title,
     meta,
     zoom,
@@ -221,11 +228,12 @@ export function wireCustomize({
   drawer,
   bar,
   scrim,
+  header,
   back,
+  relink,
   save,
   reset,
   viewerClose,
-  iconSvg,
   title,
   meta,
   zoom,
@@ -249,6 +257,7 @@ export function wireCustomize({
   // { url, width, height } or null). After Reset, `defaults` holds the whole
   // array each kind goes back to, backup included.
   let gameId = null;
+  let gameName = null;
   let sgdbId = null;
   let arrays = {};
   let picks = {};
@@ -326,13 +335,18 @@ export function wireCustomize({
     range.style.setProperty("--fill", `${(step / last) * 100}%`);
   }
 
-  // Save reads Next until the last tab.
-  function setSaveIcon() {
-    const last = active === PREVIEW;
-    const label = last ? "Save" : "Next";
-    save.innerHTML = iconSvg(last ? "confirm" : "next");
-    save.title = label;
-    save.setAttribute("aria-label", label);
+  // Reset and Save slide in from the right on Preview, the relink circle
+  // moving left to make room (--actions-t on the header, 0 to 1). At 0 they
+  // are display: none, so nothing reaches them.
+  const actionsSpring = createSpring({
+    onUpdate: (v) => header.style.setProperty("--actions-t", v.toFixed(4)),
+    onRest: (target) => {
+      if (target === 0) header.classList.remove("has-actions");
+    },
+  });
+  function showActions(on, instant) {
+    if (on) header.classList.add("has-actions");
+    actionsSpring.to(on ? 1 : 0, { instant: instant || reducedMotion() });
   }
 
   function selectTab(index, { instant = false, focus = false } = {}) {
@@ -352,7 +366,7 @@ export function wireCustomize({
     preview.element.hidden = index !== PREVIEW;
     if (kind) pickers[kind].activate();
     else preview.activate();
-    setSaveIcon();
+    showActions(index === PREVIEW, instant);
   }
 
   // The heading, the pickers' source and the stored picks. A game whose
@@ -362,8 +376,10 @@ export function wireCustomize({
     const token = ++loadToken;
     title.textContent = "";
     meta.textContent = "";
+    matchToken += 1;
     link.hide();
     gameId = id;
+    gameName = null;
     sgdbId = null;
     arrays = {};
     picks = {};
@@ -386,10 +402,9 @@ export function wireCustomize({
       for (const kind of KINDS) pickers[kind].setSource(null);
       return;
     }
-    title.textContent = row.name ?? "";
-    meta.textContent = [TYPE_LABELS.get(row.game_type), releaseYear(row)]
-      .filter(Boolean)
-      .join(" · ");
+    const year = releaseYear(row);
+    title.textContent = year ? `${row.name} (${year})` : row.name;
+    gameName = row.name ?? "";
     for (const kind of KINDS) {
       arrays[kind] = row[kind] ?? null;
       const url = arrays[kind]?.[0] ?? null;
@@ -397,15 +412,47 @@ export function wireCustomize({
     }
     preview.render(picks);
     setSource(row.sgdb_id);
-    if (row.sgdb_id === 0) {
-      link.show(row.id, row.name, {
-        onLinked: (id) => token === loadToken && setSource(id),
-      });
+    if (row.sgdb_id === 0) openLink();
+  }
+
+  // The link pop-up, pre-filled with the game's name. Choosing a result
+  // links it at once and reloads the grids; picks made so far stay.
+  function openLink() {
+    if (gameId == null || gameName == null) return;
+    const token = loadToken;
+    link.show(gameId, gameName, {
+      onLinked: (id) => {
+        if (token !== loadToken) return;
+        // Reset's defaults came from the old match.
+        defaults = null;
+        setSource(id);
+      },
+    });
+  }
+
+  // The line under the title: the linked SteamGridDB entry, so a wrong match
+  // shows. Left blank if SteamGridDB can't be reached.
+  let matchToken = 0;
+  async function showMatch(id) {
+    const mine = ++matchToken;
+    meta.textContent = id === 0 ? "No match found" : "";
+    if (!(id > 0)) return;
+    try {
+      const { call } = await import("/js/api.js");
+      const entry = await call("sgdb", "game", { sgdbId: id });
+      if (mine !== matchToken || !entry?.name) return;
+      const year = entry.release_date
+        ? new Date(entry.release_date * 1000).getUTCFullYear()
+        : null;
+      meta.textContent = `Match found: "${entry.name}${year ? ` (${year})` : ""}"`;
+    } catch {
+      // Stays blank.
     }
   }
 
   function setSource(id) {
     sgdbId = id > 0 ? id : null;
+    showMatch(id);
     for (const kind of KINDS) {
       pickers[kind].setSource(id);
       pickers[kind].setSelected(picks[kind]?.url);
@@ -537,20 +584,19 @@ export function wireCustomize({
   }
 
   const onBack = () => close();
-  const onSave = () => {
-    if (active < PREVIEW) selectTab(active + 1);
-    else saveAll();
-  };
+  const onRelink = () => openLink();
+  const onSave = () => saveAll();
   const onReset = () => resetAll();
   const onScrim = () => close();
   // Capture phase, so Escape closes the drawer before the menu's own Escape
   // (which would close the game page) sees it. In a URL field it closes the
-  // field instead.
+  // field instead, and over the link pop-up only the pop-up.
   const onKeydown = (event) => {
     if (!isOpen || event.key !== "Escape") return;
     event.preventDefault();
     event.stopPropagation();
     if (preview.closeViewer()) return;
+    if (!sgdbLink.overlay.hidden) return link.hide();
     if (!preview.cancelField(event.target)) close();
   };
   const onTabClick = (event) => {
@@ -635,6 +681,7 @@ export function wireCustomize({
   });
 
   back.addEventListener("click", onBack);
+  relink.addEventListener("click", onRelink);
   save.addEventListener("click", onSave);
   reset.addEventListener("click", onReset);
   scrim.addEventListener("click", onScrim);
@@ -656,8 +703,10 @@ export function wireCustomize({
       spring.destroy();
       pillSpring.destroy();
       zoomSpring.destroy();
+      actionsSpring.destroy();
       resize.disconnect();
       back.removeEventListener("click", onBack);
+      relink.removeEventListener("click", onRelink);
       save.removeEventListener("click", onSave);
       reset.removeEventListener("click", onReset);
       scrim.removeEventListener("click", onScrim);

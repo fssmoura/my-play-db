@@ -1349,7 +1349,8 @@ export async function mountMenu({ search, filter, game }) {
       }),
       liquidGL({
         ...GLASS_CONFIG,
-        target: "#customize-back, #customize-reset, #customize-save",
+        target:
+          "#customize-back, #customize-relink, #customize-reset, #customize-save",
         content: false,
         zIndex: 1,
       }),
