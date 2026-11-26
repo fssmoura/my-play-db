@@ -116,13 +116,18 @@ Rules a redesign must keep, with the HIG reason where there is one.
 - While it is open the search field and filter fold away but the search is
   kept; the main pill and Back stay.
 - The header (banner and logo) is sticky. The pinned area reaches below the
-  logo and ends in a soft fade, so content scrolling up fades out beneath the
-  logo rather than being cut off at the banner's edge. Banner and logo show
-  only when the game has them.
-- The banner fades into a dark version of its own main colour, which carries
-  on down the top of the page before easing into black (as streaming apps
-  do). Mostly white, grey or cream banners give a near-neutral dark grey.
-  Plain black when the banner's colours can't be read.
+  logo and ends in a soft fade of the page's own backdrop, so content
+  scrolling up fades out beneath the logo rather than being cut off at the
+  banner's edge, with no visible seam. The fade's edge is curved, reaching
+  further down at the sides than in the middle. Banner and logo show only
+  when the game has them.
+- Behind the banner and the top of the page, a darkened, heavily blurred copy
+  of the banner art, so the picture seems to carry on down the page (as
+  streaming apps do). Below the banner it melts into a dark version of the
+  banner's main colour, which then eases into black. It stays put while the
+  content scrolls over it, so it always lines up with the pinned banner.
+  Mostly white, grey or cream banners give a near-neutral dark grey. Plain
+  black when the banner's colours can't be read.
 - Logos are sized to roughly the same area whatever their shape, so wide and
   squarer logos carry similar weight; they sit centred on the banner's edge.
 - Under the logo, "Available for" then one grey icon per platform family:

@@ -120,6 +120,88 @@ function bannerTint(img) {
   }
 }
 
+// The banner art heavily blurred and darkened, as a small image the page
+// stretches (see .game-sheet-body::before). The blur is a few downscale
+// steps, each softened by the browser's smoothing, then a box blur on the
+// tiny copy. Null when the image can't be read (no CORS).
+function bannerGlow(img, tint) {
+  try {
+    const w = 32;
+    const h = 36;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, 0, 0, w, h);
+    const image = ctx.getImageData(0, 0, w, h);
+    const d = image.data;
+    let src = Float32Array.from(d);
+    const r = 2;
+    const pass = (dx, dy) => {
+      const out = new Float32Array(src.length);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4;
+          for (let k = -r; k <= r; k++) {
+            const xx = Math.min(Math.max(x + k * dx, 0), w - 1);
+            const yy = Math.min(Math.max(y + k * dy, 0), h - 1);
+            const j = (yy * w + xx) * 4;
+            out[i] += src[j];
+            out[i + 1] += src[j + 1];
+            out[i + 2] += src[j + 2];
+          }
+          out[i] /= 2 * r + 1;
+          out[i + 1] /= 2 * r + 1;
+          out[i + 2] /= 2 * r + 1;
+        }
+      }
+      src = out;
+    };
+    for (let n = 0; n < 3; n++) {
+      pass(1, 0);
+      pass(0, 1);
+    }
+    for (let i = 0; i < d.length; i += 4) {
+      const l = 0.299 * src[i] + 0.587 * src[i + 1] + 0.114 * src[i + 2];
+      for (let c = 0; c < 3; c++)
+        d[i + c] = (l + (src[i + c] - l) * 1.3) * 0.45;
+      d[i + 3] = 255;
+    }
+    ctx.putImageData(image, 0, 0);
+    const big = document.createElement("canvas");
+    big.width = w * 8;
+    big.height = h * 8;
+    const bctx = big.getContext("2d");
+    bctx.imageSmoothingEnabled = true;
+    bctx.imageSmoothingQuality = "high";
+    bctx.drawImage(canvas, 0, 0, big.width, big.height);
+    // Below the banner it eases into the tint, then fades out onto the tint
+    // itself, so there is no step between picture and colour. Built in, so
+    // every copy of it (behind the banner, under it and in the fade below it)
+    // matches.
+    if (tint) {
+      const melt = bctx.createLinearGradient(0, 0, 0, big.height);
+      melt.addColorStop(0.35, tint.replace(")", " / 0)"));
+      melt.addColorStop(0.5, tint.replace(")", " / 0.45)"));
+      melt.addColorStop(0.65, tint);
+      bctx.globalCompositeOperation = "source-atop";
+      bctx.fillStyle = melt;
+      bctx.fillRect(0, 0, big.width, big.height);
+    }
+    const fade = bctx.createLinearGradient(0, 0, 0, big.height);
+    fade.addColorStop(tint ? 0.6 : 0.4, "#000");
+    fade.addColorStop(tint ? 0.75 : 0.62, "rgba(0, 0, 0, 0)");
+    bctx.globalCompositeOperation = "destination-in";
+    bctx.fillStyle = fade;
+    bctx.fillRect(0, 0, big.width, big.height);
+    return big.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
 function toHsl(r, g, b) {
   r /= 255;
   g /= 255;
@@ -237,6 +319,7 @@ export function createGamePage({ game, content, library, onProgress }) {
     }
     if (run !== artRun || !parts) return;
     parts.body.style.removeProperty("--tint");
+    parts.body.style.removeProperty("--banner-glow");
     // The heading sits in the spacer, between Back and the menu pill, so the
     // rising sheet scrolls it away.
     const heading = gameHeading(row);
@@ -285,6 +368,10 @@ export function createGamePage({ game, content, library, onProgress }) {
           if (cls === "game-banner") {
             const tint = bannerTint(img);
             if (tint) parts.body.style.setProperty("--tint", tint);
+            const glow = bannerGlow(img, tint);
+            if (glow)
+              parts.body.style.setProperty("--banner-glow", `url(${glow})`);
+            placeGlow();
           }
           if (cls === "game-logo" && img.naturalWidth && img.naturalHeight) {
             // On the body, so the info line below can follow the logo's height.
@@ -387,6 +474,7 @@ export function createGamePage({ game, content, library, onProgress }) {
     const top = parts.scroller.scrollTop;
     game.reportScroll({ top, delta: top - lastTop });
     lastTop = top;
+    placeGlow();
     // The sheet's top meets the name's bottom (25 + 44px) at 16px scrolled;
     // its shadow fades in over the next 16px.
     const overlap = Math.min(Math.max((top - 16) / 16, 0), 1);
@@ -395,8 +483,10 @@ export function createGamePage({ game, content, library, onProgress }) {
       parts.sheet.style.setProperty("--overlap", overlap.toFixed(3));
     }
     // Content starts passing under the pinned banner once the sheet has risen
-    // (REST_TOP); the fade under the logo grows over the next 60px.
-    const under = Math.min(Math.max((top - REST_TOP) / 60, 0), 1);
+    // (REST_TOP); the fade under the logo grows over the next 60px. It starts
+    // 44px early because the content sits that much closer to the logo than
+    // the fade was tuned for, so it still fades at the same place on screen.
+    const under = Math.min(Math.max((top - REST_TOP + 44) / 60, 0), 1);
     if (under !== lastUnder) {
       lastUnder = under;
       parts.sheet.style.setProperty("--under", under.toFixed(3));
@@ -404,6 +494,17 @@ export function createGamePage({ game, content, library, onProgress }) {
     // Only the rise changes what is under the top bar's lenses; past it the
     // pinned banner (or nothing) is there. See glass-refresh.js for the cost.
     refreshGlassWhileScrolling({ live: top <= REST_TOP });
+  }
+
+  // Keeps the page's blurred backdrop level with the pinned banner's.
+  function placeGlow() {
+    const banner = parts?.body.querySelector(".game-banner");
+    if (!banner) return;
+    const y =
+      banner.getBoundingClientRect().top -
+      parts.body.getBoundingClientRect().top;
+    parts.body.style.setProperty("--glow-y", `${y}px`);
+    parts.body.style.setProperty("--glow-h", `${banner.offsetHeight * 2}px`);
   }
 
   // The scroll indicator starts below the banner and the black under its logo
@@ -591,6 +692,7 @@ export function createGamePage({ game, content, library, onProgress }) {
   // The library may arrive after the page opened: the marks then show what is owned.
   const offLibrary = library?.on("change", placeInfo);
   window.addEventListener("resize", fitHeading);
+  window.addEventListener("resize", placeGlow);
 
   return {
     destroy() {
@@ -599,6 +701,7 @@ export function createGamePage({ game, content, library, onProgress }) {
       offArt();
       offLibrary?.();
       window.removeEventListener("resize", fitHeading);
+      window.removeEventListener("resize", placeGlow);
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown, true);
       closeMediaLayers();

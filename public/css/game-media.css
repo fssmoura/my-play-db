@@ -14,6 +14,11 @@
   --edge-alpha: 0.25;
 }
 
+/* Closer under the platform line, which sits tight under the logo. */
+.game-info + .game-media {
+  margin-top: 20px;
+}
+
 .media-head {
   margin: 0 20px 8px;
   font-size: 17px;
