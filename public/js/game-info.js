@@ -626,7 +626,9 @@ export function gameInfoLine(row, copies = []) {
   label.textContent = "Available for";
   list.append(label);
   wireTaps(list);
-  for (const family of marks) {
+  for (const family of [...marks].sort(
+    (a, b) => (b.owned.length > 0) - (a.owned.length > 0),
+  )) {
     // Consoles with a wordmark show it in the tooltip; others their name.
     const consoles = family.consoles ?? [];
     const names = [
