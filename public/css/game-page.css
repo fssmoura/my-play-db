@@ -195,7 +195,7 @@ html.is-game-open body {
 }
 
 .game-head.has-banner::after {
-  --len: calc(var(--hang) + 48px + 72px * var(--under, 0));
+  --len: calc(var(--hang) + 24px + 24px * var(--under, 0));
   /* The banner's height (see .game-banner), to line the backdrop up. */
   --bh: min(100cqw * 238 / 439, 420px);
   content: "";
