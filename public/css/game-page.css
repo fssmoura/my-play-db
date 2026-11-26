@@ -208,8 +208,8 @@ html.is-game-open body {
   background:
     var(--banner-glow, none) 0 calc(-1 * var(--bh)) / 100% calc(2 * var(--bh))
       no-repeat,
-    var(--page-grad) 0 calc(-1 * var(--bh)) / 100% 650px no-repeat,
-    var(--black);
+    var(--page-grad) 0 calc(-1 * var(--bh)) / 100% var(--grad-h) no-repeat,
+    var(--page-base);
   /* The fade, times a curve: the box runs half as long again and an
      ellipse at the bottom centre clears that extra there, so it reaches
      further at the sides. --under is in the alpha (opacity: 0 here
@@ -268,7 +268,7 @@ html.is-game-open body {
   overflow: hidden;
   /* Behind the fading image: the page's own backdrop (or the sheet's black),
      so the image fades into the same colour as the page under it. */
-  background: var(--page-fade), var(--black);
+  background: var(--page-fade), var(--page-base);
 }
 
 /* The banner art again, blurred and darkened (bannerGlow in game-page.js
@@ -301,7 +301,7 @@ html.is-game-open body {
   background:
     var(--banner-glow, none) 0 var(--glow-y, 0) / 100% var(--glow-h, 0)
       no-repeat,
-    var(--page-grad) 0 var(--glow-y, 0) / 100% 650px no-repeat;
+    var(--page-grad) 0 var(--glow-y, 0) / 100% var(--grad-h) no-repeat;
 }
 
 /* The logo (SteamGridDB's, usually): centred, fitted without cropping. Every
@@ -567,21 +567,30 @@ html.is-game-open body {
   --logo-ratio: 3;
   --logo-side: clamp(96px, 30vw, 190px);
   --logo-h: min(26vw, 150px, calc(var(--logo-side) / sqrt(var(--logo-ratio))));
-  /* The tint carries on below the banner, then eases into the sheet's black.
+  /* The tint carries on below the banner, then eases into the sheet's black
+     in an arc (further down the middle than the sides), not a straight line.
      The banner sits on the same backdrop (--page-fade), so the two meet with
      no seam. */
-  --page-grad: linear-gradient(
-    to bottom,
+  /* The page's own colour below the fade: a very dark shade of the tint
+     rather than plain black. */
+  --page-base: color-mix(in srgb, var(--tint) 30%, var(--black));
+  --page-grad: radial-gradient(
+    170% 100% at 50% 0,
     var(--tint) 0,
     var(--tint) 30%,
-    color-mix(in srgb, var(--tint) 85%, var(--black)) 45%,
-    color-mix(in srgb, var(--tint) 60%, var(--black)) 60%,
-    color-mix(in srgb, var(--tint) 32%, var(--black)) 75%,
-    color-mix(in srgb, var(--tint) 11%, var(--black)) 90%,
-    var(--black) 100%
+    color-mix(in srgb, var(--tint) 85%, var(--page-base)) 45%,
+    color-mix(in srgb, var(--tint) 60%, var(--page-base)) 60%,
+    color-mix(in srgb, var(--tint) 32%, var(--page-base)) 75%,
+    color-mix(in srgb, var(--tint) 11%, var(--page-base)) 90%,
+    var(--page-base) 100%
   );
-  --page-fade: var(--page-grad) top / 100% 650px no-repeat;
-  background: var(--black);
+  /* How far down the page the colour reaches before it is all black. */
+  --grad-h: 500px;
+  --page-fade: var(--page-grad) top / 100% var(--grad-h) no-repeat;
+  /* Easing on into real black over the last stretch of the page. */
+  background:
+    linear-gradient(transparent calc(100% - 500px), var(--black)),
+    var(--page-base);
   /* Room at the end so the floating toolbar never covers the last content. */
   padding-bottom: calc(120px + env(safe-area-inset-bottom));
   transition:

@@ -199,21 +199,41 @@ function bannerGlow(img, tint) {
     // itself, so there is no step between picture and colour. Built in, so
     // every copy of it (behind the banner, under it and in the fade below it)
     // matches.
-    if (tint) {
-      const melt = bctx.createLinearGradient(0, 0, 0, big.height);
-      melt.addColorStop(0.35, tint.replace(")", " / 0)"));
-      melt.addColorStop(0.5, tint.replace(")", " / 0.45)"));
-      melt.addColorStop(0.65, tint);
-      bctx.globalCompositeOperation = "source-atop";
-      bctx.fillStyle = melt;
-      bctx.fillRect(0, 0, big.width, big.height);
-    }
-    const fade = bctx.createLinearGradient(0, 0, 0, big.height);
-    fade.addColorStop(tint ? 0.6 : 0.4, "#000");
-    fade.addColorStop(tint ? 0.75 : 0.62, "rgba(0, 0, 0, 0)");
-    bctx.globalCompositeOperation = "destination-in";
-    bctx.fillStyle = fade;
-    bctx.fillRect(0, 0, big.width, big.height);
+    // Both fades are arcs from the top centre (further down the middle than
+    // the sides) on eased curves, so neither shows as a straight line.
+    const arc = (stops, op) => {
+      bctx.save();
+      bctx.translate(big.width / 2, 0);
+      bctx.scale((1.7 * big.width) / big.height, 1);
+      const g = bctx.createRadialGradient(0, 0, 0, 0, 0, big.height);
+      for (const [at, colour] of stops) g.addColorStop(at, colour);
+      bctx.globalCompositeOperation = op;
+      bctx.fillStyle = g;
+      bctx.fillRect(-big.height, 0, big.height * 2, big.height);
+      bctx.restore();
+    };
+    const ease = (from, to, a, b) =>
+      [0, 0.15, 0.35, 0.5, 0.65, 0.85, 1].map((t) => [
+        from + (to - from) * t,
+        // smoothstep
+        a + (b - a) * t * t * (3 - 2 * t),
+      ]);
+    if (tint)
+      arc(
+        ease(0.28, 0.62, 0, 1).map(([at, x]) => [
+          at,
+          tint.replace(")", ` / ${x.toFixed(3)})`),
+        ]),
+        "source-atop",
+      );
+    const [f0, f1] = tint ? [0.56, 0.8] : [0.36, 0.66];
+    arc(
+      ease(f0, f1, 1, 0).map(([at, x]) => [
+        at,
+        `rgba(0, 0, 0, ${x.toFixed(3)})`,
+      ]),
+      "destination-in",
+    );
     return big.toDataURL("image/png");
   } catch {
     return null;
