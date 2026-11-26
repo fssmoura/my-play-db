@@ -81,43 +81,119 @@ const SLOP = 8;
 // The sheet's resting top, px from the viewport top (css: .game-spacer).
 const REST_TOP = 85;
 
-// A dark version of the banner's main colour, for the fade under it and the
-// top of the page (the way streaming apps tint their backgrounds). Reads the
-// lower half (what fades out), favouring colourful pixels over grey ones.
-// Null when the image can't be read (no CORS), leaving plain black.
+// Dark versions of the banner's colours, for the fade under it and the top
+// of the page (the way streaming apps tint their backgrounds): one for the
+// whole banner, and one for each of five strips across it, so the fade keeps
+// the art's colours from left to right. Reads the lower half of the banner as
+// it shows (cropped like object-fit: cover), favouring colourful pixels over
+// grey ones. Null when the image can't be read (no CORS), leaving plain black.
+const TINT_STRIPS = 5;
 function bannerTint(img) {
   try {
-    const w = 24;
+    const w = 25;
     const h = 12;
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    const sh = img.naturalHeight / 2;
-    ctx.drawImage(img, 0, sh, img.naturalWidth, sh, 0, 0, w, h);
+    const iw = img.naturalWidth;
+    const ih = img.naturalHeight;
+    const scale = Math.max(439 / iw, 238 / ih);
+    const sw = 439 / scale;
+    const sh = 238 / scale;
+    const sx = (iw - sw) / 2;
+    const sy = (ih - sh) / 2;
+    ctx.drawImage(img, sx, sy + sh / 2, sw, sh / 2, 0, 0, w, h);
     const data = ctx.getImageData(0, 0, w, h).data;
-    let r = 0;
-    let g = 0;
-    let b = 0;
-    let total = 0;
-    let chroma = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      const max = Math.max(data[i], data[i + 1], data[i + 2]);
-      const min = Math.min(data[i], data[i + 1], data[i + 2]);
-      const weight = 0.15 + (max - min) / 255;
-      r += data[i] * weight;
-      g += data[i + 1] * weight;
-      b += data[i + 2] * weight;
-      total += weight;
-      chroma += (max - min) / 255;
-    }
-    if (!total) return null;
-    const [hue, sat] = toHsl(r / total, g / total, b / total);
-    // Mostly white, grey or cream art fades to a near-neutral dark grey
-    // rather than a strong tint of its faint hue.
-    const vivid = Math.min(chroma / (data.length / 4) / 0.25, 1);
-    const s = Math.min(sat, 0.45) * vivid;
-    return `hsl(${Math.round(hue)} ${Math.round(s * 100)}% 11%)`;
+    const tintOf = (x0, x1) => {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let total = 0;
+      let chroma = 0;
+      let edge = 0;
+      for (let y = 0; y < h; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = (y * w + x) * 4;
+          const max = Math.max(data[i], data[i + 1], data[i + 2]);
+          const min = Math.min(data[i], data[i + 1], data[i + 2]);
+          const weight = 0.15 + (max - min) / 255;
+          r += data[i] * weight;
+          g += data[i + 1] * weight;
+          b += data[i + 2] * weight;
+          total += weight;
+          chroma += (max - min) / 255;
+          if (y >= h - 3)
+            edge +=
+              (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) /
+              255;
+        }
+      }
+      const n = h * (x1 - x0);
+      const [hue, sat] = toHsl(r / total, g / total, b / total);
+      // Never lighter than the banner's own bottom edge, so art that ends in
+      // black fades into black rather than a greyish shade of its hue.
+      const light = Math.min(edge / (3 * (x1 - x0)), 0.11);
+      // Mostly white, grey or cream art fades to a near-neutral dark grey
+      // rather than a strong tint of its faint hue.
+      const vivid = Math.min(chroma / n / 0.25, 1);
+      const s = Math.min(sat, 0.45) * vivid;
+      return `hsl(${Math.round(hue)} ${Math.round(s * 100)}% ${(light * 100).toFixed(1)}%)`;
+    };
+    const step = w / TINT_STRIPS;
+    return {
+      tint: tintOf(0, w),
+      tints: Array.from({ length: TINT_STRIPS }, (_, n) =>
+        tintOf(n * step, (n + 1) * step),
+      ),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// The tints side by side, blending into each other across the width.
+function paintTints(ctx, tints, width, alpha = 1) {
+  const g = ctx.createLinearGradient(0, 0, width, 0);
+  tints.forEach((t, n) =>
+    g.addColorStop(
+      (n + 0.5) / tints.length,
+      t.replace(")", ` / ${alpha.toFixed(3)})`),
+    ),
+  );
+  return g;
+}
+
+// The colour below the banner as an image (the page's --page-grad): the
+// tints across, fading out in an arc (further down the middle than the
+// sides) onto the page colour under it.
+function tintFade(tints) {
+  try {
+    const w = 64;
+    const h = 64;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = paintTints(ctx, tints, w);
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = "destination-in";
+    ctx.translate(w / 2, 0);
+    ctx.scale((1.7 * w) / h, 1);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, h);
+    for (const [at, a] of [
+      [0, 1],
+      [0.3, 1],
+      [0.45, 0.85],
+      [0.6, 0.6],
+      [0.75, 0.32],
+      [0.9, 0.11],
+      [1, 0],
+    ])
+      g.addColorStop(at, `rgba(0, 0, 0, ${a})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(-h, 0, h * 2, h);
+    return canvas.toDataURL("image/png");
   } catch {
     return null;
   }
@@ -129,7 +205,7 @@ function bannerTint(img) {
 // it below, so the picture seems to carry on down the page. The blur is a few downscale
 // steps, each softened by the browser's smoothing, then a box blur on the
 // tiny copy. Null when the image can't be read (no CORS).
-function bannerGlow(img, tint) {
+function bannerGlow(img, tints) {
   try {
     const w = 32;
     const h = 36;
@@ -201,16 +277,16 @@ function bannerGlow(img, tint) {
     // matches.
     // Both fades are arcs from the top centre (further down the middle than
     // the sides) on eased curves, so neither shows as a straight line.
-    const arc = (stops, op) => {
-      bctx.save();
-      bctx.translate(big.width / 2, 0);
-      bctx.scale((1.7 * big.width) / big.height, 1);
-      const g = bctx.createRadialGradient(0, 0, 0, 0, 0, big.height);
+    const arc = (stops, op, c = bctx) => {
+      c.save();
+      c.translate(c.canvas.width / 2, 0);
+      c.scale((1.7 * c.canvas.width) / c.canvas.height, 1);
+      const g = c.createRadialGradient(0, 0, 0, 0, 0, c.canvas.height);
       for (const [at, colour] of stops) g.addColorStop(at, colour);
-      bctx.globalCompositeOperation = op;
-      bctx.fillStyle = g;
-      bctx.fillRect(-big.height, 0, big.height * 2, big.height);
-      bctx.restore();
+      c.globalCompositeOperation = op;
+      c.fillStyle = g;
+      c.fillRect(-c.canvas.height, 0, c.canvas.height * 2, c.canvas.height);
+      c.restore();
     };
     const ease = (from, to, a, b) =>
       [0, 0.15, 0.35, 0.5, 0.65, 0.85, 1].map((t) => [
@@ -218,15 +294,26 @@ function bannerGlow(img, tint) {
         // smoothstep
         a + (b - a) * t * t * (3 - 2 * t),
       ]);
-    if (tint)
+    if (tints) {
+      const melt = document.createElement("canvas");
+      melt.width = big.width;
+      melt.height = big.height;
+      const mctx = melt.getContext("2d");
+      mctx.fillStyle = paintTints(mctx, tints, melt.width);
+      mctx.fillRect(0, 0, melt.width, melt.height);
       arc(
         ease(0.28, 0.62, 0, 1).map(([at, x]) => [
           at,
-          tint.replace(")", ` / ${x.toFixed(3)})`),
+          `rgba(0, 0, 0, ${x.toFixed(3)})`,
         ]),
-        "source-atop",
+        "destination-in",
+        mctx,
       );
-    const [f0, f1] = tint ? [0.56, 0.8] : [0.36, 0.66];
+      bctx.globalCompositeOperation = "source-atop";
+      bctx.drawImage(melt, 0, 0);
+      bctx.globalCompositeOperation = "source-over";
+    }
+    const [f0, f1] = tints ? [0.56, 0.8] : [0.36, 0.66];
     arc(
       ease(f0, f1, 1, 0).map(([at, x]) => [
         at,
@@ -359,6 +446,7 @@ export function createGamePage({ game, content, library, onProgress }) {
     }
     if (run !== artRun || !parts) return;
     parts.body.style.removeProperty("--tint");
+    parts.body.style.removeProperty("--page-grad");
     parts.body.style.removeProperty("--banner-glow");
     // The heading sits in the spacer, between Back and the menu pill, so the
     // rising sheet scrolls it away.
@@ -407,8 +495,13 @@ export function createGamePage({ game, content, library, onProgress }) {
           if (run !== artRun) return;
           if (cls === "game-banner") {
             const tint = bannerTint(img);
-            if (tint) parts.body.style.setProperty("--tint", tint);
-            const glow = bannerGlow(img, tint);
+            if (tint) {
+              parts.body.style.setProperty("--tint", tint.tint);
+              const fade = tintFade(tint.tints);
+              if (fade)
+                parts.body.style.setProperty("--page-grad", `url(${fade})`);
+            }
+            const glow = bannerGlow(img, tint?.tints);
             if (glow)
               parts.body.style.setProperty("--banner-glow", `url(${glow})`);
             placeGlow();
