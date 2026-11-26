@@ -244,6 +244,13 @@ For large originals, use the host's own resize parameter if it has one.
   bright banners.
 - The bottom bar's spring variables live on the stage, not the bar - a
   declaration on the bar would override the inherited value.
+- **A game with no logo** (none, or it failed to load) shows its name in the
+  logo's place (`gameName`, `.game-name`), as content under the header. Without
+  a banner the first thing on the sheet starts 44px down.
+- **The description** (`gameDescription` in `game-info.js`) sits under the
+  platform marks: the summary, or the storyline when there is no summary. The three-line
+  cut and the "Read more" button are found by measuring, so they are redone on
+  a width change; opening animates the height, then asks the glass to refresh.
 - **Platform icons** (`game-info.js`) are cropped to their drawing: each
   `viewBox` is the path's real bounds, measured with `getBBox()` in the
   browser (the `svg-path-bounds` package gave wrong ones), so a common height

@@ -177,6 +177,10 @@ html.is-game-open body {
 }
 
 .game-head:not(.has-banner) {
+  padding-top: 44px;
+}
+
+.game-head:not(.has-banner):has(.game-logo) {
   padding-top: 32px;
 }
 
@@ -423,12 +427,12 @@ html.is-game-open body {
   align-items: center;
   gap: 4px;
   margin: 20px 16px 0;
-  color: rgba(244, 244, 244, 0.6);
+  color: rgba(244, 244, 244, 0.5);
   transition: margin-top 0.25s ease-out;
 }
 
 .game-info:first-child {
-  margin-top: 32px;
+  margin-top: 44px;
 }
 
 .game-info-label {
@@ -436,8 +440,99 @@ html.is-game-open body {
   line-height: 18px;
 }
 
-.game-head.has-banner:has(.game-logo) + .game-info {
-  margin-top: calc(var(--logo-h) / 2 - 8px + 20px);
+.game-head.has-banner:has(.game-logo) + .game-info,
+.game-head.has-banner:has(.game-logo) + .game-desc {
+  margin-top: calc(var(--logo-h) / 2 - 8px + 26px);
+}
+
+/* The summary under the logo (game-info.js). Its height is animated when it
+   opens or closes, so it clips. */
+.game-desc {
+  margin: 20px 52px 0;
+  overflow: hidden;
+  text-align: center;
+  color: rgba(244, 244, 244, 0.75);
+  transition:
+    height 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
+    margin-top 0.25s ease-out;
+}
+
+.game-desc:first-child {
+  margin-top: 44px;
+}
+
+/* The name, in place of a missing logo (game-info.js). */
+.game-name {
+  margin: 20px 40px 0;
+  color: var(--white);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 34px;
+  text-align: center;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  text-wrap: balance;
+}
+
+.game-head.has-banner + .game-name {
+  margin-top: 2px;
+}
+
+.game-head .game-name {
+  margin-top: 0;
+}
+
+.game-head.has-banner .game-name {
+  position: relative;
+  margin-top: -34px;
+}
+
+.game-head:has(.game-name) + .game-info {
+  margin-top: 18px;
+}
+
+.game-head:has(.game-name) + .game-desc {
+  margin-top: 20px;
+}
+
+.game-name:first-child {
+  margin-top: 0;
+  padding-top: 76px;
+}
+
+.game-name + .game-info {
+  margin-top: 14px;
+}
+
+.game-name + .game-desc {
+  margin-top: 16px;
+}
+
+.game-info + .game-desc {
+  margin-top: 16px;
+}
+
+.game-desc-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: pre-line;
+  text-wrap: balance;
+}
+
+.game-desc-more {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #f4f4f4;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-desc {
+    transition: none;
+  }
 }
 /* An icon in the line's own grey. Every icon gets the
    same width, centred, so they sit evenly however much of it their shape fills;

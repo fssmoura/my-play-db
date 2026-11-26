@@ -317,6 +317,14 @@ function metaText(row) {
     .join(" · ");
 }
 
+export function gameName(row) {
+  if (!row?.name) return null;
+  const name = document.createElement("h1");
+  name.className = "game-name";
+  name.textContent = row.name;
+  return name;
+}
+
 // The name over type · date, for the top bar between Back and the menu pill
 // (laid out like the Customize header).
 export function gameHeading(row) {
@@ -411,6 +419,114 @@ function ownedConsoles(family) {
   return (family.consoles ?? []).filter((k) =>
     family.owned.some((c) => c.version && c.version === k.version),
   );
+}
+
+// The game's summary (its storyline when there is none), cut to three lines
+// with an ellipsis and a "Read more" button right after it. The cut is found by
+// measuring, so the button sits on the last line whatever the width. Opening
+// and closing animate the height so what follows is pushed or pulled along.
+export function gameDescription(row, { onSettle } = {}) {
+  const full = row?.summary?.trim() || row?.storyline?.trim() || "";
+  if (!full) return null;
+  const box = document.createElement("div");
+  box.className = "game-desc";
+  const text = document.createElement("p");
+  text.className = "game-desc-text";
+  text.textContent = full;
+  box.append(text);
+  const more = document.createElement("button");
+  more.type = "button";
+  more.className = "game-desc-more";
+
+  let expanded = false;
+  let busy = false;
+  let width = 0;
+  let collapsedH = 0;
+  const reduce = () =>
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function showCollapsed() {
+    text.textContent = full;
+    const max = (parseFloat(getComputedStyle(text).lineHeight) || 20) * 3 + 1;
+    if (text.scrollHeight <= max) {
+      collapsedH = text.offsetHeight;
+      return;
+    }
+    more.textContent = "Read more";
+    const cut = (n) => {
+      text.textContent = `${full.slice(0, n).trimEnd()}… `;
+      text.append(more);
+      return text.scrollHeight <= max;
+    };
+    let lo = 0;
+    let hi = full.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (cut(mid)) lo = mid;
+      else hi = mid - 1;
+    }
+    // Back to a whole word, unless that loses too much.
+    const space = full.lastIndexOf(" ", lo);
+    cut(space > lo * 0.6 ? space : lo);
+    collapsedH = text.offsetHeight;
+  }
+
+  function showExpanded() {
+    text.textContent = `${full} `;
+    more.textContent = "Show less";
+    text.append(more);
+  }
+
+  // Height animation; `done` runs once it ends.
+  function glide(to, done) {
+    busy = true;
+    let ended = false;
+    const end = () => {
+      if (ended) return;
+      ended = true;
+      box.removeEventListener("transitionend", onEnd);
+      box.style.height = "";
+      done?.();
+      busy = false;
+      onSettle?.();
+    };
+    const onEnd = (e) => e.target === box && end();
+    box.addEventListener("transitionend", onEnd);
+    box.getBoundingClientRect();
+    box.style.height = `${to}px`;
+    setTimeout(end, 500);
+  }
+
+  more.addEventListener("click", () => {
+    if (busy) return;
+    const from = box.offsetHeight;
+    if (reduce()) {
+      expanded = !expanded;
+      if (expanded) showExpanded();
+      else showCollapsed();
+      onSettle?.();
+      return;
+    }
+    box.style.height = `${from}px`;
+    if (!expanded) {
+      expanded = true;
+      showExpanded();
+      glide(text.offsetHeight);
+    } else {
+      expanded = false;
+      glide(collapsedH, showCollapsed);
+    }
+  });
+
+  // Fits the text once it is on screen, and again if the width changes. A
+  // hidden sheet has no width, so it waits.
+  new ResizeObserver(() => {
+    const w = box.clientWidth;
+    if (!w || w === width || expanded || busy) return;
+    width = w;
+    showCollapsed();
+  }).observe(box);
+  return box;
 }
 
 // The platform marks, for under the logo. `copies` are the owner's library

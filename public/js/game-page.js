@@ -31,7 +31,12 @@ import {
 import { resolveGameArt, isIgdb } from "/js/game-art.js";
 import { loadGameRow, setGameArtArray } from "/js/games-cache.js";
 import { displayImageUrl, loadImageForGlass } from "/js/image-url.js";
-import { gameHeading, gameInfoLine } from "/js/game-info.js";
+import {
+  gameHeading,
+  gameInfoLine,
+  gameDescription,
+  gameName,
+} from "/js/game-info.js";
 import { gameMediaSections, closeMediaLayers } from "/js/game-media.js";
 
 const reducedMotion = () =>
@@ -431,6 +436,8 @@ export function createGamePage({ game, content, library, onProgress }) {
     shown = null;
     closeMediaLayers();
     parts?.body.querySelector(".game-head")?.remove();
+    parts?.body.querySelector(".game-name")?.remove();
+    parts?.body.querySelector(".game-desc")?.remove();
     parts?.body.querySelector(".game-info")?.remove();
     parts?.body.querySelector(".game-media")?.remove();
     parts?.spacer.querySelector(".game-heading")?.remove();
@@ -458,7 +465,9 @@ export function createGamePage({ game, content, library, onProgress }) {
     // The platform marks go under the header (or at the top when there is
     // none) and scroll with the content rather than pinning.
     shown = row ? { id, row } : null;
+    if (!logo) placeName();
     placeInfo();
+    placeDescription();
     placeMedia(run);
     const bannerUrl = banner ? displayImageUrl(banner, "banner") : null;
     const logoUrl = logo ? displayImageUrl(logo, "logo") : null;
@@ -524,6 +533,11 @@ export function createGamePage({ game, content, library, onProgress }) {
             !!head.querySelector(".game-banner"),
           );
           if (!head.children.length) head.remove();
+          if (cls === "game-logo") {
+            placeName();
+            placeInfo();
+            placeDescription();
+          }
           settle();
         },
       });
@@ -534,8 +548,25 @@ export function createGamePage({ game, content, library, onProgress }) {
 
     if (bannerUrl) addImage("game-banner", bannerUrl);
     if (logoUrl) addImage("game-logo", logoUrl);
+    if (!logo) {
+      placeName();
+      placeInfo();
+      placeDescription();
+    }
     overlay?.update();
     finishLoading(run);
+  }
+
+  // The game's name stands in for a missing logo (none, or it failed to load).
+  // It lives in the header once there is one, so it pins with the banner.
+  function placeName() {
+    if (!parts) return;
+    parts.body.querySelector(".game-name")?.remove();
+    const name = shown && gameName(shown.row);
+    if (!name) return;
+    const head = parts.body.querySelector(".game-head");
+    if (head) head.append(name);
+    else parts.body.prepend(name);
   }
 
   // The platform marks, redrawn in place (after the header, if any).
@@ -545,9 +576,34 @@ export function createGamePage({ game, content, library, onProgress }) {
     if (!shown) return;
     const info = gameInfoLine(shown.row, library?.copies(shown.id) ?? []);
     if (!info) return;
-    const head = parts.body.querySelector(".game-head");
-    if (head) head.after(info);
+    const anchor =
+      parts.body.querySelector(":scope > .game-name") ??
+      parts.body.querySelector(".game-head");
+    if (anchor) anchor.after(info);
     else parts.body.prepend(info);
+  }
+
+  // The summary (or storyline) goes right under the platform marks, or the
+  // header when there are none. Opening it
+  // changes the page's height without the lenses noticing, so they retake
+  // their picture afterwards.
+  function placeDescription() {
+    if (!parts) return;
+    parts.body.querySelector(".game-desc")?.remove();
+    if (!shown) return;
+    const desc = gameDescription(shown.row, {
+      onSettle: () => {
+        overlay?.update();
+        refreshGlass();
+      },
+    });
+    if (!desc) return;
+    const anchor =
+      parts.body.querySelector(".game-info") ??
+      parts.body.querySelector(":scope > .game-name") ??
+      parts.body.querySelector(".game-head");
+    if (anchor) anchor.after(desc);
+    else parts.body.prepend(desc);
   }
 
   // Trailers and Images, last in the body. Their pictures arrive after the
