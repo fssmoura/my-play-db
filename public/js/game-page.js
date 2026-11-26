@@ -40,6 +40,15 @@ import {
 } from "/js/game-info.js";
 import { trendingRank } from "/js/search.js";
 import { gameMediaSections, closeMediaLayers } from "/js/game-media.js";
+import {
+  achievementsSkeleton,
+  achievementsSection,
+} from "/js/game-achievements.js";
+import { loadGameAchievements } from "/js/achievements-data.js";
+import {
+  openAchievements,
+  closeAchievementLayers,
+} from "/js/achievements-page.js";
 
 const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -437,11 +446,13 @@ export function createGamePage({ game, content, library, onProgress }) {
     const run = ++artRun;
     shown = null;
     closeMediaLayers();
+    closeAchievementLayers();
     parts?.body.querySelector(".game-head")?.remove();
     parts?.body.querySelector(".game-name")?.remove();
     parts?.body.querySelector(".game-desc")?.remove();
     parts?.body.querySelector(".game-info")?.remove();
     parts?.body.querySelector(".game-media")?.remove();
+    parts?.body.querySelector(".ach-section")?.remove();
     parts?.spacer.querySelector(".game-heading")?.remove();
     parts?.body.style.removeProperty("--logo-ratio");
     setLoading(true);
@@ -472,6 +483,7 @@ export function createGamePage({ game, content, library, onProgress }) {
     placeDescription();
     placeRating();
     placeMedia(run);
+    placeAchievements(run);
     const bannerUrl = banner ? displayImageUrl(banner, "banner") : null;
     const logoUrl = logo ? displayImageUrl(logo, "logo") : null;
     if (!bannerUrl && !logoUrl) return finishLoading(run);
@@ -639,6 +651,44 @@ export function createGamePage({ game, content, library, onProgress }) {
       parts.body.querySelector(".game-head");
     if (anchor) anchor.after(line);
     else parts.body.prepend(line);
+    overlay?.update();
+    refreshGlass();
+  }
+
+  // Achievements go just before Trailers and Images. The page doesn't wait
+  // for them: for a game in the library a shimmering stand-in holds their
+  // place until every store's list has loaded, then the card replaces it (or
+  // it goes, when there are none).
+  async function placeAchievements(run) {
+    if (!parts || !shown) return;
+    const { id } = shown;
+    const put = (section) => {
+      parts.body.querySelector(".ach-section")?.remove();
+      if (!section) return;
+      const media = parts.body.querySelector(".game-media");
+      if (media) media.before(section);
+      else parts.body.append(section);
+    };
+    if (library?.copies(id)?.length) put(achievementsSkeleton());
+    let result = null;
+    try {
+      result = await loadGameAchievements(id);
+    } catch {
+      // Left out, like a game with none.
+    }
+    if (run !== artRun || !parts || shown?.id !== id) return;
+    put(
+      achievementsSection(result, {
+        onOpen: (opener) =>
+          openAchievements({
+            igdbId: id,
+            gameName: shown?.row?.name ?? "",
+            behind: parts?.layer,
+            opener,
+            result,
+          }),
+      }),
+    );
     overlay?.update();
     refreshGlass();
   }
@@ -812,6 +862,7 @@ export function createGamePage({ game, content, library, onProgress }) {
     if (!parts) return;
     artRun++;
     closeMediaLayers();
+    closeAchievementLayers();
     unwireDrag?.();
     parts.layer.classList.add("is-closing");
     parts.layer.inert = true;
@@ -960,6 +1011,7 @@ export function createGamePage({ game, content, library, onProgress }) {
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown, true);
       closeMediaLayers();
+      closeAchievementLayers();
       spring.destroy();
       overlay?.destroy();
       pointGlass(false);

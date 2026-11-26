@@ -27,7 +27,8 @@ those files.
 
 `search.js`, `ranking.js`, `sgdb.js`, `sgdb-match.js`, `games-cache.js` and
 `api.js` are copies of the lab's (the lab's `search.js` has since been
-removed), each with a header saying where it came from.
+removed), each with a header saying where it came from. `achievements-data.js`
+copies part of the lab's achievement code (its header lists which).
 They are independent on purpose, so work on the app can never change the lab:
 never import across, and fix a bug in both. `sgdb.js` is the one that behaves
 differently - see [Game page art](#game-page-art).
@@ -258,6 +259,29 @@ For large originals, use the host's own resize parameter if it has one.
   the rank is known. The stars are also the owner's vote: hover lights them
   white, a click saves `games.my_rating` (the same star again removes it), and
   the vote is counted into the average and the vote count.
+- **Achievements** (`game-achievements.js`) sit before Trailers and Images, for
+  games with achievements in the library: one edge-to-edge card for the game,
+  every store's list combined as in the lab (so a game on Steam and PS5 is one
+  card), PlayStation-style: earned, a ring with the percentage, and available,
+  then the unlocked count under each trophy grade when the list has grades
+  (icons in `public/trophies/`, 80px wide). The page doesn't wait for it: a
+  game in the library gets a shimmering stand-in until the lists load, which
+  goes if there turn out to be none. The loaded lists are handed to the
+  achievement pages, so opening them doesn't load again.
+- **Achievement pages** (`achievements-page.js`, `achievements-data.js`,
+  `css/achievements.css`) open from that card or its title, over the game page
+  like the Trailers all-cards page but with the app's back arrow (a Close X on
+  a single trophy), and stack: group
+  cards (only when the game has several trophy groups), a group's list, one
+  trophy. Every store's list is combined as in the lab. Sorting is per the
+  owner's choice: default (the rarest earned trophy, then all in the store's
+  order), not earned, rarity, earned date, grade; each groups its rows under
+  small titles with a count ("Ultra Rare: 15", not on the default), and a sort
+  the game can't support is greyed out. Rarity names
+  are Sony's and apply app-wide: Ultra Rare under 5%, Very Rare under 20%,
+  Rare under 50%, Common from 50%. A hidden trophy not yet earned shows a
+  padlock, "Hidden" and the dark cup (`trophies/hidden.png`); only its own
+  page offers to show the real name and description.
 - **Platform icons** (`game-info.js`) are cropped to their drawing: each
   `viewBox` is the path's real bounds, measured with `getBBox()` in the
   browser (the `svg-path-bounds` package gave wrong ones), so a common height

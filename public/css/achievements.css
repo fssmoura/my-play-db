@@ -1,0 +1,463 @@
+/* =========================================================================
+   my-play-db - the achievement pages (js/achievements-page.js): full screen
+   over the game page, built on the all-cards page's layer, bar and Close
+   (game-media.css) and the viewer's menu look (.mv-menu).
+   ========================================================================= */
+
+/* ---- the bar: back, then the game's name over its progress ---- */
+.ach-layer.has-sort .media-grid-bar {
+  max-width: calc(100% - 50px - 56px);
+}
+
+.ach-bar-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ach-bar-sub {
+  margin: 1px 0 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--gray);
+  font-size: 12px;
+  line-height: 16px;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
+}
+
+.ach-bar-sub[hidden] {
+  display: none;
+}
+
+.ach-sort-menu {
+  min-width: 220px;
+}
+
+/* The tick sits after the option's name, at the right edge. */
+.ach-sort-check {
+  margin-left: auto;
+}
+
+.ach-layer .mv-menu .mv-menu-item:disabled {
+  opacity: 0.35;
+  background: none;
+  cursor: default;
+}
+
+/* ---- the page: the all-cards page's margins, a column on wide screens ---- */
+.ach-page {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 85px 25px calc(40px + env(safe-area-inset-bottom));
+}
+
+.ach-message {
+  margin: 0;
+  color: var(--gray);
+  font-size: 15px;
+}
+
+/* ---- several groups: a card each ---- */
+.ach-group-list,
+.ach-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ach-group-card,
+.ach-row {
+  position: relative;
+  --edge-alpha: 0.15;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(244, 244, 244, 0.06);
+  color: var(--white);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ach-group-card:focus,
+.ach-row:focus,
+.ach-reveal:focus {
+  outline: none;
+}
+
+.ach-group-card:focus-visible,
+.ach-row:focus-visible,
+.ach-reveal:focus-visible {
+  outline: 2px solid var(--light-gray);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .ach-group-card:hover,
+  .ach-row:hover {
+    background: rgba(244, 244, 244, 0.09);
+  }
+}
+
+.ach-group-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.ach-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ach-group-name {
+  min-width: 0;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.ach-group-percent {
+  flex: none;
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.ach-group-tiers {
+  display: flex;
+  gap: 18px;
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 600;
+}
+
+.ach-group-tier {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ach-group-tier img {
+  height: 20px;
+  width: auto;
+}
+
+.ach-group-count {
+  color: var(--gray);
+  font-weight: 400;
+}
+
+.ach-progress {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(244, 244, 244, 0.15);
+  overflow: hidden;
+}
+
+.ach-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--white);
+}
+
+/* ---- a list: small titles over rows ---- */
+.ach-list-section + .ach-list-section {
+  margin-top: 26px;
+}
+
+.ach-list-title {
+  margin: 0 4px 10px;
+  color: var(--gray);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+
+.ach-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+/* Earned: a white line along the bottom. */
+.ach-row.is-earned::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--white);
+}
+
+.ach-row-img,
+.ach-detail-img {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  overflow: hidden;
+  background: rgba(244, 244, 244, 0.08);
+}
+
+/* Square, as tall as the text beside it, so the row's padding is even. */
+.ach-row-img {
+  width: 78px;
+  height: 78px;
+  border-radius: 8px;
+}
+
+.ach-row-img img,
+.ach-detail-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ach-row-img.is-locked img,
+.ach-detail-img.is-locked img {
+  filter: grayscale(1) brightness(0.6);
+}
+
+.ach-lock {
+  width: 40%;
+  height: 40%;
+  color: rgba(244, 244, 244, 0.35);
+}
+
+.ach-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  height: 78px;
+  padding: 6px 0;
+}
+
+.ach-row-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.ach-row-desc {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--gray);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* Pinned to the bottom: grade and rarity on the left, earned on the right. */
+.ach-row-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 18px;
+  margin-top: auto;
+}
+
+.ach-row-grade {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ach-row-rarity {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--gray);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.ach-row-grade img {
+  height: 18px;
+  width: auto;
+}
+
+.ach-points {
+  color: var(--light-gray);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+}
+
+.ach-row-earned {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  color: var(--gray);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.ach-row-unlocked {
+  width: 14px;
+  height: 14px;
+  color: var(--white);
+}
+
+/* ---- one trophy ---- */
+.ach-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.ach-detail-img {
+  width: 128px;
+  height: 128px;
+  border-radius: 16px;
+}
+
+.ach-detail-game {
+  margin: 20px 0 0;
+  color: var(--gray);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.ach-detail-name {
+  margin: 2px 0 0;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 600;
+}
+
+.ach-detail-cols {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 16px;
+  width: 100%;
+  margin-top: 28px;
+}
+
+/* Grade and Rarity: the picture large on top, then the value and its name. */
+.ach-detail-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ach-detail-art {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 56px;
+  margin-bottom: 10px;
+}
+
+.ach-detail-art img {
+  height: 56px;
+  width: auto;
+}
+
+.ach-detail-art .ach-points {
+  color: var(--white);
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 600;
+}
+
+.ach-pyramid {
+  width: 52px;
+  height: 52px;
+  fill: rgba(244, 244, 244, 0.2);
+}
+
+.ach-pyramid .is-lit {
+  fill: var(--white);
+}
+
+.ach-detail-value {
+  margin: 0;
+  font-size: 15px;
+  line-height: 20px;
+}
+
+/* Progress and Details read from the left. */
+.ach-detail-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  margin-top: 28px;
+  text-align: left;
+}
+
+.ach-detail-label {
+  margin: 0;
+  color: var(--gray);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.ach-detail-col .ach-detail-label {
+  margin-top: 2px;
+}
+
+.ach-detail-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.ach-detail-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.ach-detail-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 21px;
+}
+
+.ach-reveal {
+  margin: 32px 0 0;
+  padding: 10px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(244, 244, 244, 0.16);
+  color: var(--white);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .ach-reveal:hover {
+    background: rgba(244, 244, 244, 0.22);
+  }
+}
