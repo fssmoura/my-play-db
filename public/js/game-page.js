@@ -78,6 +78,65 @@ const SLOP = 8;
 // The sheet's resting top, px from the viewport top (css: .game-spacer).
 const REST_TOP = 85;
 
+// A dark version of the banner's main colour, for the fade under it and the
+// top of the page (the way streaming apps tint their backgrounds). Reads the
+// lower half (what fades out), favouring colourful pixels over grey ones.
+// Null when the image can't be read (no CORS), leaving plain black.
+function bannerTint(img) {
+  try {
+    const w = 24;
+    const h = 12;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const sh = img.naturalHeight / 2;
+    ctx.drawImage(img, 0, sh, img.naturalWidth, sh, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    let total = 0;
+    let chroma = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const max = Math.max(data[i], data[i + 1], data[i + 2]);
+      const min = Math.min(data[i], data[i + 1], data[i + 2]);
+      const weight = 0.15 + (max - min) / 255;
+      r += data[i] * weight;
+      g += data[i + 1] * weight;
+      b += data[i + 2] * weight;
+      total += weight;
+      chroma += (max - min) / 255;
+    }
+    if (!total) return null;
+    const [hue, sat] = toHsl(r / total, g / total, b / total);
+    // Mostly white, grey or cream art fades to a near-neutral dark grey
+    // rather than a strong tint of its faint hue.
+    const vivid = Math.min(chroma / (data.length / 4) / 0.25, 1);
+    const s = Math.min(sat, 0.45) * vivid;
+    return `hsl(${Math.round(hue)} ${Math.round(s * 100)}% 11%)`;
+  } catch {
+    return null;
+  }
+}
+
+function toHsl(r, g, b) {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (!d) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  let h;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, s, l];
+}
+
 export function createGamePage({ game, content, library, onProgress }) {
   let parts = null;
   let overlay = null;
@@ -177,6 +236,7 @@ export function createGamePage({ game, content, library, onProgress }) {
       // resolveGameArt does not throw; stay defensive so loading always ends.
     }
     if (run !== artRun || !parts) return;
+    parts.body.style.removeProperty("--tint");
     // The heading sits in the spacer, between Back and the menu pill, so the
     // rising sheet scrolls it away.
     const heading = gameHeading(row);
@@ -222,6 +282,10 @@ export function createGamePage({ game, content, library, onProgress }) {
       loadImageForGlass(img, url, {
         onLoad: () => {
           if (run !== artRun) return;
+          if (cls === "game-banner") {
+            const tint = bannerTint(img);
+            if (tint) parts.body.style.setProperty("--tint", tint);
+          }
           if (cls === "game-logo" && img.naturalWidth && img.naturalHeight) {
             // On the body, so the info line below can follow the logo's height.
             parts.body.style.setProperty(
@@ -317,23 +381,42 @@ export function createGamePage({ game, content, library, onProgress }) {
   // Reports scrolling to the toolbar, and keeps the glass current: the lenses
   // photograph the page, and an inner scroller is not something they track.
   let lastTop = 0;
+  let lastOverlap = 0;
+  let lastUnder = 0;
   function onScroll() {
     const top = parts.scroller.scrollTop;
     game.reportScroll({ top, delta: top - lastTop });
     lastTop = top;
+    // The sheet's top meets the name's bottom (25 + 44px) at 16px scrolled;
+    // its shadow fades in over the next 16px.
+    const overlap = Math.min(Math.max((top - 16) / 16, 0), 1);
+    if (overlap !== lastOverlap) {
+      lastOverlap = overlap;
+      parts.sheet.style.setProperty("--overlap", overlap.toFixed(3));
+    }
+    // Content starts passing under the pinned banner once the sheet has risen
+    // (REST_TOP); the fade under the logo grows over the next 60px.
+    const under = Math.min(Math.max((top - REST_TOP) / 60, 0), 1);
+    if (under !== lastUnder) {
+      lastUnder = under;
+      parts.sheet.style.setProperty("--under", under.toFixed(3));
+    }
     // Only the rise changes what is under the top bar's lenses; past it the
     // pinned banner (or nothing) is there. See glass-refresh.js for the cost.
     refreshGlassWhileScrolling({ live: top <= REST_TOP });
   }
 
-  // The scroll indicator starts below the banner (where the scrolling content
-  // is), or just under the top bar when there is none.
+  // The scroll indicator starts below the banner and the black under its logo
+  // (where the scrolling content shows), or just under the top bar when there
+  // is none.
   const TRACK_TOP = 24;
   function trackTop() {
     const banner = parts?.body.querySelector(".game-banner");
     if (!banner) return TRACK_TOP;
+    const logo = parts.body.querySelector(".game-head .game-logo");
+    const hang = logo ? Math.max(0, logo.offsetHeight / 2 - 8) : 0;
     const sheetTop = Math.max(0, REST_TOP - parts.scroller.scrollTop);
-    return Math.max(TRACK_TOP, sheetTop + banner.offsetHeight + 6);
+    return Math.max(TRACK_TOP, sheetTop + banner.offsetHeight + hang + 6);
   }
 
   function onOpen({ id }) {
@@ -354,6 +437,8 @@ export function createGamePage({ game, content, library, onProgress }) {
         bottom: 12,
       });
       lastTop = 0;
+      lastOverlap = 0;
+      lastUnder = 0;
       parts.scroller.addEventListener("scroll", onScroll, { passive: true });
       document.documentElement.classList.add("is-game-open");
       freezeContent();

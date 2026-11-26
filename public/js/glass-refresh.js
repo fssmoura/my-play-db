@@ -115,16 +115,24 @@ export function refreshGlass() {
 // once per glass layer, which is by far the most expensive thing on the page
 // (measured ~28ms per frame at 4x CPU slowdown when done every frame), so live
 // recaptures are rate-limited to one per LIVE_GAP_MS; `live: false` skips them
-// and leaves only the final capture shortly after scrolling stops.
+// and leaves only the final capture shortly after scrolling stops. The first
+// live one waits START_MS into a scroll, so it doesn't land on the first
+// frames (when the game page's toolbar is also shrinking) and a short scroll
+// gets only the final capture.
 let settleTimer = 0;
 let liveTimer = 0;
 let lastLive = 0;
 const SETTLE_MS = 120;
 const LIVE_GAP_MS = 150;
+const START_MS = 300;
 
 export function refreshGlassWhileScrolling({ live = true } = {}) {
+  if (!settleTimer) lastLive = performance.now() + START_MS - LIVE_GAP_MS;
   clearTimeout(settleTimer);
-  settleTimer = setTimeout(refreshGlass, SETTLE_MS);
+  settleTimer = setTimeout(() => {
+    settleTimer = 0;
+    refreshGlass();
+  }, SETTLE_MS);
   if (!live || liveTimer) return;
   const wait = Math.max(0, lastLive + LIVE_GAP_MS - performance.now());
   liveTimer = setTimeout(() => {

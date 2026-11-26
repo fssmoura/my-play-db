@@ -5,7 +5,8 @@
 // - It shows only while the game page is open, rising and fading in with the
 //   sheet (the game state's "progress" event, which follows the sheet's spring
 //   and a finger's drag alike).
-// - Two looks, one number: --bar-t on the stage, 1 expanded (icon + label),
+// - Two looks, one number: --bar-t on the bar (not the stage, so each frame
+//   restyles only the bar), 1 expanded (icon + label),
 //   0 compact (smaller icons only), animated with a spring.
 // - Scrolling the page either way makes it compact. Per Apple's HIG (tab bars,
 //   minimise on scroll) it comes back when someone taps it or scrolls to the
@@ -71,7 +72,7 @@ export function wireBottomBar({
   let expanded = true;
 
   const spring = createSpring({
-    onUpdate: (v) => stage.style.setProperty("--bar-t", v.toFixed(4)),
+    onUpdate: (v) => bar.style.setProperty("--bar-t", v.toFixed(4)),
   });
   spring.set(1);
 

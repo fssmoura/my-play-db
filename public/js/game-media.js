@@ -340,6 +340,9 @@ function wireRowScrolling(row) {
     },
     true,
   );
+  // One wheel gesture stays with the row: reaching its end mid-spin doesn't
+  // hand the rest to the page; a fresh spin (after a short pause) does.
+  let latchUntil = 0;
   row.addEventListener(
     "wheel",
     (e) => {
@@ -347,8 +350,12 @@ function wireRowScrolling(row) {
       const delta = e.deltaY * (e.deltaMode === 1 ? 16 : 1);
       const easing = mode === "ease";
       const from = easing ? target : row.scrollLeft;
-      if ((delta < 0 && from <= 0) || (delta > 0 && from >= max() - 1)) return;
+      const atEnd =
+        (delta < 0 && from <= 0) || (delta > 0 && from >= max() - 1);
+      if (atEnd && e.timeStamp > latchUntil) return;
       e.preventDefault();
+      latchUntil = e.timeStamp + 250;
+      if (atEnd) return;
       if (!easing) pos = row.scrollLeft;
       target = clamp(from + delta);
       run("ease");

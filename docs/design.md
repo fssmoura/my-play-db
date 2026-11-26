@@ -115,8 +115,14 @@ Rules a redesign must keep, with the HIG reason where there is one.
   down dismisses it.
 - While it is open the search field and filter fold away but the search is
   kept; the main pill and Back stay.
-- The header (banner and logo) is sticky, so content dissolves under the
-  banner as it scrolls. Banner and logo show only when the game has them.
+- The header (banner and logo) is sticky. The pinned area reaches below the
+  logo and ends in a soft fade, so content scrolling up fades out beneath the
+  logo rather than being cut off at the banner's edge. Banner and logo show
+  only when the game has them.
+- The banner fades into a dark version of its own main colour, which carries
+  on down the top of the page before easing into black (as streaming apps
+  do). Mostly white, grey or cream banners give a near-neutral dark grey.
+  Plain black when the banner's colours can't be read.
 - Logos are sized to roughly the same area whatever their shape, so wide and
   squarer logos carry similar weight; they sit centred on the banner's edge.
 - Under the logo, "Available for" then one grey icon per platform family:
@@ -134,13 +140,15 @@ Rules a redesign must keep, with the HIG reason where there is one.
 - In the top bar, between Back and the menu pill, the game's name in white
   over type · first release date (earliest on any platform) in grey, like the
   Customize header. It dissolves in and out as the game opens and closes
-  rather than sliding with the sheet, and scrolls away as the sheet rises.
+  rather than sliding with the sheet, and stays put while the sheet scrolls
+  up over it.
 - Further down, **Trailers** then **Images** (screenshots, then artwork),
   each drawn only when the game has some. A section is a title with a chevron
   over a sideways row of 16:9 cards, the next one peeking in, shimmering like
   the results grid until their picture arrives. No arrows: a mouse drags the
   row (gliding on after a flick) or turns its wheel over it (eased, not in
-  steps); cards snap under a finger only. Trailers run newest first (IGDB
+  steps; one spin stays with the row even at its end, and the page only
+  scrolls on a fresh spin); cards snap under a finger only. Trailers run newest first (IGDB
   lists them oldest first, with no dates). Trailer cards show the video's title and a play
   mark; no running time, since YouTube only gives that through a keyed API.
   The title opens every card of the section as a full-screen grid.

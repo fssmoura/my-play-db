@@ -115,7 +115,8 @@ changes, so anything else that changes what is under the glass needs
   16 times the work.
 - **Never recapture every frame.** Back-to-back captures caused the game page's
   scroll lag; inner scrollers go through the throttled
-  `refreshGlassWhileScrolling()`.
+  `refreshGlassWhileScrolling()`, which also skips the first 300ms of a scroll
+  (the toolbar is shrinking then; a capture on top of it stuttered the start).
 - Known limit: once real content scrolls under a lens, it stays stale until
   scrolling pauses. That is why the Customize drawer's images stop above its
   tabs instead of scrolling under them: the constant re-photographing made
@@ -288,9 +289,10 @@ What depends on the sheet being taller than the screen:
   trailer's still covers YouTube's suggestions. YouTube's play/pause circle
   still flashes mid-frame as a video starts; the owner prefers that to
   holding the still over the first moment.
-- **Browsers may refuse to start a video with sound** without a tap on the
-  video itself (iPhones especially). If it hasn't started after 1.5s it is
-  started muted; the volume button unmutes. Untested on a phone.
+- **Phones only autoplay muted videos**, so on touch screens (no hover) a
+  trailer always starts muted; the volume button turns the sound on. On a
+  computer it starts with sound, and if the browser refuses, it is started
+  muted after 1.5s.
 - Card stills come from `i.ytimg.com` (`maxresdefault`, falling back to
   `hqdefault` on a 404 or YouTube's 120px stand-in). It sends CORS headers, so
   the stills are readable by the glass like IGDB's.

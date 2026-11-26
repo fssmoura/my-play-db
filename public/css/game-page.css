@@ -69,10 +69,11 @@ html.is-game-open body {
 
 /* The name over type · date, in the top bar between Back (25px + 44px + 12px
    gap) and the menu pill (--heading-right, measured in game-page.js), like the
-   Customize header: subheadline over footnote (HIG typography). It is in the
-   spacer, so the rising sheet scrolls it away. */
+   Customize header: subheadline over footnote (HIG typography). Fixed to the
+   layer (its transform makes it the containing block), so it stays put and
+   the rising sheet, later in the page, slides over it. */
 .game-heading {
-  position: absolute;
+  position: fixed;
   top: 25px;
   left: 81px;
   right: var(--heading-right, 177px);
@@ -136,6 +137,9 @@ html.is-game-open body {
   background: var(--black);
   overflow: clip;
   outline: none;
+  /* A faint shadow above its top edge, faded in by game-page.js (--overlap)
+     only once the sheet reaches the game's name. */
+  box-shadow: 0 -3px 10px rgba(0, 0, 0, calc(0.5 * var(--overlap, 0)));
   /* The page-wide edge stroke is much too bright over a surface this big, and
      the sheet only lights its top-left corner (nothing at the bottom right). */
   --edge-alpha: 0.4;
@@ -168,15 +172,68 @@ html.is-game-open body {
   padding-top: 32px;
 }
 
+/* Under the pinned banner: the tint, fading from the banner's edge on a
+   smooth S-curve with no solid strip (a flat band read as a divider), so
+   content scrolling up
+   dissolves behind the logo instead of being cut off at the banner's edge.
+   At rest the fade is short and ends at the platform line (colour on the same
+   colour); once content scrolls under, it grows (--under, set by
+   game-page.js). */
+.game-head.has-banner {
+  --hang: 0px;
+}
+
+.game-head.has-banner:has(.game-logo) {
+  --hang: calc(var(--logo-h) / 2 - 8px);
+}
+
+.game-head.has-banner::after {
+  --len: calc(var(--hang) + 48px + 72px * var(--under, 0));
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: calc(var(--len) * 1.25);
+  background: linear-gradient(
+    to bottom,
+    var(--tint) 0,
+    color-mix(in srgb, var(--tint) 97%, transparent) 10%,
+    color-mix(in srgb, var(--tint) 90%, transparent) 20%,
+    color-mix(in srgb, var(--tint) 79%, transparent) 30%,
+    color-mix(in srgb, var(--tint) 65%, transparent) 40%,
+    color-mix(in srgb, var(--tint) 50%, transparent) 50%,
+    color-mix(in srgb, var(--tint) 35%, transparent) 60%,
+    color-mix(in srgb, var(--tint) 21%, transparent) 70%,
+    color-mix(in srgb, var(--tint) 10%, transparent) 80%,
+    color-mix(in srgb, var(--tint) 3%, transparent) 90%,
+    transparent 100%
+  );
+  /* A slight curve: the box runs a quarter longer, and an ellipse at the
+     bottom centre clears that extra there, so the fade reaches a little
+     further at the sides. */
+  -webkit-mask-image: radial-gradient(
+    70% calc(var(--len) * 0.5) at 50% 100%,
+    transparent 45%,
+    rgba(0, 0, 0, 0.5) 72%,
+    #000 100%
+  );
+  mask-image: radial-gradient(
+    70% calc(var(--len) * 0.5) at 50% 100%,
+    transparent 45%,
+    rgba(0, 0, 0, 0.5) 72%,
+    #000 100%
+  );
+}
 .game-banner {
   position: relative;
   width: 100%;
   aspect-ratio: 439 / 238;
   max-height: 420px;
   overflow: hidden;
-  /* Behind the fading image: the sheet's black, so content scrolling under
-     the pinned banner disappears into it. */
-  background: var(--black);
+  /* Behind the fading image: the tint (or the sheet's black), so the image
+     fades into the same colour as the page under it. */
+  background: var(--tint);
 }
 
 /* The logo (SteamGridDB's, usually): centred, fitted without cropping. Every
@@ -200,6 +257,7 @@ html.is-game-open body {
   top: 100%;
   left: 50%;
   margin: 0;
+  z-index: 1;
   transform: translate(-50%, calc(-50% - 8px));
 }
 
@@ -311,7 +369,7 @@ html.is-game-open body {
 }
 
 .game-head.has-banner:has(.game-logo) + .game-info {
-  margin-top: calc(var(--logo-h) / 2 - 8px + 40px);
+  margin-top: calc(var(--logo-h) / 2 - 8px + 48px);
 }
 /* An icon in the line's own grey. Every icon gets the
    same width, centred, so they sit evenly however much of it their shape fills;
@@ -425,15 +483,40 @@ html.is-game-open body {
    ends the content fades in and the shimmer fades out. Same shimmer as the
    result cards (result-shimmer / result-pulse in pages.css). Covers the first
    sheet; the edge stroke (z-index 2) stays on top. */
+/* A dark version of the banner's main colour (bannerTint in game-page.js),
+   black until it is known. Registered so it can animate in. */
+@property --tint {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #09090b;
+}
+
 .game-sheet-body {
   /* The logo's size (see .game-logo), here so the info line can follow it.
      --logo-ratio is set on this element once the logo loads. */
   --logo-ratio: 3;
   --logo-side: clamp(96px, 30vw, 190px);
   --logo-h: min(26vw, 150px, calc(var(--logo-side) / sqrt(var(--logo-ratio))));
+  /* The tint carries on below the banner, then eases into the sheet's black
+     over the first screenful. */
+  background:
+    linear-gradient(
+        to bottom,
+        var(--tint) 0,
+        var(--tint) 30%,
+        color-mix(in srgb, var(--tint) 85%, var(--black)) 45%,
+        color-mix(in srgb, var(--tint) 60%, var(--black)) 60%,
+        color-mix(in srgb, var(--tint) 32%, var(--black)) 75%,
+        color-mix(in srgb, var(--tint) 11%, var(--black)) 90%,
+        var(--black) 100%
+      )
+      top / 100% 900px no-repeat,
+    var(--black);
   /* Room at the end so the floating toolbar never covers the last content. */
   padding-bottom: calc(120px + env(safe-area-inset-bottom));
-  transition: opacity 0.3s ease-out;
+  transition:
+    opacity 0.3s ease-out,
+    --tint 0.4s ease-out;
 }
 
 .game-sheet.is-loading .game-sheet-body {

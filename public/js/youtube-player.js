@@ -58,12 +58,16 @@ export async function createYouTubePlayer(host, videoId, { onState } = {}) {
   let playing = false;
   let ready;
   const whenReady = new Promise((r) => (ready = r));
+  // Phones only start a video by themselves when it is muted; the volume
+  // button turns the sound on.
+  const phone = window.matchMedia("(hover: none)").matches;
 
   const player = new YT.Player(host, {
     host: "https://www.youtube-nocookie.com",
     videoId,
     playerVars: {
       autoplay: 1,
+      mute: phone ? 1 : 0,
       controls: 0,
       disablekb: 1,
       fs: 0,
