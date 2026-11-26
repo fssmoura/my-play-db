@@ -124,7 +124,9 @@ function bannerTint(img) {
 }
 
 // The banner art heavily blurred and darkened, as a small image the page
-// stretches (see .game-sheet-body::before). The blur is a few downscale
+// stretches (see .game-sheet-body::before) to twice the banner's height: the
+// banner as it shows (cropped like object-fit: cover) on top, and a mirror of
+// it below, so the picture seems to carry on down the page. The blur is a few downscale
 // steps, each softened by the browser's smoothing, then a box blur on the
 // tiny copy. Null when the image can't be read (no CORS).
 function bannerGlow(img, tint) {
@@ -137,7 +139,20 @@ function bannerGlow(img, tint) {
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(img, 0, 0, w, h);
+    const half = h / 2;
+    const iw = img.naturalWidth;
+    const ih = img.naturalHeight;
+    const scale = Math.max(w / iw, half / ih);
+    const sw = w / scale;
+    const sh = half / scale;
+    const sx = (iw - sw) / 2;
+    const sy = (ih - sh) / 2;
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, half);
+    ctx.save();
+    ctx.translate(0, h);
+    ctx.scale(1, -1);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, half);
+    ctx.restore();
     const image = ctx.getImageData(0, 0, w, h);
     const d = image.data;
     let src = Float32Array.from(d);
@@ -473,6 +488,7 @@ export function createGamePage({ game, content, library, onProgress }) {
   // Reports scrolling to the toolbar, and moves what follows the scroll.
   let lastTop = 0;
   let lastOverlap = 0;
+  let lastFlat = false;
   let lastUnder = 0;
   function onScroll() {
     const top = parts.scroller.scrollTop;
@@ -485,6 +501,13 @@ export function createGamePage({ game, content, library, onProgress }) {
     if (overlap !== lastOverlap) {
       lastOverlap = overlap;
       parts.sheet.style.setProperty("--overlap", overlap.toFixed(3));
+    }
+    // Its rounded top corners square off the moment it reaches the top of
+    // the screen (REST_TOP), and round again as soon as it leaves.
+    const flat = top >= REST_TOP;
+    if (flat !== lastFlat) {
+      lastFlat = flat;
+      parts.sheet.classList.toggle("is-flat", flat);
     }
     // Content starts passing under the pinned banner once the sheet has risen
     // (REST_TOP); the fade under the logo grows over the next 60px. It starts

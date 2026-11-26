@@ -134,6 +134,8 @@ html.is-game-open body {
   min-height: calc(100dvh - 85px);
   margin: 0 25px;
   border-radius: 24px 24px 0 0;
+  /* Squared off once it reaches the top of the screen (game-page.js). */
+  transition: border-radius 0.2s ease-out;
   background: var(--black);
   overflow: clip;
   outline: none;
@@ -143,6 +145,10 @@ html.is-game-open body {
   /* The page-wide edge stroke is much too bright over a surface this big, and
      the sheet only lights its top-left corner (nothing at the bottom right). */
   --edge-alpha: 0.4;
+}
+
+.game-sheet.is-flat {
+  border-radius: 0;
 }
 
 /* Edge to edge below the narrowest tablet in portrait (744px). */
