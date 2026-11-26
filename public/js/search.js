@@ -235,6 +235,17 @@ function popularList() {
   return popularPromise;
 }
 
+/** A game's place (1 = top) on today's popular list, or null if it isn't there. */
+export async function trendingRank(id) {
+  try {
+    const games = await popularList();
+    const at = games.findIndex((game) => game.id === id);
+    return at < 0 ? null : at + 1;
+  } catch {
+    return null;
+  }
+}
+
 /** Popular recent releases, best first, with the owner's chosen covers. */
 export async function popular() {
   const games = await popularList();

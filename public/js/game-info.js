@@ -317,6 +317,88 @@ function metaText(row) {
     .join(" · ");
 }
 
+// Five stars filled to IGDB's rating (0-100, with the owner's own vote counted
+// in), then the number and a vote-count tooltip; then "Trending #X" when the
+// game is on the popular list. The stars are also the owner's voting control:
+// hovering lights them white up to the pointer, a click saves that many (the
+// same again removes it) through onRate(value | null).
+export function gameRating(row, rank, { onRate } = {}) {
+  if (!row) return null;
+  const mine = Number(row.my_rating) || 0;
+  const igdb = Number(row.rating) > 0 ? Number(row.rating) : 0;
+  const igdbCount = igdb ? Math.max(Number(row.rating_count) || 0, 1) : 0;
+  const count = igdbCount + (mine ? 1 : 0);
+  // Mine is 1-5 stars, which is 20-100 on IGDB's scale.
+  const score = count ? (igdb * igdbCount + mine * 20) / count / 20 : 0;
+  const shown = Math.round(score * 10) / 10;
+
+  const line = document.createElement("div");
+  line.className = "game-rating";
+  const part = document.createElement("span");
+  part.className = "game-rating-score";
+  const stars = document.createElement("span");
+  stars.className = "game-stars";
+  stars.classList.toggle("is-mine", !!mine);
+  const fill = document.createElement("span");
+  fill.className = "game-stars-fill";
+  fill.textContent = "★★★★★";
+  fill.style.width = `${(shown / 5) * 100}%`;
+  const lit = document.createElement("span");
+  lit.className = "game-stars-lit";
+  lit.textContent = "★★★★★";
+  stars.append("★★★★★", fill, lit);
+  if (onRate) {
+    for (let n = 1; n <= 5; n++) {
+      const hit = document.createElement("button");
+      hit.type = "button";
+      hit.className = "game-star-hit";
+      hit.style.left = `${(n - 1) * 20}%`;
+      hit.setAttribute("aria-label", `Rate ${n} out of 5`);
+      hit.addEventListener("pointerenter", (event) => {
+        if (event.pointerType === "mouse") lit.style.width = `${n * 20}%`;
+      });
+      hit.addEventListener("click", () => onRate(n === mine ? null : n));
+      stars.append(hit);
+    }
+    stars.addEventListener("pointerleave", () => {
+      lit.style.width = "0";
+    });
+  }
+  part.append(stars);
+  if (count) {
+    const num = document.createElement("span");
+    num.textContent = shown.toFixed(1);
+    part.append(num);
+    const tip = document.createElement("span");
+    tip.className = "game-tip";
+    tip.setAttribute("aria-hidden", "true");
+    const votes = `${count.toLocaleString("en-US")} ${count === 1 ? "vote" : "votes"}`;
+    for (const text of mine ? [votes, `Your vote: ${mine}`] : [votes]) {
+      const row = document.createElement("span");
+      row.className = "game-tip-line";
+      row.textContent = text;
+      tip.append(row);
+    }
+    part.append(tip);
+    wireTaps(line, ".game-rating-score");
+  }
+  part.setAttribute(
+    "aria-label",
+    count ? `Rating ${shown} out of 5, ${count} votes` : "No votes yet",
+  );
+  line.append(part);
+
+  if (rank) {
+    const divider = document.createElement("span");
+    divider.className = "game-rating-divider";
+    divider.setAttribute("aria-hidden", "true");
+    const trend = document.createElement("span");
+    trend.textContent = `Trending #${rank}`;
+    line.append(divider, trend);
+  }
+  return line;
+}
+
 export function gameName(row) {
   if (!row?.name) return null;
   const name = document.createElement("h1");
@@ -395,7 +477,7 @@ function markEl({ key, icon, title, owned }) {
 
 // A tap (touch or pen) on a mark shows its tooltip until the next tap
 // anywhere; a mouse uses hover instead.
-function wireTaps(list) {
+function wireTaps(list, hostSelector = ".game-platform") {
   const close = (event) => {
     if (event && list.contains(event.target)) return;
     for (const m of list.querySelectorAll(".is-tip")) {
@@ -404,8 +486,9 @@ function wireTaps(list) {
     document.removeEventListener("pointerdown", close, true);
   };
   list.addEventListener("pointerup", (event) => {
-    if (event.pointerType === "mouse") return;
-    const mark = event.target.closest(".game-platform");
+    if (event.pointerType === "mouse" || event.target.closest(".game-star-hit"))
+      return;
+    const mark = event.target.closest(hostSelector);
     const open = mark && !mark.classList.contains("is-tip");
     close();
     if (!open) return;
@@ -426,7 +509,9 @@ function ownedConsoles(family) {
 // measuring, so the button sits on the last line whatever the width. Opening
 // and closing animate the height so what follows is pushed or pulled along.
 export function gameDescription(row, { onSettle } = {}) {
-  const full = row?.summary?.trim() || row?.storyline?.trim() || "";
+  const raw = row?.summary?.trim() || row?.storyline?.trim() || "";
+  // Blank lines between paragraphs are dropped; the line breaks stay.
+  const full = raw.replace(/\s*\n\s*/g, "\n");
   if (!full) return null;
   const box = document.createElement("div");
   box.className = "game-desc";

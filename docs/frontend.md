@@ -251,6 +251,13 @@ For large originals, use the host's own resize parameter if it has one.
   platform marks: the summary, or the storyline when there is no summary. The three-line
   cut and the "Read more" button are found by measuring, so they are redone on
   a width change; opening animates the height, then asks the glass to refresh.
+- **The rating line** (`gameRating`) sits under the description: IGDB's
+  `rating` (0-100) as five stars (rating / 20, one decimal), then "Trending #X"
+  when the game is on search's popular list (`trendingRank` in `search.js`,
+  from the day's saved copy). The line is added after the page is up, once
+  the rank is known. The stars are also the owner's vote: hover lights them
+  white, a click saves `games.my_rating` (the same star again removes it), and
+  the vote is counted into the average and the vote count.
 - **Platform icons** (`game-info.js`) are cropped to their drawing: each
   `viewBox` is the path's real bounds, measured with `getBBox()` in the
   browser (the `svg-path-bounds` package gave wrong ones), so a common height

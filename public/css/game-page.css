@@ -511,6 +511,73 @@ html.is-game-open body {
   margin-top: 16px;
 }
 
+/* IGDB rating and trending place (game-info.js). */
+.game-rating {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 14px 52px 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgba(244, 244, 244, 0.5);
+}
+
+.game-head.has-banner:has(.game-logo) + .game-rating {
+  margin-top: calc(var(--logo-h) / 2 - 8px + 26px);
+}
+
+.game-rating-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.game-stars {
+  position: relative;
+  display: inline-block;
+  letter-spacing: 1px;
+  color: rgba(244, 244, 244, 0.25);
+}
+
+.game-stars-fill,
+.game-stars-lit {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: rgba(244, 244, 244, 0.7);
+  pointer-events: none;
+}
+
+.game-stars-lit {
+  width: 0;
+  color: #fff;
+}
+
+.game-stars.is-mine .game-stars-fill {
+  color: #fff;
+}
+
+.game-star-hit {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  width: 20%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.game-rating-divider {
+  width: 1px;
+  height: 12px;
+  background: rgba(244, 244, 244, 0.3);
+}
+
 .game-desc-text {
   margin: 0;
   font-size: 13px;
@@ -564,7 +631,8 @@ html.is-game-open body {
 
 /* The tooltip: a small dark label centred under the mark, shown on hover
    (mouse) or after a tap (.is-tip). */
-.game-platform {
+.game-platform,
+.game-rating-score {
   position: relative;
 }
 
@@ -617,13 +685,15 @@ html.is-game-open body {
   height: calc(13px * var(--icon-scale, 1));
 }
 
-.game-platform.is-tip .game-tip {
+.game-platform.is-tip .game-tip,
+.game-rating-score.is-tip .game-tip {
   opacity: 1;
   transform: translate(-50%, 0);
 }
 
 @media (hover: hover) {
-  .game-platform:hover .game-tip {
+  .game-platform:hover .game-tip,
+  .game-rating-score:hover .game-tip {
     opacity: 1;
     transform: translate(-50%, 0);
   }

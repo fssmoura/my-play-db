@@ -169,6 +169,15 @@ export async function setGameArtArray(id, kind, list) {
   lookups.clear();
 }
 
+/** The owner's own star vote (1-5, or null to remove it). Throws. */
+export async function setMyRating(id, value) {
+  const { error } = await supabase
+    .from("games")
+    .update({ my_rating: value })
+    .eq("id", Number(id));
+  if (error) throw error;
+}
+
 /** sgdb_id: null never tried, 0 tried and nothing found, >0 matched. Throws. */
 export async function setSgdbId(id, value) {
   const { error } = await supabase.rpc("set_sgdb_id", {

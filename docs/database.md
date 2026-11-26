@@ -73,6 +73,7 @@ its grants.**
 | `platforms`             | jsonb       | IGDB                    | `[{id, name, abbreviation}]` - IGDB platform objects                                                                         |
 | `rating`                | numeric     | IGDB                    | `total_rating` 0-100                                                                                                         |
 | `rating_count`          | integer     | IGDB                    | `total_rating_count`                                                                                                         |
+| `my_rating`             | smallint    | the owner               | 1-5 stars from the game page; null = no vote. Never written by a sync; `prune_games_cache()` keeps rated rows                |
 | `videos`                | jsonb       | IGDB                    | `[{name, url}]` - YouTube URLs                                                                                               |
 | `websites`              | jsonb       | IGDB                    | `[{url, type}]` - type enriched to human name (official/steam/epic/etc.)                                                     |
 | `collections`           | jsonb       | IGDB                    | `[{id, name}]`                                                                                                               |
@@ -359,7 +360,8 @@ response to hitting it.
   rewrites `synced_at` for the results it saw, so a game that keeps turning up
   in searches keeps resetting its own clock. "Stale" really means "nothing you
   have searched lately surfaced this".
-- **not referenced by `player_games`**.
+- **not referenced by `player_games`**, and
+- **not rated** - `my_rating` is null.
 
 **A `player_games` row is the only thing that makes a `games` row permanent.**
 Being fully detail-synced does not protect it: a game whose detail page was

@@ -29,14 +29,16 @@ import {
   refreshGlass,
 } from "/js/glass-refresh.js";
 import { resolveGameArt, isIgdb } from "/js/game-art.js";
-import { loadGameRow, setGameArtArray } from "/js/games-cache.js";
+import { loadGameRow, setGameArtArray, setMyRating } from "/js/games-cache.js";
 import { displayImageUrl, loadImageForGlass } from "/js/image-url.js";
 import {
   gameHeading,
   gameInfoLine,
   gameDescription,
   gameName,
+  gameRating,
 } from "/js/game-info.js";
+import { trendingRank } from "/js/search.js";
 import { gameMediaSections, closeMediaLayers } from "/js/game-media.js";
 
 const reducedMotion = () =>
@@ -468,6 +470,7 @@ export function createGamePage({ game, content, library, onProgress }) {
     if (!logo) placeName();
     placeInfo();
     placeDescription();
+    placeRating();
     placeMedia(run);
     const bannerUrl = banner ? displayImageUrl(banner, "banner") : null;
     const logoUrl = logo ? displayImageUrl(logo, "logo") : null;
@@ -604,6 +607,40 @@ export function createGamePage({ game, content, library, onProgress }) {
       parts.body.querySelector(".game-head");
     if (anchor) anchor.after(desc);
     else parts.body.prepend(desc);
+  }
+
+  // The rating line goes under the description. The trending place arrives
+  // after the page is up (usually instantly, from the day's saved list).
+  async function placeRating() {
+    if (!parts) return;
+    parts.body.querySelector(".game-rating")?.remove();
+    if (!shown) return;
+    const { id, row } = shown;
+    const rank = await trendingRank(id);
+    if (!parts || shown?.id !== id) return;
+    parts.body.querySelector(".game-rating")?.remove();
+    const line = gameRating(row, rank, {
+      onRate: async (value) => {
+        try {
+          await setMyRating(id, value);
+        } catch {
+          return;
+        }
+        if (shown?.id !== id) return;
+        row.my_rating = value;
+        placeRating();
+      },
+    });
+    if (!line) return;
+    const anchor =
+      parts.body.querySelector(".game-desc") ??
+      parts.body.querySelector(".game-info") ??
+      parts.body.querySelector(":scope > .game-name") ??
+      parts.body.querySelector(".game-head");
+    if (anchor) anchor.after(line);
+    else parts.body.prepend(line);
+    overlay?.update();
+    refreshGlass();
   }
 
   // Trailers and Images, last in the body. Their pictures arrive after the
