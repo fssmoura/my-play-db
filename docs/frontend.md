@@ -244,11 +244,10 @@ For large originals, use the host's own resize parameter if it has one.
 
 ### Scrolling, once the page has content
 
-The sheet has only the platform line so far, so it is one screen tall and
-barely scrolls.
-The scroll behaviour was built against a temporary filler
+The scroll behaviour was first built against a temporary filler
 (`.game-sheet-body { min-height: 250dvh }`, added in 1dee22d, removed in
-1404f76); put it back locally to test scrolling before real content exists.
+1404f76); a game with no trailers or images is still about one screen tall,
+so put it back locally to test scrolling on one.
 What depends on the sheet being taller than the screen:
 
 - **One scroller for everything** (`.game-scroll`): an 85px spacer, then the
@@ -265,9 +264,10 @@ What depends on the sheet being taller than the screen:
 - **Scroll indicator** (`overlay-scroll.js`) starts below the banner
   (`trackTop()`) and follows content height on its own (ResizeObserver).
 - **Bottom toolbar** goes compact after scrolling, and expands only at the top
-  or on tap (`game.reportScroll` -> `bottom-bar.js`). Not done yet: the end of
-  the content needs bottom padding so the floating toolbar doesn't cover it.
-- **Swipe down to close** only starts when the scroller is at the top.
+  or on tap (`game.reportScroll` -> `bottom-bar.js`). `.game-sheet-body`'s
+  bottom padding keeps it off the last content.
+- **Swipe down to close** only starts when the scroller is at the top, and
+  gives way to a mostly sideways move (the Trailers and Images rows).
 - **Glass:** scrolling during the rise retakes the top bar's glass (throttled);
   past it, nothing under the lenses changes, so it doesn't. Content that
   arrives or changes height after opening doesn't change the page's size, so
@@ -275,6 +275,28 @@ What depends on the sheet being taller than the screen:
   does (`settle()` in `game-page.js`).
 - **Loading:** `.game-sheet-body` is hidden while the sheet shimmers; new
   content appears with the rest when `finishLoading()` runs.
+
+### Trailers and Images
+
+- **Trailers play through YouTube's IFrame API** with its controls off; ours
+  are drawn over it. A transparent layer covers the iframe so taps reach the
+  viewer, never YouTube (which would take them and show its own UI).
+- **YouTube still draws its title, logo and "More videos"** on load and pause,
+  whatever the player settings, pinned to the iframe's edges. The iframe is
+  twice the frame's height and centred, so those land in black bands that the
+  frame cuts off while the video itself stays fully in view. At the end the
+  trailer's still covers YouTube's suggestions. YouTube's play/pause circle
+  still flashes mid-frame as a video starts; the owner prefers that to
+  holding the still over the first moment.
+- **Browsers may refuse to start a video with sound** without a tap on the
+  video itself (iPhones especially). If it hasn't started after 1.5s it is
+  started muted; the volume button unmutes. Untested on a phone.
+- Card stills come from `i.ytimg.com` (`maxresdefault`, falling back to
+  `hqdefault` on a 404 or YouTube's 120px stand-in). It sends CORS headers, so
+  the stills are readable by the glass like IGDB's.
+- The viewer and the all-cards page sit above everything (z-index 400+),
+  outside the sheet, and take Escape first (capture listener) so it doesn't
+  also close the game. Closing or switching the game closes them.
 
 ### Game page art
 

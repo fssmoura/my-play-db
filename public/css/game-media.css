@@ -1,0 +1,893 @@
+/* =========================================================================
+   my-play-db - the game page's Trailers and Images (js/game-media.js), their
+   all-cards page, and the full-screen viewer (js/media-viewer.js).
+   ========================================================================= */
+
+/* ---- sections on the game page ---- */
+.game-media {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  margin-top: 32px;
+  /* Back to the page-wide edge stroke: the sheet turns its own up, which is
+     too bright on cards this size. */
+  --edge-alpha: 0.25;
+}
+
+.media-head {
+  margin: 0 20px 8px;
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.media-head-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--white);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.media-head-chevron {
+  width: 20px;
+  height: 20px;
+  color: var(--gray);
+  transition: transform 0.15s ease;
+}
+
+.media-head-button:hover .media-head-chevron {
+  transform: translateX(2px);
+}
+
+/* Sideways only: the sheet's swipe-down leaves sideways moves to it. Cards
+   snap under a finger; a mouse or trackpad scrolls freely (game-media.js adds
+   dragging and the wheel). */
+.media-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 20px;
+  scroll-padding: 0 20px;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: pan-x pan-y;
+}
+
+@media (pointer: fine) {
+  .media-row {
+    scroll-snap-type: none;
+  }
+}
+
+.media-row.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.media-row::-webkit-scrollbar {
+  display: none;
+}
+
+/* Wide enough that the next card peeks in on a phone. */
+.media-card {
+  position: relative;
+  flex: 0 0 auto;
+  width: clamp(200px, 62vw, 300px);
+  aspect-ratio: 16 / 9;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--dark-gray);
+  color: var(--white);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  scroll-snap-align: start;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.media-card:focus {
+  outline: none;
+}
+
+.media-card:focus-visible {
+  outline: 2px solid var(--light-gray);
+  outline-offset: 2px;
+}
+
+.media-thumb {
+  position: absolute;
+  inset: 0;
+}
+
+.media-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+}
+
+.media-thumb.is-loaded img {
+  opacity: 1;
+}
+
+.media-card-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 12px 10px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+.media-card-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.media-card-play {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+/* ---- top left of the all-cards page and the viewer ----
+   Close and the section's name sit exactly where the game page has Back and
+   the game's name (menu.css .menu-back, game-page.css .game-heading). Close
+   imitates Back's glass in plain CSS: liquidGL can't draw over these layers
+   (nor photograph a YouTube video). */
+.media-grid-bar,
+.mv-top-left {
+  position: absolute;
+  top: 25px;
+  left: 25px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 50px);
+  height: 44px;
+}
+
+.media-grid-title,
+.mv-section {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
+}
+
+.media-grid-close,
+.mv-close {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  color: var(--light-gray);
+  opacity: 0.95;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  --edge-alpha: 0.35;
+}
+
+@media (hover: hover) {
+  .media-grid-close:hover,
+  .mv-close:hover {
+    opacity: 1;
+  }
+}
+
+.media-grid-close-icon,
+.mv-close .mv-icon {
+  width: 20px;
+  height: 20px;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.35));
+}
+
+/* ---- "Set as" (pictures): the circle top right, its menu, the confirmation ---- */
+.mv-top-right {
+  position: absolute;
+  top: 25px;
+  right: 25px;
+  z-index: 2;
+}
+
+/* Glass imitated in CSS, like Close (liquidGL can't draw on this layer). */
+.mv-menu {
+  position: absolute;
+  top: 52px;
+  right: 0;
+  min-width: 180px;
+  padding: 6px;
+  box-sizing: border-box;
+  border-radius: 24px;
+  background: rgba(40, 40, 42, 0.55);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  transform-origin: top right;
+  animation: mv-menu-in 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  --edge-alpha: 0.3;
+}
+
+.mv-menu[hidden] {
+  display: none;
+}
+
+@keyframes mv-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+.mv-menu-label {
+  margin: 0;
+  padding: 6px 14px 4px;
+  color: rgba(244, 244, 244, 0.55);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* Beats the generic button rules in sign-in.css. */
+.mv-menu .mv-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  margin: 0;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--light-gray);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.mv-menu .mv-menu-item:hover,
+.mv-menu .mv-menu-item:focus-visible {
+  background: rgba(244, 244, 244, 0.08);
+  outline: none;
+}
+
+.mv-menu-icon {
+  display: block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.35));
+}
+
+.mv-menu-text {
+  line-height: 1;
+}
+
+/* The confirmation: a plain card over the dimmed picture. */
+.mv-alert-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 25px;
+  background: rgba(0, 0, 0, 0.6);
+  animation: media-fade-in 0.2s ease-out;
+}
+
+.mv-alert-overlay[hidden] {
+  display: none;
+}
+
+.mv-alert {
+  width: 100%;
+  max-width: 300px;
+  padding: 20px 16px 16px;
+  box-sizing: border-box;
+  border-radius: 22px;
+  background: #161618;
+  text-align: center;
+}
+
+.mv-alert-title {
+  margin: 0;
+  color: var(--white);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.mv-alert-text,
+.mv-alert-error {
+  margin: 6px 0 0;
+  color: var(--gray);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.mv-alert-error {
+  color: var(--destructive);
+}
+
+.mv-alert-error[hidden] {
+  display: none;
+}
+
+.mv-alert-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.mv-alert .mv-alert-btn {
+  flex: 1;
+  height: 40px;
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(244, 244, 244, 0.1);
+  color: var(--light-gray);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.mv-alert .mv-alert-btn.is-default {
+  background: var(--light-gray);
+  color: var(--black);
+  font-weight: 600;
+}
+
+.mv-alert .mv-alert-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.mv-alert .mv-alert-btn:focus {
+  outline: none;
+}
+
+.mv-alert .mv-alert-btn:focus-visible {
+  outline: 2px solid var(--light-gray);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .mv-menu {
+    border-radius: 28px;
+  }
+
+  .mv-menu .mv-menu-item,
+  .mv-alert .mv-alert-btn {
+    height: 44px;
+  }
+}
+
+/* ---- the all-cards page ---- */
+.media-grid-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  background: var(--black);
+  color: var(--white);
+  animation: media-fade-in 0.2s ease-out;
+}
+
+.media-grid-layer:focus {
+  outline: none;
+}
+
+/* Cards fade out under Close and the name as they scroll up. */
+.media-grid-layer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  height: 85px;
+  background: linear-gradient(var(--black) 30%, rgba(9, 9, 11, 0));
+  pointer-events: none;
+}
+
+.media-grid-scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* The results page's margins (pages.css): 85px down, 25px in. */
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 16px;
+  padding: 85px 25px calc(40px + env(safe-area-inset-bottom));
+}
+
+.media-grid .media-card {
+  width: auto;
+}
+
+/* ---- the full-screen viewer ---- */
+.media-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 410;
+  background: #000;
+  /* The controls and the browse chrome fading in and out. */
+  --mv-fade: 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--white);
+  user-select: none;
+  -webkit-user-select: none;
+  animation: media-fade-in 0.2s ease-out;
+}
+
+.media-viewer:focus {
+  outline: none;
+}
+
+@keyframes media-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.mv-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+
+/* Videos at 16:9, as large as fits; pictures fill the screen, uncropped. */
+.mv-frame {
+  position: relative;
+  width: min(100vw, 100dvh * 16 / 9);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+}
+
+.media-viewer:not(.is-video) .mv-frame {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+/* YouTube pins its own title, logo and "More videos" to the edges of its
+   frame, whatever the player settings. A frame much taller than the video
+   leaves them in black bands above and below it, cut off here; the video,
+   fitted to the width, stays exactly in view. */
+.mv-frame iframe {
+  position: absolute;
+  top: -50%;
+  left: 0;
+  width: 100%;
+  height: 200%;
+  border: 0;
+}
+
+/* The trailer's still, over a finished video (YouTube shows suggestions). */
+.mv-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.4s ease-in-out;
+  pointer-events: none;
+}
+
+.media-viewer.is-ended .mv-poster {
+  opacity: 1;
+}
+
+.mv-shield {
+  position: absolute;
+  inset: 0;
+}
+
+.mv-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition:
+    opacity 0.25s ease-out,
+    transform 0.25s ease-out;
+}
+
+.media-viewer.is-zoomed .mv-stage {
+  cursor: grab;
+}
+
+.media-viewer.is-zoomed .mv-stage:active {
+  cursor: grabbing;
+}
+
+.mv-image.is-loaded {
+  opacity: 1;
+}
+
+.mv-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  color: var(--gray);
+  font-size: 15px;
+}
+
+/* Darkens the video under the controls. */
+.mv-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--mv-fade);
+}
+
+.media-viewer[data-mode="controls"] .mv-stage::after {
+  opacity: 1;
+}
+
+.mv-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 94px;
+  background: linear-gradient(rgba(0, 0, 0, 0.45), transparent);
+  pointer-events: none;
+}
+
+.mv-top > * {
+  pointer-events: auto;
+}
+
+.mv-section {
+  transition: opacity var(--mv-fade);
+}
+
+.media-viewer[data-mode="controls"] .mv-section {
+  opacity: 0;
+}
+
+.mv-icon {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+
+.mv-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--white);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mv-btn:focus,
+.mv-close:focus,
+.mv-pill:focus,
+.mv-dot:focus,
+.mv-track:focus {
+  outline: none;
+}
+
+.mv-btn:focus-visible,
+.mv-close:focus-visible,
+.mv-pill:focus-visible,
+.mv-dot:focus-visible,
+.mv-track:focus-visible {
+  outline: 2px solid var(--light-gray);
+  outline-offset: 3px;
+}
+
+.mv-skip .mv-icon {
+  width: 40px;
+  height: 40px;
+}
+
+.mv-play .mv-icon {
+  width: 60px;
+  height: 60px;
+}
+
+/* Browse chrome (titles, dots) and controls trade places. */
+.mv-browse,
+.mv-centre,
+.mv-bar,
+.mv-volume {
+  transition:
+    opacity var(--mv-fade),
+    visibility var(--mv-fade);
+}
+
+.media-viewer[data-mode="controls"] .mv-browse,
+.media-viewer[data-mode="browse"] .mv-centre,
+.media-viewer[data-mode="browse"] .mv-bar,
+.media-viewer[data-mode="browse"] .mv-volume {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.mv-browse {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 40px 24px calc(20px + env(safe-area-inset-bottom));
+  text-align: center;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.55));
+  pointer-events: none;
+}
+
+.mv-caption {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(244, 244, 244, 0.6);
+}
+
+.mv-title {
+  margin: 4px 0 14px;
+  font-size: 20px;
+  line-height: 25px;
+  font-weight: 600;
+}
+
+.mv-dots {
+  margin: 0 auto;
+  width: max-content;
+  max-width: 100%;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.mv-dots[hidden] {
+  display: none;
+}
+
+.mv-dots-row {
+  display: flex;
+  transition: transform 0.25s ease;
+}
+
+.mv-dot {
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.mv-dot::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(244, 244, 244, 0.35);
+  transition: background 0.2s ease;
+}
+
+.mv-dot.is-current::before {
+  background: var(--white);
+}
+
+.mv-centre {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 48px;
+  transform: translate(-50%, -50%);
+}
+
+.mv-volume {
+  position: absolute;
+  top: 25px;
+  right: 25px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+}
+
+.mv-volume-slider {
+  width: 100px;
+  accent-color: var(--white);
+}
+
+/* Phones set the volume with their buttons. */
+@media (hover: none) {
+  .mv-volume-slider {
+    display: none;
+  }
+}
+
+.mv-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 40px 24px calc(16px + env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+}
+
+.mv-bar-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mv-bar-title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 20px;
+  line-height: 25px;
+  font-weight: 600;
+}
+
+.mv-fs .mv-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.mv-fs[hidden] {
+  display: none;
+}
+
+.mv-scrub {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 10px;
+}
+
+.mv-time {
+  min-width: 40px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(244, 244, 244, 0.75);
+}
+
+.mv-time-left {
+  text-align: right;
+}
+
+.mv-track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(244, 244, 244, 0.3);
+  cursor: pointer;
+  touch-action: none;
+  transition: height 0.15s ease;
+}
+
+/* A taller target than the bar itself. */
+.mv-track::before {
+  content: "";
+  position: absolute;
+  inset: -12px 0;
+}
+
+.mv-track.is-dragging {
+  height: 10px;
+}
+
+.mv-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--white);
+}
+
+.mv-pill {
+  display: block;
+  margin: 4px auto 0;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(244, 244, 244, 0.16);
+  color: var(--white);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .media-grid-layer,
+  .media-viewer {
+    animation: none;
+  }
+
+  .media-head-chevron,
+  .media-thumb img,
+  .mv-image,
+  .mv-poster,
+  .mv-stage::after,
+  .mv-section,
+  .mv-browse,
+  .mv-centre,
+  .mv-bar,
+  .mv-volume,
+  .mv-dots-row,
+  .mv-dot::before,
+  .mv-track {
+    transition: none;
+  }
+}

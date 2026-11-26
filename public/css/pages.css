@@ -124,6 +124,10 @@
    (customize.css) share it; their shimmer is their own, in customize.css. */
 .result-cover::after,
 .game-sheet::after,
+.media-card::after,
+.media-grid-close::after,
+.mv-close::after,
+.mv-menu::after,
 .picker-art::after,
 .preview-frame::after {
   content: "";
@@ -280,7 +284,8 @@
 .result-card.is-skeleton .result-title,
 .result-card.is-skeleton .result-meta,
 .result-card.is-cover-loading .result-cover,
-.preview-frame.is-loading {
+.preview-frame.is-loading,
+.media-thumb:not(.is-loaded) {
   background-color: #1f1f23;
   background-image: linear-gradient(
     115deg,
@@ -332,7 +337,8 @@
   .result-card.is-skeleton .result-title,
   .result-card.is-skeleton .result-meta,
   .result-card.is-cover-loading .result-cover,
-  .preview-frame.is-loading {
+  .preview-frame.is-loading,
+  .media-thumb:not(.is-loaded) {
     background-image: none;
     animation: result-pulse 2.4s ease-in-out infinite;
   }

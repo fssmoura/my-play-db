@@ -24,6 +24,7 @@ were confirmed to resolve.
 | Feedback and loading | `progress-indicators`, `alerts`, `sheets`, `popovers`                                                                                          |
 | Navigation           | `toolbars`, `sidebars`, `tab-bars`, `searching`, `navigation-and-search`                                                                       |
 | Content              | `lists-and-tables`, `content`, `layout-and-organization`                                                                                       |
+| Video and pictures   | `playing-video`, `page-controls`, `image-views`                                                                                                |
 | Patterns             | `entering-data`, `loading`, `feedback`, `managing-accounts`, `offering-help`, `launching`                                                      |
 | Sign-in              | `managing-accounts`, `sign-in-with-apple`                                                                                                      |
 
@@ -134,6 +135,38 @@ Rules a redesign must keep, with the HIG reason where there is one.
   over type · first release date (earliest on any platform) in grey, like the
   Customize header. It dissolves in and out as the game opens and closes
   rather than sliding with the sheet, and scrolls away as the sheet rises.
+- Further down, **Trailers** then **Images** (screenshots, then artwork),
+  each drawn only when the game has some. A section is a title with a chevron
+  over a sideways row of 16:9 cards, the next one peeking in, shimmering like
+  the results grid until their picture arrives. No arrows: a mouse drags the
+  row (gliding on after a flick) or turns its wheel over it (eased, not in
+  steps); cards snap under a finger only. Trailers run newest first (IGDB
+  lists them oldest first, with no dates). Trailer cards show the video's title and a play
+  mark; no running time, since YouTube only gives that through a keyed API.
+  The title opens every card of the section as a full-screen grid.
+- The grid and the viewer put Close and the section's name exactly where the
+  game page has Back and the game's name, in the same size and look.
+- A card opens a full-screen black viewer (after Apple TV's web player): X and
+  the section's name top left; the game's name small, grey and uppercase over
+  the item's title, then page dots (HIG page controls), at the bottom.
+  Pictures follow a sideways drag to the next one, and zoom like the
+  Customize viewer (wheel or pinch towards the pointer, double-click or
+  double-tap there or back out, + / - / 0, drag to move once zoomed; no
+  swiping on while zoomed); trailers change with the
+  arrow keys or the dots only (a drag over a video would fight its
+  controls). A trailer plays at once in that
+  view; a tap swaps in player controls (volume, back/forward 10 seconds,
+  play/pause, full screen, a scrubber with elapsed and remaining time, and a
+  pill with the section's name to go back), which fade out 2 seconds into
+  playback. Apple's subtitles, audio and share buttons are left
+  out. Glass can't be drawn over these layers (it photographs the page, and
+  can't see a YouTube video), so Close imitates Back's glass in plain CSS and
+  the player controls are plain.
+- On a picture, a matching circle top right (a paint-roller icon) opens a
+  small menu headed "Set as…": Poster, Logo, Banner. Picking one asks first
+  (HIG alert: "Set as Poster?", Cancel / Set); Set stores the picture as
+  Customize does with a pasted link (it goes first, one other image kept
+  behind it), and the page redraws with the new art, closing the viewer.
 
 **Bottom toolbar (game page)**
 

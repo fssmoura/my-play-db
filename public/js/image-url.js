@@ -17,6 +17,8 @@ const SIZES = {
   cover: { igdb: "t_cover_big_2x", psn: "528" },
   banner: { igdb: "t_1080p", psn: "1320" },
   logo: { igdb: "t_1080p", psn: "528" },
+  // The game page's Images cards (889x500); the viewer uses "banner".
+  shot: { igdb: "t_screenshot_big", psn: "720" },
   full: { igdb: "t_original", psn: null },
 };
 

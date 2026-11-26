@@ -431,6 +431,8 @@ html.is-game-open body {
   --logo-ratio: 3;
   --logo-side: clamp(96px, 30vw, 190px);
   --logo-h: min(26vw, 150px, calc(var(--logo-side) / sqrt(var(--logo-ratio))));
+  /* Room at the end so the floating toolbar never covers the last content. */
+  padding-bottom: calc(120px + env(safe-area-inset-bottom));
   transition: opacity 0.3s ease-out;
 }
 

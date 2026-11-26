@@ -16,9 +16,10 @@
 //   step (pages.js `setCovered`).
 //
 // The sheet holds the game's banner and logo, when it has them, and the info
-// line under them (game-info.js); it shows a
-// whole-sheet shimmer (.is-loading) while the game's art resolves. Closing hands focus back to the card that opened
-// it. Dragging it down (touch, pen or mouse) dismisses it like Back.
+// line under them (game-info.js), then its Trailers and Images (game-media.js);
+// it shows a whole-sheet shimmer (.is-loading) while the game's art resolves.
+// Closing hands focus back to the card that opened it. Dragging it down
+// (touch, pen or mouse) dismisses it like Back.
 
 import { createSpring } from "/js/spring.js";
 import { createOverlayScroll } from "/js/overlay-scroll.js";
@@ -27,9 +28,11 @@ import {
   refreshGlass,
   refreshGlassWhileScrolling,
 } from "/js/glass-refresh.js";
-import { resolveGameArt } from "/js/game-art.js";
+import { resolveGameArt, isIgdb } from "/js/game-art.js";
+import { loadGameRow, setGameArtArray } from "/js/games-cache.js";
 import { displayImageUrl, loadImageForGlass } from "/js/image-url.js";
 import { gameHeading, gameInfoLine } from "/js/game-info.js";
+import { gameMediaSections, closeMediaLayers } from "/js/game-media.js";
 
 const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -158,8 +161,10 @@ export function createGamePage({ game, content, library, onProgress }) {
   async function loadArt(id) {
     const run = ++artRun;
     shown = null;
+    closeMediaLayers();
     parts?.body.querySelector(".game-head")?.remove();
     parts?.body.querySelector(".game-info")?.remove();
+    parts?.body.querySelector(".game-media")?.remove();
     parts?.spacer.querySelector(".game-heading")?.remove();
     parts?.body.style.removeProperty("--logo-ratio");
     setLoading(true);
@@ -183,6 +188,7 @@ export function createGamePage({ game, content, library, onProgress }) {
     // none) and scroll with the content rather than pinning.
     shown = row ? { id, row } : null;
     placeInfo();
+    placeMedia(run);
     const bannerUrl = banner ? displayImageUrl(banner, "banner") : null;
     const logoUrl = logo ? displayImageUrl(logo, "logo") : null;
     if (!bannerUrl && !logoUrl) return finishLoading(run);
@@ -258,6 +264,34 @@ export function createGamePage({ game, content, library, onProgress }) {
     const head = parts.body.querySelector(".game-head");
     if (head) head.after(info);
     else parts.body.prepend(info);
+  }
+
+  // Trailers and Images, last in the body. Their pictures arrive after the
+  // page has settled, so each one asks the lenses to retake their picture
+  // (once things go quiet).
+  let mediaTimer = 0;
+  function placeMedia(run) {
+    if (!parts || !shown) return;
+    const { id } = shown;
+    const media = gameMediaSections(shown.row, {
+      behind: parts.layer,
+      onImageLoad: () => {
+        clearTimeout(mediaTimer);
+        mediaTimer = setTimeout(() => run === artRun && refreshGlass(), 300);
+      },
+      onSetAs: (kind, url) => setArt(id, kind, url),
+    });
+    if (media) parts.body.append(media);
+  }
+
+  // The viewer's "Set as": the picture goes first with one other image kept
+  // behind it, as when it is picked in Customize; then the page redraws.
+  async function setArt(id, kind, url) {
+    const now = (await loadGameRow(id))?.[kind] ?? [];
+    const rest = now.filter((x) => x !== url);
+    const backup = isIgdb(url) ? rest[0] : (rest.find(isIgdb) ?? rest[0]);
+    await setGameArtArray(id, kind, backup ? [url, backup] : [url]);
+    game.reportArtChanged(id);
   }
 
   // The heading ends 12px short of the menu pill, whose width follows its
@@ -336,6 +370,7 @@ export function createGamePage({ game, content, library, onProgress }) {
   function onClose({ id }) {
     if (!parts) return;
     artRun++;
+    closeMediaLayers();
     unwireDrag?.();
     parts.layer.classList.add("is-closing");
     parts.layer.inert = true;
@@ -352,13 +387,14 @@ export function createGamePage({ game, content, library, onProgress }) {
 
   // ---- swipe down to dismiss ----------------------------------------------
   // Starts only when the sheet's scroll is at the top and the movement is
-  // downward, so it never fights scrolling. Pointer events cover mouse and
+  // downward, so it never fights scrolling (a mostly sideways move is left to
+  // the Trailers and Images rows). Pointer events cover mouse and
   // pen; touch needs touch events, because only a cancelled touchmove stops the
   // browser taking the gesture over as a pan (which cancels the pointer).
   let unwireDrag = null;
 
   function wireDrag({ layer: sheet, scroller }) {
-    let start = null; // { y, id } while a press might become a drag
+    let start = null; // { x, y, id } while a press might become a drag
     let dragging = false;
     let samples = []; // [time, y] of the last few moves, for the flick speed
 
@@ -369,19 +405,20 @@ export function createGamePage({ game, content, library, onProgress }) {
       samples = [];
     };
 
-    function press(y, id) {
+    function press(x, y, id) {
       if (game.isOpen && scroller.scrollTop <= 0) {
-        start = { y, id };
+        start = { x, y, id };
         samples = [[performance.now(), y]];
       }
     }
 
     // Returns true when it took the gesture.
-    function move(y) {
+    function move(x, y) {
       if (!start) return false;
       const dy = y - start.y;
       if (!dragging) {
-        if (dy < -SLOP) start = null;
+        const dx = Math.abs(x - start.x);
+        if (dy < -SLOP || (dx > SLOP && dx > Math.abs(dy))) start = null;
         if (!start || dy < SLOP || scroller.scrollTop > 0) return false;
         dragging = true;
         sheet.classList.add("is-dragging");
@@ -417,11 +454,11 @@ export function createGamePage({ game, content, library, onProgress }) {
 
     const onPointerDown = (e) => {
       if (e.pointerType === "touch" || e.button !== 0) return;
-      press(e.clientY, e.pointerId);
+      press(e.clientX, e.clientY, e.pointerId);
     };
     const onPointerMove = (e) => {
       if (e.pointerType === "touch" || start?.id !== e.pointerId) return;
-      if (move(e.clientY) && !sheet.hasPointerCapture(e.pointerId))
+      if (move(e.clientX, e.clientY) && !sheet.hasPointerCapture(e.pointerId))
         sheet.setPointerCapture(e.pointerId);
     };
     const onPointerUp = (e) => {
@@ -429,12 +466,14 @@ export function createGamePage({ game, content, library, onProgress }) {
       release(e.clientY, e.type === "pointercancel");
     };
     const onTouchStart = (e) => {
-      if (e.touches.length === 1) press(e.touches[0].clientY, "touch");
+      if (e.touches.length === 1)
+        press(e.touches[0].clientX, e.touches[0].clientY, "touch");
       else if (dragging) release(e.touches[0].clientY, true);
       else reset();
     };
     const onTouchMove = (e) => {
-      if (start?.id === "touch" && move(e.touches[0].clientY) && e.cancelable)
+      const t = e.touches[0];
+      if (start?.id === "touch" && move(t.clientX, t.clientY) && e.cancelable)
         e.preventDefault();
     };
     const onTouchEnd = (e) => {
@@ -477,6 +516,7 @@ export function createGamePage({ game, content, library, onProgress }) {
       window.removeEventListener("resize", fitHeading);
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown, true);
+      closeMediaLayers();
       spring.destroy();
       overlay?.destroy();
       parts?.layer.remove();
