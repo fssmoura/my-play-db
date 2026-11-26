@@ -113,14 +113,20 @@ changes, so anything else that changes what is under the glass needs
 - The photo is taken at half a pixel per CSS px (`resolution` in menu.js):
   the blur hides finer detail, and at the original 2 every photo was about
   16 times the work.
-- **Never recapture every frame.** Back-to-back captures caused the game page's
-  scroll lag; inner scrollers go through the throttled
-  `refreshGlassWhileScrolling()`, which also skips the first 300ms of a scroll
-  (the toolbar is shrinking then; a capture on top of it stuttered the start).
-- Known limit: once real content scrolls under a lens, it stays stale until
-  scrolling pauses. That is why the Customize drawer's images stop above its
-  tabs instead of scrolling under them: the constant re-photographing made
-  the drawer slow.
+- **Never recapture while scrolling.** Back-to-back captures made the game
+  page's scroll lag, and throttled ones still lagged behind the content.
+  Scrolling is followed by sliding the photo instead: liquidGL places it by
+  the photographed element's position every frame, which is why the page's
+  own scroll is free.
+- Content scrolling inside its own box (the game page) gets the same by
+  pointing the glass at an element that moves with it
+  (`glassPhotographs()`). Anything that moves differently from that element
+  (the pinned banner, image rows scrolling sideways) is left out of the photo,
+  photographed on its own, and drawn over the photo where it is now, every
+  frame, under the lenses only (patched hook: see the file header). Measured
+  about 0.5ms a frame.
+- Known limit: the Customize drawer still re-photographs, so its images stop
+  above its tabs instead of scrolling under them.
 - A lens can photograph one element instead of the page (`snapshot` in its
   `liquidGL()` call). The Customize full-screen X photographs only the viewer,
   so its glass shows just the image and retaking it while the image moves is

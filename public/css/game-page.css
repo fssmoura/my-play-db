@@ -431,7 +431,7 @@ html.is-game-open body {
 }
 
 .game-head.has-banner:has(.game-logo) + .game-info {
-  margin-top: calc(var(--logo-h) / 2 - 8px + 16px);
+  margin-top: calc(var(--logo-h) / 2 - 8px + 20px);
 }
 /* An icon in the line's own grey. Every icon gets the
    same width, centred, so they sit evenly however much of it their shape fills;

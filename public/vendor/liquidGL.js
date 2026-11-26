@@ -1,5 +1,5 @@
 /*
- * my-play-db: vendored copy of liquid-gl 3.0.0 (MIT, licence below) with six
+ * my-play-db: vendored copy of liquid-gl 3.0.0 (MIT, licence below) with eight
  * changes, marked "my-play-db patch" in both shaders (WebGL and WebGPU).
  * Upstream measures refraction in fractions of the whole page snapshot, so on
  * a page taller than it is wide the vertical bend grows with page length.
@@ -28,6 +28,10 @@
  * draws every lower layer's glass under every lens, so the Customize
  * drawer's buttons bent the game page's buttons hidden behind the drawer and
  * looked like glass on glass.
+ * Eighth patch (same marker, JavaScript only): hooks for photographing an
+ * element instead of the page (glass-refresh.js): per-renderer `ignore` and
+ * `background`, the blur as a method (`blurCanvas`), `photographPiece`, and
+ * `beforeLenses`, called every frame before the lenses are drawn.
  */
 /*
  * liquidGL – Liquid Glass - Powered by WebGPU/WebGL
@@ -5818,9 +5822,13 @@ fn fs() -> @location(0) vec4<f32> {
           };
 
           const naughtyIgnore = (el) =>
-            ignoreElementsFunc(el) || lensElements.has(el);
+            ignoreElementsFunc(el) ||
+            lensElements.has(el) ||
+            !!this.ignore?.(el); // my-play-db patch: per-renderer skips
 
-          let backgroundColor = null;
+          // my-play-db patch: a renderer pointed at an element can be given
+          // the colour to lay under its photo (`background`).
+          let backgroundColor = this.background || null;
           if (
             this.snapshotTarget === document.body ||
             this.snapshotTarget === document.documentElement
@@ -5879,6 +5887,51 @@ fn fs() -> @location(0) vec4<f32> {
       return await attemptCapture();
     }
 
+    // my-play-db patch: one element photographed alone at the snapshot's scale
+    // and blurred like it, for drawing over the snapshot live (glass-refresh.js).
+    async photographPiece(el) {
+      const cv = await NaughtyDOM.rasteriseAsync(el, {
+        scale: this.scaleFactor,
+        ignoreElements: (n) =>
+          n.tagName === "CANVAS" || n.hasAttribute?.("data-liquid-ignore"),
+      });
+      return this.blurCanvas(cv, this._appliedBlur || 0);
+    }
+
+    // my-play-db patch: the snapshot blur (see _uploadTexture) as a method, so
+    // pieces drawn over the snapshot live (glass-refresh.js) get it too.
+    blurCanvas(srcCanvas, blur) {
+      const steps = Math.round(Math.log2(Math.max(1, blur * (this.scaleFactor || 1))));
+      if (steps > 0) {
+        const W = srcCanvas.width;
+        const H = srcCanvas.height;
+        const chain = [srcCanvas];
+        for (let i = 1; i <= steps; i++) {
+          const c = document.createElement("canvas");
+          c.width = Math.max(1, Math.round(W / 2 ** i));
+          c.height = Math.max(1, Math.round(H / 2 ** i));
+          const x = c.getContext("2d");
+          x.imageSmoothingEnabled = true;
+          x.imageSmoothingQuality = "high";
+          x.drawImage(chain[i - 1], 0, 0, c.width, c.height);
+          chain.push(c);
+        }
+        let up = chain[steps];
+        for (let i = steps - 1; i >= 0; i--) {
+          const c = document.createElement("canvas");
+          c.width = i === 0 ? W : chain[i].width;
+          c.height = i === 0 ? H : chain[i].height;
+          const x = c.getContext("2d");
+          x.imageSmoothingEnabled = true;
+          x.imageSmoothingQuality = "high";
+          x.drawImage(up, 0, 0, c.width, c.height);
+          up = c;
+        }
+        srcCanvas = up;
+      }
+      return srcCanvas;
+    }
+
     /* ----------------------------- */
     _uploadTexture(srcCanvas, opaque = false) {
       if (!srcCanvas) {
@@ -5921,34 +5974,7 @@ fn fs() -> @location(0) vec4<f32> {
       // ignored on large canvases and missing in Safari. `blur` is in CSS px.
       const preBlur = Math.max(0, ...this.lenses.map((l) => l.options.blur || 0));
       this._appliedBlur = preBlur;
-      const steps = Math.round(Math.log2(Math.max(1, preBlur * (this.scaleFactor || 1))));
-      if (steps > 0) {
-        const W = srcCanvas.width;
-        const H = srcCanvas.height;
-        const chain = [srcCanvas];
-        for (let i = 1; i <= steps; i++) {
-          const c = document.createElement("canvas");
-          c.width = Math.max(1, Math.round(W / 2 ** i));
-          c.height = Math.max(1, Math.round(H / 2 ** i));
-          const x = c.getContext("2d");
-          x.imageSmoothingEnabled = true;
-          x.imageSmoothingQuality = "high";
-          x.drawImage(chain[i - 1], 0, 0, c.width, c.height);
-          chain.push(c);
-        }
-        let up = chain[steps];
-        for (let i = steps - 1; i >= 0; i--) {
-          const c = document.createElement("canvas");
-          c.width = i === 0 ? W : chain[i].width;
-          c.height = i === 0 ? H : chain[i].height;
-          const x = c.getContext("2d");
-          x.imageSmoothingEnabled = true;
-          x.imageSmoothingQuality = "high";
-          x.drawImage(up, 0, 0, c.width, c.height);
-          up = c;
-        }
-        srcCanvas = up;
-      }
+      srcCanvas = this.blurCanvas(srcCanvas, preBlur);
       this.staticSnapshotCanvas = srcCanvas;
       if (!this.backend || !this.backend.uploadSnapshot(srcCanvas)) {
         return false;
@@ -6463,6 +6489,7 @@ fn fs() -> @location(0) vec4<f32> {
       if (this._updateDynamicVideos() !== false) this._updateDynamicNodes();
 
       this._frameSnapRect = this.snapshotTarget.getBoundingClientRect();
+      this.beforeLenses?.(this); // my-play-db patch: live pieces (glass-refresh.js)
       this._frameLensRects = [];
 
       for (const renderer of below) {

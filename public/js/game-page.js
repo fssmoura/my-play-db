@@ -25,8 +25,8 @@ import { createSpring } from "/js/spring.js";
 import { createOverlayScroll } from "/js/overlay-scroll.js";
 import {
   blankGlass,
+  glassPhotographs,
   refreshGlass,
-  refreshGlassWhileScrolling,
 } from "/js/glass-refresh.js";
 import { resolveGameArt, isIgdb } from "/js/game-art.js";
 import { loadGameRow, setGameArtArray } from "/js/games-cache.js";
@@ -64,10 +64,13 @@ function buildLayer() {
   skeleton.setAttribute("aria-hidden", "true");
   sheet.classList.add("is-loading");
   sheet.append(body, skeleton);
-  scroller.append(spacer, sheet);
+  // Moves as one as it scrolls, so the glass can follow it (pointGlass).
+  const track = document.createElement("div");
+  track.append(spacer, sheet);
+  scroller.append(track);
 
   layer.append(scroller);
-  return { layer, sheet, scroller, body, spacer };
+  return { layer, sheet, scroller, body, spacer, track };
 }
 
 // Past this fraction of the sheet's visible height, or flicked faster than
@@ -276,6 +279,8 @@ export function createGamePage({ game, content, library, onProgress }) {
       // Fully closed: remove the sheet and let the page scroll again.
       overlay?.destroy();
       overlay = null;
+      pointGlass(false);
+      blankGlass();
       parts?.layer.remove();
       parts = null;
       unwireDrag = null;
@@ -465,8 +470,7 @@ export function createGamePage({ game, content, library, onProgress }) {
     );
   }
 
-  // Reports scrolling to the toolbar, and keeps the glass current: the lenses
-  // photograph the page, and an inner scroller is not something they track.
+  // Reports scrolling to the toolbar, and moves what follows the scroll.
   let lastTop = 0;
   let lastOverlap = 0;
   let lastUnder = 0;
@@ -491,9 +495,30 @@ export function createGamePage({ game, content, library, onProgress }) {
       lastUnder = under;
       parts.sheet.style.setProperty("--under", under.toFixed(3));
     }
-    // Only the rise changes what is under the top bar's lenses; past it the
-    // pinned banner (or nothing) is there. See glass-refresh.js for the cost.
-    refreshGlassWhileScrolling({ live: top <= REST_TOP });
+  }
+
+  // The bars' glass photographs the game page once and slides that photo as
+  // it scrolls, like the page's own glass does, so scrolling takes no new
+  // photos. The pinned banner and the image cards (which scroll sideways)
+  // move differently, so they're left out of the photo and drawn over it
+  // where they are, live. The heading is pinned too, but never under a lens.
+  function pointGlass(on) {
+    const lens = document.getElementById("app-bottom");
+    if (!on || !parts) return glassPhotographs(lens, null);
+    const { track } = parts;
+    glassPhotographs(lens, track, {
+      ignore: (el) =>
+        el.classList?.contains("game-head") ||
+        el.classList?.contains("media-card") ||
+        el.classList?.contains("game-heading"),
+      pieces: () => [
+        ...[...track.querySelectorAll(".media-card")].map((el) => ({
+          el,
+          clip: el.closest(".media-row"),
+        })),
+        ...[...track.querySelectorAll(".game-head")].map((el) => ({ el })),
+      ],
+    });
   }
 
   // Keeps the page's blurred backdrop level with the pinned banner's.
@@ -543,6 +568,7 @@ export function createGamePage({ game, content, library, onProgress }) {
       parts.scroller.addEventListener("scroll", onScroll, { passive: true });
       document.documentElement.classList.add("is-game-open");
       freezeContent();
+      pointGlass(true);
       wireDrag(parts);
     }
     parts.layer.classList.remove("is-closing");
@@ -707,6 +733,7 @@ export function createGamePage({ game, content, library, onProgress }) {
       closeMediaLayers();
       spring.destroy();
       overlay?.destroy();
+      pointGlass(false);
       parts?.layer.remove();
       parts = null;
       unfreezeContent();

@@ -16,7 +16,7 @@
 
 /* Closer under the platform line, which sits tight under the logo. */
 .game-info + .game-media {
-  margin-top: 20px;
+  margin-top: 16px;
 }
 
 .media-head {
@@ -447,10 +447,11 @@
   overflow-y: auto;
 }
 
-/* The results page's margins (pages.css): 85px down, 25px in. */
+/* The results page's margins (pages.css): 85px down, 25px in. Never fewer
+   than two columns, even on a phone. */
 .media-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(calc(50% - 8px), 240px), 1fr));
   gap: 16px;
   padding: 85px 25px calc(40px + env(safe-area-inset-bottom));
 }
