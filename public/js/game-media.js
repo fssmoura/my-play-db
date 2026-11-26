@@ -60,7 +60,7 @@ function sectionsFor(row) {
       title,
       url,
       thumb: displayImageUrl(url, "shot"),
-      image: displayImageUrl(url, "banner"),
+      image: displayImageUrl(url, "full"),
     }));
   const images = [
     ...pictures(row?.screenshots, "Screenshot"),
@@ -370,7 +370,8 @@ export function gameMediaSections(
   const sections = sectionsFor(row);
   if (!sections.length) return null;
   const caption = row?.name || "";
-  const onSetAs = store && ((kind, item) => store(kind, item.url));
+  // Whatever is picked is saved as the address the full-screen view shows.
+  const onSetAs = store && ((kind, item) => store(kind, item.image));
   const box = el("div", "game-media");
   for (const section of sections)
     box.append(buildRow(section, { caption, behind, onImageLoad, onSetAs }));

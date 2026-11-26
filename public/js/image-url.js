@@ -17,7 +17,7 @@ const SIZES = {
   cover: { igdb: "t_cover_big_2x", psn: "528" },
   banner: { igdb: "t_1080p", psn: "1320" },
   logo: { igdb: "t_1080p", psn: "528" },
-  // The game page's Images cards (889x500); the viewer uses "banner".
+  // The game page's Images cards (889x500); the viewer uses "full".
   shot: { igdb: "t_screenshot_big", psn: "720" },
   full: { igdb: "t_original", psn: null },
 };
@@ -28,7 +28,10 @@ export function displayImageUrl(url, kind = "cover") {
   try {
     const parsed = new URL(url);
     if (parsed.hostname === "images.igdb.com") {
-      return url.replace(/\/t_[a-z0-9_]+\//i, `/${size.igdb}/`);
+      const sized = url.replace(/\/t_[a-z0-9_]+\//i, `/${size.igdb}/`);
+      // IGDB keeps the upload as it came (often PNG) and only serves it
+      // unconverted at the .png address; stored URLs end in .jpg.
+      return kind === "full" ? sized.replace(/\.jpg(\?|$)/i, ".png$1") : sized;
     }
     const prefix = PROXIED_HOSTS[parsed.hostname];
     if (prefix) {
