@@ -349,6 +349,10 @@ export function wireCustomize({
     actionsSpring.to(on ? 1 : 0, { instant: instant || reducedMotion() });
   }
 
+  // Tabs shown since the game was loaded. A pane hidden when it was reset
+  // can keep an old scroll position, so its first showing puts it at the top.
+  const visited = new Set();
+
   function selectTab(index, { instant = false, focus = false } = {}) {
     active = index;
     tabs.forEach((tab, i) => {
@@ -364,6 +368,10 @@ export function wireCustomize({
     showZoom(kind);
     for (const k of KINDS) pickers[k].element.hidden = k !== kind;
     preview.element.hidden = index !== PREVIEW;
+    if (!visited.has(index)) {
+      visited.add(index);
+      (kind ? pickers[kind] : preview).element.scrollTop = 0;
+    }
     if (kind) pickers[kind].activate();
     else preview.activate();
     showActions(index === PREVIEW, instant);
@@ -562,6 +570,7 @@ export function wireCustomize({
     returnFocus = byKeyboard ? document.activeElement : null;
     layer.classList.remove("is-closing");
     layer.classList.add("is-open");
+    visited.clear();
     selectTab(0, { instant: true });
     loadGame(game.id);
     setBackgroundInert(true);
