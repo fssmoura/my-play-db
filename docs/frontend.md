@@ -276,7 +276,9 @@ For large originals, use the host's own resize parameter if it has one.
   like the Trailers all-cards page but with the app's back arrow (a Close X on
   a single trophy), and stack: group
   cards (only when the game has several trophy groups), a group's list, one
-  trophy. Every store's list is combined as in the lab. Sorting is per the
+  trophy. Every store's list is combined as in the lab, and group names are
+  tidied for display (underscores and a "DLC" word dropped, lowercase words
+  capitalised: "Woolhaven_DLC" reads "Woolhaven"). Sorting is per the
   owner's choice: default (the rarest earned trophy, then all in the store's
   order), not earned, rarity, earned date, grade; each groups its rows under
   small titles with a count ("Ultra Rare: 15", not on the default), and a sort
@@ -284,7 +286,9 @@ For large originals, use the host's own resize parameter if it has one.
   are Sony's and apply app-wide: Ultra Rare under 5%, Very Rare under 20%,
   Rare under 50%, Common from 50%. A hidden trophy not yet earned shows a
   padlock, "Hidden" and the dark cup (`trophies/hidden.png`); only its own
-  page offers to show the real name and description.
+  page offers to show the real name and description, unless "Reveal All" (the
+  last option in the Sort menu, which then becomes "Hide All") is on for that
+  game or group: it shows them right in the list until the app is reloaded.
 - **Platform icons** (`game-info.js`) are cropped to their drawing: each
   `viewBox` is the path's real bounds, measured with `getBBox()` in the
   browser (the `svg-path-bounds` package gave wrong ones), so a common height

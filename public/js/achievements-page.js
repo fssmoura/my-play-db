@@ -21,6 +21,7 @@ import {
   percent,
   groupTitle,
   summaryLine,
+  duration,
   TIERS,
   BANDS,
 } from "/js/achievements-data.js";
@@ -33,6 +34,33 @@ const CLOSE =
   '<path d="M18.3 5.71 12 12.01l-6.3-6.3-1.41 1.41 6.3 6.3-6.3 6.29 1.41 1.42 6.3-6.3 6.29 6.3 1.42-1.42-6.3-6.29 6.3-6.3z"/>';
 const SORT =
   '<path fill="currentColor" d="m18 22l1.414-1.414L23 24.172V4h2v20.172l3.586-3.586L30 22l-6 6zM2 6h14v2H2zm4 6h10v2H6zm4 6h6v2h-6z"/>';
+// Each sort's icon in the menu, with its viewBox.
+const SORT_ICONS = {
+  default: [
+    '<path d="M2 3.5a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 0 1h-8a.5.5 0 0 1-.5-.5m0 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5M2.5 7a.5.5 0 0 0 0 1h11a.5.5 0 0 0 0-1z"/>',
+    "0 0 16 16",
+  ],
+  notEarned: [
+    '<path d="M20 12c0-1.103-.897-2-2-2h-1V7c0-2.757-2.243-5-5-5S7 4.243 7 7v3H6c-1.103 0-2 .897-2 2v8c0 1.103.897 2 2 2h12c1.103 0 2-.897 2-2zM9 7c0-1.654 1.346-3 3-3s3 1.346 3 3v3H9z"/>',
+    "0 0 24 24",
+  ],
+  rarity: [
+    '<path d="M10.29 5L8 1L5.710 5zm-8 6L0 15h16l-2.29-4zm10.85-1l-2.28-4H5.14l-2.28 4z"/>',
+    "0 0 16 16",
+  ],
+  date: [
+    '<path d="M21 17.75A3.25 3.25 0 0 1 17.75 21H6.25A3.25 3.25 0 0 1 3 17.75V8.5h18zM9.996 10.541a.75.75 0 0 0-.834.243l-.004.005l-.02.024l-.09.105a8 8 0 0 1-1.7 1.448a.75.75 0 0 0 .802 1.268a9 9 0 0 0 .85-.61V17a.75.75 0 0 0 1.5 0v-5.75a.75.75 0 0 0-.504-.709m4.504-.291c-1.18 0-2.25.891-2.25 2.125c0 .512.186.963.485 1.317A2.3 2.3 0 0 0 12 15.375c0 1.363 1.173 2.375 2.5 2.375s2.5-1.012 2.5-2.375a2.3 2.3 0 0 0-.736-1.683c.3-.354.486-.805.486-1.317c0-1.234-1.070-2.125-2.25-2.125m0 4.25c.606 0 1 .443 1 .875s-.394.875-1 .875s-1-.443-1-.875s.394-.875 1-.875m0-2.75c.477 0 .75.34.75.625s-.273.625-.75.625s-.75-.34-.75-.625s.273-.625.75-.625M17.750 3A3.25 3.25 0 0 1 21 6.25V7H3v-.75A3.25 3.25 0 0 1 6.25 3z"/>',
+    "0 0 24 24",
+  ],
+  grade: [
+    '<path d="M868 160h-92v-40c0-4.4-3.6-8-8-8H256c-4.4 0-8 3.6-8 8v40h-92a44 44 0 0 0-44 44v148c0 81.7 60 149.6 138.2 162C265.6 630.2 359 721.8 476 734.5v105.2H280c-17.7 0-32 14.3-32 32V904c0 4.4 3.6 8 8 8h512c4.4 0 8-3.6 8-8v-32.3c0-17.7-14.3-32-32-32H548V734.5C665 721.8 758.4 630.2 773.8 514C852 501.6 912 433.7 912 352V204a44 44 0 0 0-44-44M248 439.6c-37.1-11.9-64-46.7-64-87.6V232h64zM840 352c0 41-26.9 75.8-64 87.6V232h64z"/>',
+    "0 0 1024 1024",
+  ],
+};
+const EYE =
+  '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12a9.75 9.75 0 0 1 18 0a9.75 9.75 0 0 1-18 0m7 0a2 2 0 1 0 4 0a2 2 0 0 0-4 0"/>';
+const EYE_OFF =
+  '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.76 16.76A9.75 9.75 0 0 1 3 12a9.74 9.74 0 0 1 4.24-4.76M12 6a9.75 9.75 0 0 1 9 6a9.8 9.8 0 0 1-1.073 1.927m-9.341-3.341a2 2 0 1 0 2.828 2.828M2 2l20 20"/>';
 const CHECK = '<path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>';
 const LOCK =
   '<path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 0 1 6 0v3H9z"/>';
@@ -80,6 +108,9 @@ function earnedDate(iso, withTime) {
 const stack = [];
 // One sort for every list while the pages are open.
 let sortKey = "default";
+// Lists ("game id|group") whose hidden trophies are shown, until the app is
+// reloaded.
+const revealed = new Set();
 
 export function closeAchievementLayers() {
   while (stack.length) stack.at(-1).close();
@@ -132,14 +163,20 @@ function openLayer({ label, behind, opener, close = false }) {
     layer,
     content,
     open: true,
-    setHeader(t, s) {
+    // `bold`, when it ends the subline, is drawn heavier ("Platinum in X").
+    setHeader(t, s, bold) {
       title.textContent = t ?? "";
       sub.textContent = s ?? "";
+      if (bold && s?.endsWith(bold))
+        sub.replaceChildren(
+          s.slice(0, -bold.length),
+          el("strong", "ach-bar-strong", bold),
+        );
       sub.hidden = !s;
     },
     // The Sort button and its menu, top right.
-    addSort(items, onChange) {
-      menu = sortMenu(layer, items, onChange);
+    addSort(items, listKey, onChange) {
+      menu = sortMenu(layer, items, listKey, onChange);
       layer.classList.add("has-sort");
     },
     close() {
@@ -160,7 +197,7 @@ function openLayer({ label, behind, opener, close = false }) {
   return page;
 }
 
-function sortMenu(layer, items, onChange) {
+function sortMenu(layer, items, listKey, onChange) {
   const wrap = el("div", "mv-top-right");
   const button = el("button", "media-grid-close ach-sort-button");
   button.type = "button";
@@ -184,7 +221,12 @@ function sortMenu(layer, items, onChange) {
       item.disabled = !sortAvailable(items, option.key);
       const mark = icon(CHECK, "mv-menu-icon ach-sort-check");
       mark.style.visibility = option.key === sortKey ? "visible" : "hidden";
-      item.append(el("span", "mv-menu-text", option.label), mark);
+      const [art, box] = SORT_ICONS[option.key];
+      item.append(
+        icon(art, "mv-menu-icon", box),
+        el("span", "mv-menu-text", option.label),
+        mark,
+      );
       item.addEventListener("click", () => {
         sortKey = option.key;
         close();
@@ -192,6 +234,24 @@ function sortMenu(layer, items, onChange) {
       });
       menu.append(item);
     }
+    menu.append(el("div", "ach-menu-divider"));
+    const reveal = el("button", "mv-menu-item ach-reveal-all");
+    reveal.type = "button";
+    reveal.setAttribute("role", "menuitem");
+    const on = revealed.has(listKey);
+    reveal.classList.toggle("is-on", on);
+    reveal.disabled = !items.some(isHidden);
+    reveal.append(
+      icon(on ? EYE_OFF : EYE, "mv-menu-icon"),
+      el("span", "mv-menu-text", on ? "Hide All" : "Reveal All"),
+    );
+    reveal.addEventListener("click", () => {
+      if (revealed.has(listKey)) revealed.delete(listKey);
+      else revealed.add(listKey);
+      close();
+      onChange();
+    });
+    menu.append(reveal);
   }
   function open() {
     fill();
@@ -246,18 +306,22 @@ export async function openAchievements({
     }
   if (!page.open) return;
 
-  page.setHeader(gameName, summaryLine(result));
+  page.setHeader(
+    gameName,
+    summaryLine(result),
+    result.finish && duration(result.finish.ms),
+  );
   const ctx = {
     gameName,
     prefixes: [gameName, result.groups.find((g) => g.base)?.name],
   };
-  if (result.groups.length > 1) drawGroups(page, result.groups, ctx);
-  else drawList(page, result.groups[0]?.items ?? [], ctx);
+  if (result.groups.length > 1) drawGroups(page, result.groups, ctx, igdbId);
+  else drawList(page, result.groups[0]?.items ?? [], ctx, `${igdbId}|`);
 }
 
 // ---- several groups: a card each ------------------------------------------------
 
-function drawGroups(page, groups, ctx) {
+function drawGroups(page, groups, ctx, igdbId) {
   const list = el("div", "ach-group-list");
   for (const group of groups) {
     const name = groupTitle(group, ctx.prefixes);
@@ -294,9 +358,9 @@ function drawGroups(page, groups, ctx) {
       const sub = openLayer({ label: name, behind: page.layer, opener: card });
       sub.setHeader(
         ctx.gameName,
-        `${name} · ${done}/${total} unlocked · ${percent(done, total)}`,
+        `${name} · ${done}/${total} · ${percent(done, total)}`,
       );
-      drawList(sub, group.items, ctx);
+      drawList(sub, group.items, ctx, `${igdbId}|${name}`);
     });
     list.append(card);
   }
@@ -305,10 +369,11 @@ function drawGroups(page, groups, ctx) {
 
 // ---- a list ------------------------------------------------------------------------
 
-function drawList(page, items, ctx) {
+function drawList(page, items, ctx, listKey) {
   if (!sortAvailable(items, sortKey)) sortKey = "default";
   const draw = () => {
     if (!sortAvailable(items, sortKey)) sortKey = "default";
+    const reveal = revealed.has(listKey);
     const sections = arrange(items, sortKey);
     page.content.replaceChildren(
       ...sections.map((s) => {
@@ -322,7 +387,7 @@ function drawList(page, items, ctx) {
         );
         const list = el("div", "ach-list");
         for (const item of s.items)
-          list.append(trophyRow(item, { ...ctx, behind: page.layer }));
+          list.append(trophyRow(item, { ...ctx, behind: page.layer, reveal }));
         wrap.append(list);
         return wrap;
       }),
@@ -330,7 +395,7 @@ function drawList(page, items, ctx) {
     if (!items.length)
       page.content.append(el("p", "ach-message", "No achievements stored."));
   };
-  page.addSort(items, draw);
+  page.addSort(items, listKey, draw);
   draw();
 }
 
@@ -371,11 +436,11 @@ function grade(item, reveal = false) {
 }
 
 function trophyRow(item, ctx) {
-  const hidden = isHidden(item);
+  const hidden = isHidden(item) && !ctx.reveal;
   const row = el("button", "ach-row");
   row.type = "button";
   row.classList.toggle("is-earned", item.earned);
-  row.append(picture(item, "ach-row-img"));
+  row.append(picture(item, "ach-row-img", ctx.reveal));
 
   const body = el("span", "ach-row-body");
   body.append(
@@ -390,7 +455,7 @@ function trophyRow(item, ctx) {
   // left, when it was earned on the right.
   const foot = el("span", "ach-row-foot");
   const left = el("span", "ach-row-grade");
-  const g = grade(item);
+  const g = grade(item, ctx.reveal);
   if (g) left.append(g);
   if (item.rarity != null && !hidden)
     left.append(
@@ -420,9 +485,9 @@ function trophyRow(item, ctx) {
 
 // ---- one trophy -----------------------------------------------------------------
 
-function openTrophy(item, { gameName, behind, opener }) {
+function openTrophy(item, { gameName, behind, opener, reveal = false }) {
   const page = openLayer({
-    label: isHidden(item) ? "Hidden trophy" : item.name,
+    label: isHidden(item) && !reveal ? "Hidden trophy" : item.name,
     behind,
     opener,
     close: true,
@@ -515,5 +580,5 @@ function openTrophy(item, { gameName, behind, opener }) {
     }
     page.content.replaceChildren(box);
   };
-  draw(false);
+  draw(reveal);
 }

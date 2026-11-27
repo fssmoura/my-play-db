@@ -12,7 +12,7 @@
 //   arrange(items, sortKey) -> [{ title, items }]
 //   sortAvailable(items, sortKey), sortOptions: [{ key, label }]
 //   rarityBand(pct), percent(done, total), duration(ms), groupTitle(group, prefixes)
-//   summaryLine(result) -> "42/42 unlocked · 100% · Platinum in 2 weeks, 6 days"
+//   summaryLine(result) -> "42/42 · 100% · Platinum in 2 weeks, 6 days"
 import { supabase } from "/js/supabase.js";
 
 /* ---- combining (copied) ---- */
@@ -238,7 +238,30 @@ export function groupTitle(group, prefixes) {
   if (group.base) return "Base Game";
   if (group.other) return "Other";
   if (!group.name) return "All trophies";
-  return withoutPrefix(group.name, prefixes);
+  return tidyName(withoutPrefix(group.name, prefixes));
+}
+
+const SMALL_WORDS = new Set(
+  "a an and as at but by for in nor of on or the to vs with".split(" "),
+);
+
+// Stores' raw names: "Woolhaven_DLC" -> "Woolhaven", "sins of the flesh" ->
+// "Sins of the Flesh". Words with capitals of their own are kept as written.
+function tidyName(name) {
+  const words = name
+    .replace(/_/g, " ")
+    .replace(/(^|\s)(DLC|dlc)(?=\s|$)/g, " ")
+    .trim()
+    .split(/\s+/);
+  if (!words[0]) return name;
+  return words
+    .map((w, i) =>
+      w !== w.toLowerCase() ||
+      (i > 0 && i < words.length - 1 && SMALL_WORDS.has(w))
+        ? w
+        : w[0].toUpperCase() + w.slice(1),
+    )
+    .join(" ");
 }
 
 function withoutPrefix(name, prefixes) {
@@ -289,7 +312,7 @@ export function duration(ms) {
 
 export function summaryLine({ total, unlocked, finish }) {
   if (!total) return "No achievements stored";
-  const parts = [`${unlocked}/${total} unlocked`, percent(unlocked, total)];
+  const parts = [`${unlocked}/${total}`, percent(unlocked, total)];
   if (finish) parts.push(`${finish.kind} in ${duration(finish.ms)}`);
   return parts.join(" · ");
 }
@@ -328,10 +351,10 @@ const hasTiers = (items) => items.some((i) => i.tier);
 const hasPoints = (items) => items.some((i) => i.points != null);
 
 export const sortOptions = [
-  { key: "default", label: "Default order" },
-  { key: "notEarned", label: "Not earned" },
+  { key: "default", label: "Default" },
+  { key: "notEarned", label: "Not Earned" },
   { key: "rarity", label: "Rarity" },
-  { key: "date", label: "Earned date" },
+  { key: "date", label: "Earned Date" },
   { key: "grade", label: "Grade" },
 ];
 

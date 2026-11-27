@@ -21,8 +21,8 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--gray);
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 13px;
+  line-height: 17px;
   text-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
 }
 
@@ -30,8 +30,27 @@
   display: none;
 }
 
+.ach-bar-strong {
+  font-weight: 600;
+}
+
 .ach-sort-menu {
   min-width: 220px;
+}
+
+.ach-sort-menu .mv-menu-item {
+  height: 32px;
+}
+
+/* Reveal All stays dim until it is switched on. */
+.ach-sort-menu .ach-reveal-all:not(.is-on, :disabled) {
+  color: rgba(244, 244, 244, 0.5);
+}
+
+.ach-menu-divider {
+  height: 1px;
+  margin: 5px 14px;
+  background: rgba(244, 244, 244, 0.15);
 }
 
 /* The tick sits after the option's name, at the right edge. */
