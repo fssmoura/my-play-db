@@ -267,10 +267,14 @@ For large originals, use the host's own resize parameter if it has one.
   every store's list combined as in the lab (so a game on Steam and PS5 is one
   card), PlayStation-style: earned, a ring with the percentage, and available,
   then the unlocked count under each trophy grade when the list has grades
-  (icons in `public/trophies/`, 80px wide). The page doesn't wait for it: a
-  game in the library gets a shimmering stand-in until the lists load, which
-  goes if there turn out to be none. The loaded lists are handed to the
-  achievement pages, so opening them doesn't load again.
+  (icons in `public/trophies/`, 80px wide). The library (`library.js`) fetches
+  one achievement per copy, so it already knows which copies have a list: a
+  game with none loads and shows nothing, and one with a list gets a
+  shimmering stand-in until the lists load. Store meta flags (database.md's
+  "Has achievements?") aren't used: many PlayStation games are flagged with no
+  trophies stored, and the hand-added Rockstar copy has a list but no flag. The
+  loaded lists are handed to the achievement pages, so opening them doesn't
+  load again.
 - **Achievement pages** (`achievements-page.js`, `achievements-data.js`,
   `css/achievements.css`) open from that card or its title, over the game page
   like the Trailers all-cards page but with the app's back arrow (a Close X on

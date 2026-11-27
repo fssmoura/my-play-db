@@ -10,10 +10,11 @@ import { fromDbRow } from "/js/games-cache.js";
 import { matchScore, rankGames } from "/js/ranking.js";
 
 // Cards and ranking need no platforms or release-date list, which are most of
-// the weight; the card's year comes from first_release_date.
+// the weight; the card's year comes from first_release_date. One achievement
+// per copy (at most) says whether it has a list, without loading it.
 const COLUMNS =
   "igdb_id, platform, version, last_played, games(id, name, slug, game_type, first_release_date, " +
-  "cover, alternative_names, popularity, hypes, rating_count)";
+  "cover, alternative_names, popularity, hypes, rating_count), achievements(owned_game_id)";
 const PAGE = 1000;
 // load() is called on every search; anything younger is reused.
 const FRESH_MS = 60_000;
@@ -25,6 +26,7 @@ async function fetchRows() {
       .from("player_games")
       .select(COLUMNS)
       .not("igdb_id", "is", null)
+      .limit(1, { referencedTable: "achievements" })
       .order("id")
       .range(from, from + PAGE - 1);
     if (error) throw error;
@@ -51,12 +53,15 @@ function toList(rows) {
     .map((entry) => entry.game);
 }
 
-// Every copy held of each game: igdb_id -> [{ platform, version }].
+// Every copy held of each game: igdb_id -> [{ platform, version,
+// achievements }], achievements being whether its list is stored.
 function toCopies(rows) {
   const byGame = new Map();
-  for (const { igdb_id, platform, version } of rows) {
+  for (const { igdb_id, platform, version, achievements } of rows) {
     if (!byGame.has(igdb_id)) byGame.set(igdb_id, []);
-    byGame.get(igdb_id).push({ platform, version });
+    byGame
+      .get(igdb_id)
+      .push({ platform, version, achievements: !!achievements?.length });
   }
   return byGame;
 }
@@ -127,7 +132,8 @@ export function createLibrary() {
       return games;
     },
     has: (id) => ids.has(Number(id)),
-    // The game's copies ({ platform, version }), one per store; empty if not owned.
+    // The game's copies ({ platform, version, achievements }), one per store;
+    // empty if not owned.
     copies: (id) => copies.get(Number(id)) ?? [],
     // The game's cover changed (Customize saved): updated in place.
     setCover(id, cover) {

@@ -655,10 +655,11 @@ export function createGamePage({ game, content, library, onProgress }) {
     refreshGlass();
   }
 
-  // Achievements go just before Trailers and Images. The page doesn't wait
-  // for them: for a game in the library a shimmering stand-in holds their
-  // place until every store's list has loaded, then the card replaces it (or
-  // it goes, when there are none).
+  // Achievements go just before Trailers and Images. The library already says
+  // whether any copy has a list: if none does, nothing is loaded or shown; if
+  // one does, a shimmering stand-in holds their place until every store's list
+  // has loaded and the card replaces it. Before the library has loaded, the
+  // lists are loaded anyway and the card appears without a stand-in.
   async function placeAchievements(run) {
     if (!parts || !shown) return;
     const { id } = shown;
@@ -669,7 +670,10 @@ export function createGamePage({ game, content, library, onProgress }) {
       if (media) media.before(section);
       else parts.body.append(section);
     };
-    if (library?.copies(id)?.length) put(achievementsSkeleton());
+    if (library?.ready) {
+      if (!library.copies(id).some((c) => c.achievements)) return put(null);
+      put(achievementsSkeleton());
+    }
     let result = null;
     try {
       result = await loadGameAchievements(id);
