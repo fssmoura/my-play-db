@@ -444,6 +444,7 @@ export function gameRating(row, rank, { onRate } = {}) {
     divider.className = "game-rating-divider";
     divider.setAttribute("aria-hidden", "true");
     const trend = document.createElement("span");
+    trend.className = "game-rating-trend";
     trend.textContent = `Trending #${rank}`;
     line.append(divider, trend);
   }
