@@ -533,31 +533,37 @@ html.is-game-open body {
   gap: 6px;
 }
 
+/* Empty stars are outlines; the general rating fills them grey; the owner's
+   own stars are filled white. */
 .game-stars {
   position: relative;
   display: inline-block;
   letter-spacing: 1px;
-  color: rgba(244, 244, 244, 0.25);
+  color: transparent;
+  -webkit-text-stroke: 0.75px rgba(244, 244, 244, 0.35);
 }
 
 .game-stars-fill,
+.game-stars-mine,
 .game-stars-lit {
   position: absolute;
   top: 0;
   left: 0;
   overflow: hidden;
   white-space: nowrap;
-  color: rgba(244, 244, 244, 0.7);
+  color: #5f5f5f;
+  -webkit-text-stroke: 0.75px #5f5f5f;
   pointer-events: none;
+}
+
+.game-stars-mine,
+.game-stars-lit {
+  color: #fff;
+  -webkit-text-stroke: 0.75px #fff;
 }
 
 .game-stars-lit {
   width: 0;
-  color: #fff;
-}
-
-.game-stars.is-mine .game-stars-fill {
-  color: #fff;
 }
 
 .game-star-hit {
@@ -570,6 +576,55 @@ html.is-game-open body {
   background: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Touch rating: big stars so a finger can pick one exactly. */
+.rate-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.rate-picker-panel {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  border-radius: 28px;
+  background: rgba(30, 30, 32, 0.95);
+}
+
+.rate-picker-score {
+  color: #f4f4f4;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 44px;
+}
+
+.rate-picker-row {
+  display: flex;
+}
+
+.rate-picker-star {
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: rgba(244, 244, 244, 0.25);
+  font-size: 38px;
+  line-height: 44px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rate-picker-star.is-mine {
+  color: #fff;
 }
 
 .game-rating-divider {

@@ -258,7 +258,10 @@ For large originals, use the host's own resize parameter if it has one.
   from the day's saved copy). The line is added after the page is up, once
   the rank is known. The stars are also the owner's vote: hover lights them
   white, a click saves `games.my_rating` (the same star again removes it), and
-  the vote is counted into the average and the vote count.
+  the vote is counted into the average and the vote count. Empty stars are
+  outlines, the average fills them grey, and the owner's own vote is white. A
+  touch tap on the stars opens a picker with five large stars instead, since a
+  finger can't hit the small ones.
 - **Achievements** (`game-achievements.js`) sit before Trailers and Images, for
   games with achievements in the library: one edge-to-edge card for the game,
   every store's list combined as in the lab (so a game on Steam and PS5 is one

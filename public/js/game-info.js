@@ -322,6 +322,42 @@ function metaText(row) {
 // game is on the popular list. The stars are also the owner's voting control:
 // hovering lights them white up to the pointer, a click saves that many (the
 // same again removes it) through onRate(value | null).
+// Five large stars over a dimmed page; a tap on one votes (the same one again
+// takes the vote back), a tap outside closes.
+function openRatePicker(mine, onRate, shown) {
+  const layer = document.createElement("div");
+  layer.className = "rate-picker";
+  const panel = document.createElement("div");
+  panel.className = "rate-picker-panel";
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-label", "Rate this game");
+  const close = () => layer.remove();
+  const score = document.createElement("div");
+  score.className = "rate-picker-score";
+  score.textContent = shown ? shown.toFixed(1) : "–";
+  const row = document.createElement("div");
+  row.className = "rate-picker-row";
+  panel.append(row, score);
+  for (let n = 1; n <= 5; n++) {
+    const star = document.createElement("button");
+    star.type = "button";
+    star.className = "rate-picker-star";
+    star.classList.toggle("is-mine", n <= mine);
+    star.textContent = "★";
+    star.setAttribute("aria-label", `Rate ${n} out of 5`);
+    star.addEventListener("click", () => {
+      close();
+      onRate(n === mine ? null : n);
+    });
+    row.append(star);
+  }
+  layer.addEventListener("click", (event) => {
+    if (event.target === layer) close();
+  });
+  layer.append(panel);
+  document.body.append(layer);
+}
+
 export function gameRating(row, rank, { onRate } = {}) {
   if (!row) return null;
   const mine = Number(row.my_rating) || 0;
@@ -338,7 +374,6 @@ export function gameRating(row, rank, { onRate } = {}) {
   part.className = "game-rating-score";
   const stars = document.createElement("span");
   stars.className = "game-stars";
-  stars.classList.toggle("is-mine", !!mine);
   const fill = document.createElement("span");
   fill.className = "game-stars-fill";
   fill.textContent = "★★★★★";
@@ -346,7 +381,11 @@ export function gameRating(row, rank, { onRate } = {}) {
   const lit = document.createElement("span");
   lit.className = "game-stars-lit";
   lit.textContent = "★★★★★";
-  stars.append("★★★★★", fill, lit);
+  const own = document.createElement("span");
+  own.className = "game-stars-mine";
+  own.textContent = "★★★★★";
+  own.style.width = `${mine * 20}%`;
+  stars.append("★★★★★", fill, own, lit);
   if (onRate) {
     for (let n = 1; n <= 5; n++) {
       const hit = document.createElement("button");
@@ -357,9 +396,21 @@ export function gameRating(row, rank, { onRate } = {}) {
       hit.addEventListener("pointerenter", (event) => {
         if (event.pointerType === "mouse") lit.style.width = `${n * 20}%`;
       });
-      hit.addEventListener("click", () => onRate(n === mine ? null : n));
+      hit.addEventListener("click", () => {
+        if (touched) openRatePicker(mine, onRate, shown);
+        else onRate(n === mine ? null : n);
+      });
       stars.append(hit);
     }
+    // A finger covers several stars at once, so touch opens a big picker.
+    let touched = false;
+    stars.addEventListener(
+      "pointerdown",
+      (event) => {
+        touched = event.pointerType !== "mouse";
+      },
+      true,
+    );
     stars.addEventListener("pointerleave", () => {
       lit.style.width = "0";
     });
