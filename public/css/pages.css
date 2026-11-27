@@ -21,7 +21,7 @@
    (25px + 44px + breathing room) and scrolls behind it. */
 .results {
   box-sizing: border-box;
-  padding: calc(85px + var(--safe-top)) 25px 40px;
+  padding: 85px 25px 40px;
 }
 
 .results-grid {

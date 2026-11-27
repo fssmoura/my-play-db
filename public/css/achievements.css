@@ -77,8 +77,7 @@
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
-  padding: calc(85px + var(--safe-top)) 25px
-    calc(40px + env(safe-area-inset-bottom));
+  padding: 85px 25px calc(40px + env(safe-area-inset-bottom));
 }
 
 .ach-message {

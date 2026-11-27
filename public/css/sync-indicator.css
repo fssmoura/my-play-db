@@ -7,7 +7,7 @@
    on a phone. */
 .sync-bar {
   position: fixed;
-  top: var(--safe-top);
+  top: env(safe-area-inset-top, 0px);
   left: 0;
   right: 0;
   z-index: 2000;
@@ -36,7 +36,7 @@
 /* Rests centred on the top menu pill (25px down, 44px tall). */
 .pull-refresh {
   position: fixed;
-  top: calc(35px + var(--safe-top));
+  top: 35px;
   left: 50%;
   z-index: 2000;
   width: 24px;

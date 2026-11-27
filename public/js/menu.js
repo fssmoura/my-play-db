@@ -536,6 +536,7 @@ function wireFilter({
   // panel's padding grows from 0 as it grows from the row's own rect.
   const PAD = 6;
   const MARGIN = 12;
+  const MIN_TOP = 77;
   let row = { l: 0, t: 0, w: 0, h: 0 };
   let end = { x: 0, y0: 0, y1: 0, w: 0, h0: 0, h1: 0 };
   let v = 0;
@@ -595,9 +596,7 @@ function wireFilter({
   // moves up only as far as needed to stay on screen.
   function measureEnd() {
     const rect = typesToggle.getBoundingClientRect();
-    // No higher than the filter panel's own top (under the menu pill).
-    const minTop = parseFloat(getComputedStyle(panel).top);
-    const room = window.innerHeight - MARGIN - minTop;
+    const room = window.innerHeight - MARGIN - MIN_TOP;
     subPanel.style.height = "";
     subPanel.style.removeProperty("--sub-w");
     subPanel.style.setProperty("--sub-pad", `${PAD}px`);
@@ -617,7 +616,7 @@ function wireFilter({
         Math.min(rect.left - PAD, window.innerWidth - MARGIN - w),
       ),
       y: Math.max(
-        minTop,
+        MIN_TOP,
         Math.min(rect.top - PAD, window.innerHeight - MARGIN - h),
       ),
     };

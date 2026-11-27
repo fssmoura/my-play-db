@@ -33,7 +33,7 @@
 /* Holds the search pill and the main pill side by side, anchored top-right. */
 .menu-bar {
   position: absolute;
-  top: calc(25px + var(--safe-top));
+  top: 25px;
   right: 25px;
   display: flex;
   align-items: center;
@@ -59,7 +59,7 @@
    off-screen left with --back-t. */
 .menu.menu-back {
   position: absolute;
-  top: calc(25px + var(--safe-top));
+  top: 25px;
   left: calc(25px - 69px * (1 - var(--back-t)));
   display: none;
   width: 44px;
@@ -413,7 +413,7 @@
 
 .menu-panel {
   position: absolute;
-  top: calc(77px + var(--safe-top)); /* 25px + 44px pill + 8px gap */
+  top: 77px; /* 25px + 44px pill + 8px gap */
   right: 25px;
   box-sizing: border-box;
   padding: 6px;
@@ -511,7 +511,7 @@
   /* Above the parent panel's rows, which sit at z-index 2 in the stage. */
   z-index: 5;
   right: auto;
-  top: var(--sub-y, calc(77px + var(--safe-top)));
+  top: var(--sub-y, 77px);
   left: var(--sub-x, 25px);
   width: var(--sub-w, var(--filter-w, 220px));
   padding: var(--sub-pad, 6px);

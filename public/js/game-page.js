@@ -94,9 +94,8 @@ function buildLayer() {
 const CLOSE_FRACTION = 0.25;
 const FLICK = 0.5;
 const SLOP = 8;
-// The sheet's resting top, px from the viewport top: the spacer's height (85px,
-// plus the status bar when run from the Home Screen).
-const restTop = (spacer) => spacer.offsetHeight;
+// The sheet's resting top, px from the viewport top (css: .game-spacer).
+const REST_TOP = 85;
 
 // Dark versions of the banner's colours, for the fade under it and the top
 // of the page (the way streaming apps tint their backgrounds): one for the
@@ -764,20 +763,17 @@ export function createGamePage({ game, content, library, onProgress }) {
       parts.sheet.style.setProperty("--overlap", overlap.toFixed(3));
     }
     // Its rounded top corners square off the moment it reaches the top of
-    // the screen (restTop), and round again as soon as it leaves.
-    const flat = top >= restTop(parts.spacer);
+    // the screen (REST_TOP), and round again as soon as it leaves.
+    const flat = top >= REST_TOP;
     if (flat !== lastFlat) {
       lastFlat = flat;
       parts.sheet.classList.toggle("is-flat", flat);
     }
     // Content starts passing under the pinned banner once the sheet has risen
-    // (restTop); the fade under the logo grows over the next 60px. It starts
+    // (REST_TOP); the fade under the logo grows over the next 60px. It starts
     // 44px early because the content sits that much closer to the logo than
     // the fade was tuned for, so it still fades at the same place on screen.
-    const under = Math.min(
-      Math.max((top - restTop(parts.spacer) + 44) / 60, 0),
-      1,
-    );
+    const under = Math.min(Math.max((top - REST_TOP + 44) / 60, 0), 1);
     if (under !== lastUnder) {
       lastUnder = under;
       parts.sheet.style.setProperty("--under", under.toFixed(3));
@@ -828,10 +824,7 @@ export function createGamePage({ game, content, library, onProgress }) {
     if (!banner) return TRACK_TOP;
     const logo = parts.body.querySelector(".game-head .game-logo");
     const hang = logo ? Math.max(0, logo.offsetHeight / 2 - 8) : 0;
-    const sheetTop = Math.max(
-      0,
-      restTop(parts.spacer) - parts.scroller.scrollTop,
-    );
+    const sheetTop = Math.max(0, REST_TOP - parts.scroller.scrollTop);
     return Math.max(TRACK_TOP, sheetTop + banner.offsetHeight + hang + 6);
   }
 
@@ -896,12 +889,12 @@ export function createGamePage({ game, content, library, onProgress }) {
   // browser taking the gesture over as a pan (which cancels the pointer).
   let unwireDrag = null;
 
-  function wireDrag({ layer: sheet, scroller, spacer }) {
+  function wireDrag({ layer: sheet, scroller }) {
     let start = null; // { x, y, id } while a press might become a drag
     let dragging = false;
     let samples = []; // [time, y] of the last few moves, for the flick speed
 
-    const height = () => Math.max(1, window.innerHeight - restTop(spacer));
+    const height = () => Math.max(1, window.innerHeight - REST_TOP);
     const reset = () => {
       start = null;
       dragging = false;

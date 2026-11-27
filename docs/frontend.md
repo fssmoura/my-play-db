@@ -22,13 +22,6 @@ those files.
 - **Behaviour in JS, looks in CSS.** JS sets only CSS variables (the springs
   drive things like `--search-t` and `--game-t`) and animated sizes (the By
   Type submenu's height) inline; every other look lives in CSS.
-- **Top offsets include `--safe-top`.** Added to the iPhone Home Screen, the
-  site runs as a web app and iOS blurs the top edge of the page under the
-  status bar. `viewport-fit=cover` plus the `black-translucent` status bar
-  draw the page under it instead, so anything pinned near the top adds
-  `var(--safe-top)` (the status bar height; 0 in a browser). JS that needs
-  the resting top reads it from the layout, not a constant. The overlay
-  scrollbars' 85px track inset doesn't include it yet.
 
 ## Copies of the lab's code
 
