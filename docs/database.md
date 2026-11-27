@@ -887,7 +887,7 @@ achievements re-read), and a game removed then re-added and matched.
 `playstation`, `xbox`, `ea`); a new platform needs its row inserted. `state` is the
 updater's own bookkeeping between runs (PSN: `purchases_checked_at`,
 `purchase_entries`). Each platform runs on its own: the endpoint skips one
-if its last run finished under 15 minutes ago (unless `force`), and takes its
+if its last run finished under 15 minutes ago (1 minute with `force`), and takes its
 lock by setting `running_since` in a single conditional update, so two runs
 can't overlap; a lock older than 10 minutes counts as dead. `last_result` is
 the updater's summary, or `{error, at}` when the run failed (a failure doesn't

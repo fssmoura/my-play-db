@@ -1,0 +1,80 @@
+/* =========================================================================
+   my-play-db - library sync bar and pull to refresh
+   (public/js/sync-indicator.js).
+   ========================================================================= */
+
+/* Above everything, game page and Customize included, under the status bar
+   on a phone. */
+.sync-bar {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 2000;
+  height: 2px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.sync-bar.is-on {
+  opacity: 1;
+}
+
+.sync-bar-fill {
+  height: 100%;
+  background: var(--light-gray);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 400ms ease-out;
+}
+
+.sync-bar-fill.is-instant {
+  transition: none;
+}
+
+/* Rests centred on the top menu pill (25px down, 44px tall). */
+.pull-refresh {
+  position: fixed;
+  top: 35px;
+  left: 50%;
+  z-index: 2000;
+  width: 24px;
+  height: 24px;
+  color: var(--light-gray);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -40px);
+}
+
+.pull-refresh svg {
+  display: block;
+}
+
+.pull-refresh path {
+  opacity: 0.25;
+  transition: opacity 120ms ease;
+}
+
+.pull-refresh path.is-lit {
+  opacity: 1;
+}
+
+.is-pulling,
+.is-pulling * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.pull-refresh.is-releasing {
+  transition:
+    transform 250ms ease,
+    opacity 250ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-bar-fill,
+  .pull-refresh.is-releasing {
+    transition: none;
+  }
+}

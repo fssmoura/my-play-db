@@ -20,6 +20,7 @@ import { createPageSwitcher } from "/js/pages.js";
 import { createResultsPage } from "/js/results-page.js";
 import { mountMenu, unmountMenu } from "/js/menu.js";
 import { createOverlayScroll } from "/js/overlay-scroll.js";
+import { createSyncBar, wirePullToRefresh } from "/js/sync-indicator.js";
 
 // Keeps one history entry in step with the results screen and one with the game
 // page. When the page was loaded straight into a search or a game (a refreshed
@@ -174,7 +175,8 @@ export function mountApp() {
   const library = createLibrary();
   library.load();
   // Signed in by now (mountApp runs only with a session): bring the stores up
-  // to date in the background, once per app load.
+  // to date in the background, once per app load, with the bar showing.
+  const syncBar = createSyncBar(library);
   library.sync();
   // The popular list, resolved only once its first page of covers is
   // downloaded and decoded (2s at most), so the cards slide in with their
@@ -247,6 +249,19 @@ export function mountApp() {
     }),
   );
   searchEngine.warmUp();
+  // Pull down on home (nothing on top, no menu open) syncs again, past the
+  // 15-minute rule but not the server's 1-minute one. One already running is
+  // left to finish.
+  const stopPull = wirePullToRefresh({
+    canPull: (event) =>
+      pages.current === "home" &&
+      !searchState.active &&
+      !game.isOpen &&
+      !library.syncing &&
+      !document.querySelector(".is-open") &&
+      !event.target.closest?.("input, textarea"),
+    onRefresh: () => library.sync({ force: true }),
+  });
   // Started while the app sits on home, so opening search doesn't wait.
   const warmPopular = () => popularWithCovers().catch(() => {});
   if ("requestIdleCallback" in window) requestIdleCallback(warmPopular);
@@ -270,6 +285,8 @@ export function mountApp() {
   }
 
   cleanup = () => {
+    stopPull();
+    syncBar.destroy();
     scrollIndicator.destroy();
     unmountMenu();
     gamePage.destroy();

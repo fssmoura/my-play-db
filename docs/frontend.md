@@ -216,8 +216,13 @@ For large originals, use the host's own resize parameter if it has one.
   locally with the same ranking. It skips `platforms` and `release_dates`,
   which made up most of the ~1 MB download and that cards don't need.
 - **Each app load syncs the stores** (`library.sync()`, the same endpoint as
-  the lab, so its 15-minute rule stops repeats), silently, then reloads the
-  library.
+  the lab, so its 15-minute rule stops repeats), then reloads the library. A
+  2px bar along the top shows while any sync runs (`sync-indicator.js`),
+  filled from the server's progress lines: each store an equal share, full
+  when it reports finished, filled meanwhile by its "(3/10)" steps.
+  Pulling down on home (finger or mouse drag, nothing open on top) syncs with
+  `force`, which shortens that rule to one minute; a pull while a sync runs
+  does nothing.
 - **Popular right now** (nothing typed) is built by `igdb.popular`, once per
   day, and the browser keeps that day's copy in `localStorage`, so opening
   search shows it instantly. The day turns over at 01:00 UTC, after IGDB's

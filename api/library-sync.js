@@ -13,10 +13,13 @@ const { ensureFreshAccess } = require("./_platform-refresh");
 //
 // POST (signed in), optional { force: true }: every platform, in parallel,
 // streamed as JSON lines:
+//   {"platforms": ["steam", ...]}                 first
 //   {"platform": "steam", "step": "..."}           while running
+//   {"platform": "steam", "finished": true}        as each one ends
 //   {"done": true, "platforms": {steam: outcome, epic: outcome}}  at the end
 // where an outcome is {result} | {skipped, last_finished_at, result} |
-// {busy} | {error}. force ignores the 15-minute rule, never the lock.
+// {busy} | {error}. force shortens the 15-minute rule to one minute, and never
+// skips the lock.
 //
 // GET (Vercel cron, Authorization: Bearer CRON_SECRET), optional
 // ?platform=steam|epic|playstation|xbox|ea (all when absent): same runs, answered as
@@ -25,6 +28,9 @@ const { ensureFreshAccess } = require("./_platform-refresh");
 // asks it, through ensureFreshAccess, to renew before starting.
 
 const MIN_GAP_MS = 15 * 60 * 1000;
+// force (pull to refresh) still waits this long, so repeated pulls don't
+// hammer the stores.
+const FORCE_GAP_MS = 60 * 1000;
 // A run that died without finishing stops blocking others after this long.
 const STALE_LOCK_MS = 10 * 60 * 1000;
 // Vercel stops a function at 300s; stop starting new games well before that.
@@ -77,9 +83,9 @@ async function runPlatform({ db, platform, force, started, log }) {
   );
   if (!state) throw new Error(`no library_sync row for ${platform}`);
   if (
-    !force &&
     state.last_finished_at &&
-    started - new Date(state.last_finished_at).getTime() < MIN_GAP_MS
+    started - new Date(state.last_finished_at).getTime() <
+      (force ? FORCE_GAP_MS : MIN_GAP_MS)
   ) {
     return {
       skipped: true,
@@ -126,7 +132,7 @@ async function runPlatform({ db, platform, force, started, log }) {
   return error ? { error } : { result };
 }
 
-async function runAll({ platforms, force, log }) {
+async function runAll({ platforms, force, log, onFinish = () => {} }) {
   const db = serviceClient();
   const started = Date.now();
   const outcomes = await Promise.all(
@@ -137,7 +143,12 @@ async function runAll({ platforms, force, log }) {
         force,
         started,
         log: (step) => log(platform, step),
-      }).catch((err) => ({ error: err.message })),
+      })
+        .catch((err) => ({ error: err.message }))
+        .then((outcome) => {
+          onFinish(platform);
+          return outcome;
+        }),
     ),
   );
   return Object.fromEntries(platforms.map((p, i) => [p, outcomes[i]]));
@@ -173,11 +184,13 @@ module.exports = async function handler(req, res) {
   res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   const send = (obj) => res.write(`${JSON.stringify(obj)}\n`);
+  send({ platforms: Object.keys(UPDATERS) });
 
   const platforms = await runAll({
     platforms: Object.keys(UPDATERS),
     force,
     log: (platform, step) => send({ platform, step }),
+    onFinish: (platform) => send({ platform, finished: true }),
   });
   send({ done: true, platforms });
   res.end();
