@@ -3,11 +3,11 @@
    (public/js/sync-indicator.js).
    ========================================================================= */
 
-/* Above everything, game page and Customize included, under the status bar
-   on a phone. */
+/* Above everything, game page and Customize included, along the bottom
+   edge. */
 .sync-bar {
   position: fixed;
-  top: env(safe-area-inset-top, 0px);
+  bottom: 0;
   left: 0;
   right: 0;
   z-index: 2000;

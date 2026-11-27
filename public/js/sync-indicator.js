@@ -1,6 +1,6 @@
 // The library sync's two visible parts. Looks live in /css/sync-indicator.css.
 //
-// The bar: a thin line along the top of the screen while library.sync() runs
+// The bar: a thin line along the bottom of the screen while library.sync() runs
 // (app open, pull to refresh), filled to the real share done (see sync() in
 // library.js), then full and fading when it ends.
 //
