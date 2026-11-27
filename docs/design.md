@@ -249,6 +249,11 @@ Rules a redesign must keep, with the HIG reason where there is one.
   the banner keeps its space and each image fades in when it arrives. No fake
   text bars. Results use quiet skeleton cards with the same shimmer.
 - Under reduced motion the shimmer becomes a slow pulse.
+- A library sync shows a glass pill centred in the top row: "Syncing" and a
+  ring that fills clockwise with the real progress (Apple: determinate where
+  possible, a short specific label, one consistent place). It slides down
+  from above, and back up once the ring closes. It only shows on home: on
+  search and game pages that spot is taken.
 
 **Scrollbar**
 
@@ -274,7 +279,7 @@ Google button also keeps Google's official dark-theme colours.
 
 Liquid glass is for the navigation/controls layer only (the top-right pill
 menu and its pull-downs, the Back circle, the search pill, the filter circle,
-panel and By Type submenu, the game page's bottom toolbar, and the Customize
+panel and By Type submenu, the game page's bottom toolbar, the sync pill, and the Customize
 drawer's Back, search, Reset, Save, tab pill and full-screen X), never for content
 such as the sign-in form. Apple
 reserves it for the layer that floats above content.

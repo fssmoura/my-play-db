@@ -1,35 +1,53 @@
 /* =========================================================================
-   my-play-db - library sync bar and pull to refresh
+   my-play-db - library sync pill and pull to refresh
    (public/js/sync-indicator.js).
    ========================================================================= */
 
-/* Above everything, game page and Customize included, under the status bar
-   on a phone. */
-.sync-bar {
-  position: fixed;
-  top: env(safe-area-inset-top, 0px);
+/* A glass lens in the menu stage, in the top row (25px down, 44px tall like
+   the other controls); sync-indicator.js sets its left to centre it. Hidden
+   it is display: none; shown it slides down from above the screen with
+   --sync-show (liquidGL draws the glass). */
+.sync-pill {
+  position: absolute;
+  top: calc(25px - 80px * (1 - var(--sync-show, 0)));
   left: 0;
-  right: 0;
-  z-index: 2000;
-  height: 2px;
+  box-sizing: border-box;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  height: 44px;
+  padding: 0 12px 0 16px;
+  border-radius: 22px;
+  color: var(--light-gray);
+  font-size: calc(var(--menu-font-px) * 1px);
+  white-space: nowrap;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 300ms ease;
 }
 
-.sync-bar.is-on {
-  opacity: 1;
+.sync-pill.is-on {
+  display: flex;
 }
 
-.sync-bar-fill {
-  height: 100%;
-  background: var(--light-gray);
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform 400ms ease-out;
+.sync-pill-ring {
+  display: block;
+  flex: none;
+  fill: none;
+  stroke-width: 2.5;
 }
 
-.sync-bar-fill.is-instant {
+.sync-pill-track {
+  stroke: currentColor;
+  opacity: 0.25;
+}
+
+.sync-pill-fill {
+  stroke: currentColor;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 400ms ease-out;
+}
+
+.sync-pill-fill.is-instant {
   transition: none;
 }
 
@@ -73,7 +91,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sync-bar-fill,
+  .sync-pill-fill,
   .pull-refresh.is-releasing {
     transition: none;
   }

@@ -217,7 +217,8 @@ For large originals, use the host's own resize parameter if it has one.
   which made up most of the ~1 MB download and that cards don't need.
 - **Each app load syncs the stores** (`library.sync()`, the same endpoint as
   the lab, so its 15-minute rule stops repeats), then reloads the library. A
-  2px bar along the top shows while any sync runs (`sync-indicator.js`),
+  glass pill at the top shows while any sync runs (`sync-indicator.js`), its
+  ring
   filled from the server's progress lines: each store an equal share, full
   when it reports finished, filled meanwhile by its "(3/10)" steps.
   Pulling down on home (finger or mouse drag, nothing open on top) syncs with

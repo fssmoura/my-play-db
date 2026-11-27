@@ -1,8 +1,13 @@
 // The library sync's two visible parts. Looks live in /css/sync-indicator.css.
 //
-// The bar: a thin line along the top of the screen while library.sync() runs
-// (app open, pull to refresh), filled to the real share done (see sync() in
-// library.js), then full and fading when it ends.
+// The pill: a glass pill at the top centre, in line with the other top
+// controls, while library.sync() runs (app open, pull to refresh). "Syncing"
+// on the left, a ring on the right filled clockwise to the real share done
+// (see sync() in library.js); when the sync ends the ring closes and the pill
+// slides back up. It lives in the menu stage, so menu.js gives it its lens;
+// it slides with --sync-show, as liquidGL lenses move by top, never
+// transform. Off home (search or a game page, Back showing) the centre of the
+// row is taken, so it stays away there.
 //
 // Pull to refresh: dragging down on home reveals a spoked icon whose spokes
 // light up one by one as the pull nears the point of release; let go past it
@@ -10,37 +15,79 @@
 // finger or a mouse drag. The page itself never moves (html has no
 // rubber-band).
 
-const FADE_MS = 300;
+import { createSpring } from "/js/spring.js";
 
-export function createSyncBar(library) {
-  const bar = document.createElement("div");
-  bar.className = "sync-bar";
-  bar.setAttribute("role", "progressbar");
-  bar.setAttribute("aria-label", "Syncing library");
-  bar.hidden = true;
-  const fill = document.createElement("div");
-  fill.className = "sync-bar-fill";
-  bar.append(fill);
-  document.body.append(bar);
+const HOLD_MS = 600;
+const RING_R = 8;
+const RING_C = 2 * Math.PI * RING_R;
+
+export function createSyncPill(library) {
+  const stage = document.getElementById("app-menu-stage");
+  const pill = document.createElement("div");
+  pill.id = "app-sync";
+  pill.className = "sync-pill";
+  pill.setAttribute("role", "progressbar");
+  pill.setAttribute("aria-label", "Syncing library");
+  pill.setAttribute("aria-valuemin", "0");
+  pill.setAttribute("aria-valuemax", "100");
+  pill.innerHTML = `<span class="sync-pill-label">Syncing</span><svg class="sync-pill-ring" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><circle class="sync-pill-track" cx="10" cy="10" r="${RING_R}"/><circle class="sync-pill-fill" cx="10" cy="10" r="${RING_R}" transform="rotate(-90 10 10)" stroke-dasharray="${RING_C.toFixed(2)}"/></svg>`;
+  const fill = pill.querySelector(".sync-pill-fill");
+  (stage ?? document.body).append(pill);
 
   let value = 0;
   let running = false;
-  let fade = null;
+  let visible = false;
+  let hold = null;
+
+  const reducedMotion = () =>
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const spring = createSpring({
+    onUpdate: (v) => pill.style.setProperty("--sync-show", v.toFixed(4)),
+    onRest: (target) => {
+      if (target !== 0) return;
+      pill.classList.remove("is-on");
+      if (!visible) set(0, { instant: true });
+    },
+  });
 
   function set(next, { instant = false } = {}) {
     value = next;
     fill.classList.toggle("is-instant", instant);
-    fill.style.transform = `scaleX(${value.toFixed(4)})`;
+    fill.style.strokeDashoffset = (RING_C * (1 - value)).toFixed(2);
+    pill.setAttribute("aria-valuenow", String(Math.round(value * 100)));
+  }
+
+  const blocked = () => stage?.classList.contains("is-back-active") ?? false;
+
+  // Centred, unless a narrow phone would put it under the top-right menu:
+  // then just far enough left to keep the 8px gap, never past the margin.
+  function place() {
+    const bar = stage?.querySelector(".menu-bar");
+    if (!bar || !pill.classList.contains("is-on")) return;
+    const width = pill.offsetWidth;
+    const room = bar.getBoundingClientRect().left - 8 - width;
+    const left = Math.max(25, Math.min((window.innerWidth - width) / 2, room));
+    pill.style.left = `${left}px`;
+  }
+
+  function update() {
+    if (visible && !blocked()) {
+      pill.classList.add("is-on");
+      place();
+      spring.to(1, { instant: reducedMotion() });
+    } else {
+      spring.to(0, { instant: reducedMotion() });
+    }
   }
 
   function start() {
-    clearTimeout(fade);
+    clearTimeout(hold);
     running = true;
+    visible = true;
     set(0, { instant: true });
-    bar.hidden = false;
-    // Next frame, so the first move animates from 0.
+    update();
+    // Next frame, so the first move animates from empty.
     requestAnimationFrame(() => {
-      bar.classList.add("is-on");
       if (running) set(Math.max(value, 0.03));
     });
   }
@@ -52,15 +99,23 @@ export function createSyncBar(library) {
   function end() {
     running = false;
     set(1);
-    fade = setTimeout(() => {
-      bar.classList.remove("is-on");
-      fade = setTimeout(() => {
-        bar.hidden = true;
-        set(0, { instant: true });
-      }, FADE_MS);
-    }, FADE_MS);
+    hold = setTimeout(() => {
+      visible = false;
+      update();
+    }, HOLD_MS);
   }
 
+  // Back slides in when search or a game page opens: step aside for it.
+  let wasBlocked = blocked();
+  const observer = new MutationObserver(() => {
+    if (blocked() === wasBlocked) return;
+    wasBlocked = blocked();
+    update();
+  });
+  if (stage) observer.observe(stage, { attributeFilter: ["class"] });
+  window.addEventListener("resize", place);
+
+  set(0, { instant: true });
   const offs = [
     library.on("syncstart", start),
     library.on("syncprogress", progress),
@@ -71,8 +126,11 @@ export function createSyncBar(library) {
   return {
     destroy() {
       offs.forEach((off) => off());
-      clearTimeout(fade);
-      bar.remove();
+      observer.disconnect();
+      window.removeEventListener("resize", place);
+      clearTimeout(hold);
+      spring.destroy();
+      pill.remove();
     },
   };
 }

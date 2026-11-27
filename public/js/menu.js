@@ -1347,6 +1347,15 @@ export async function mountMenu({ search, filter, game }) {
         content: false,
         zIndex: 1,
       }),
+      // The sync pill (sync-indicator.js), added to the stage just after
+      // mountMenu; not there in pages without a library.
+      document.getElementById("app-sync") &&
+        liquidGL({
+          ...GLASS_CONFIG,
+          target: "#app-sync",
+          content: false,
+          zIndex: 1,
+        }),
       liquidGL({
         ...GLASS_CONFIG,
         target:

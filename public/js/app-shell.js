@@ -20,7 +20,7 @@ import { createPageSwitcher } from "/js/pages.js";
 import { createResultsPage } from "/js/results-page.js";
 import { mountMenu, unmountMenu } from "/js/menu.js";
 import { createOverlayScroll } from "/js/overlay-scroll.js";
-import { createSyncBar, wirePullToRefresh } from "/js/sync-indicator.js";
+import { createSyncPill, wirePullToRefresh } from "/js/sync-indicator.js";
 
 // Keeps one history entry in step with the results screen and one with the game
 // page. When the page was loaded straight into a search or a game (a refreshed
@@ -174,10 +174,6 @@ export function mountApp() {
   const filter = createFilterState();
   const library = createLibrary();
   library.load();
-  // Signed in by now (mountApp runs only with a session): bring the stores up
-  // to date in the background, once per app load, with the bar showing.
-  const syncBar = createSyncBar(library);
-  library.sync();
   // The popular list, resolved only once its first page of covers is
   // downloaded and decoded (2s at most), so the cards slide in with their
   // images rather than shimmering after. Custom covers are big SteamGridDB
@@ -227,6 +223,11 @@ export function mountApp() {
   });
 
   mountMenu({ search: searchState, filter, game });
+  // Signed in by now (mountApp runs only with a session): bring the stores up
+  // to date in the background, once per app load, with the pill showing. The
+  // pill goes in the menu stage, so it comes after mountMenu.
+  const syncPill = createSyncPill(library);
+  library.sync();
   // Created before the cover wiring below: when the page closes, focus goes
   // back to the card first, and then search may move it into the field.
   const gamePage = createGamePage({
@@ -286,7 +287,7 @@ export function mountApp() {
 
   cleanup = () => {
     stopPull();
-    syncBar.destroy();
+    syncPill.destroy();
     scrollIndicator.destroy();
     unmountMenu();
     gamePage.destroy();
