@@ -38,7 +38,7 @@
   margin: 0 20px;
   padding: 30px 16px 26px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.2);
   color: var(--white);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
