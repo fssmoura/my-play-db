@@ -326,7 +326,7 @@
 .media-grid-bar,
 .mv-top-left {
   position: absolute;
-  top: 25px;
+  top: calc(25px + var(--safe-top));
   left: 25px;
   z-index: 2;
   display: flex;
@@ -390,7 +390,7 @@
 /* ---- "Set as" (pictures): the circle top right, its menu, the confirmation ---- */
 .mv-top-right {
   position: absolute;
-  top: 25px;
+  top: calc(25px + var(--safe-top));
   right: 25px;
   z-index: 2;
 }
@@ -398,7 +398,7 @@
 /* Glass imitated in CSS, like Close (liquidGL can't draw on this layer). */
 .mv-menu {
   position: absolute;
-  top: 52px;
+  top: calc(52px + var(--safe-top));
   right: 0;
   min-width: 180px;
   padding: 6px;
@@ -596,7 +596,7 @@
   left: 0;
   right: 0;
   z-index: 1;
-  height: 85px;
+  height: calc(85px + var(--safe-top));
   background: linear-gradient(var(--black) 30%, rgba(9, 9, 11, 0));
   pointer-events: none;
 }
@@ -615,7 +615,8 @@
     minmax(min(calc(50% - 8px), 240px), 1fr)
   );
   gap: 16px;
-  padding: 85px 25px calc(40px + env(safe-area-inset-bottom));
+  padding: calc(85px + var(--safe-top)) 25px
+    calc(40px + env(safe-area-inset-bottom));
 }
 
 .media-grid .media-card {
@@ -925,7 +926,7 @@
 
 .mv-volume {
   position: absolute;
-  top: 25px;
+  top: calc(25px + var(--safe-top));
   right: 25px;
   display: flex;
   align-items: center;

@@ -6,6 +6,9 @@
   --gray: #7b7b7b;
   --dark-gray: #48484d;
   --black: #09090b;
+  /* The status bar's height when the app runs from the Home Screen (the page
+     draws under it, index.html viewport-fit=cover); 0 in a browser tab. */
+  --safe-top: env(safe-area-inset-top, 0px);
   /* Not part of the palette: Apple's dark-mode systemRed, for critical
      actions only. */
   --destructive: #ff453a;

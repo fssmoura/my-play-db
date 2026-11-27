@@ -64,7 +64,7 @@ html.is-game-open body {
 
 .game-spacer {
   position: relative;
-  height: 85px;
+  height: calc(85px + var(--safe-top));
 }
 
 /* The name over type · date, in the top bar between Back (25px + 44px + 12px
@@ -74,7 +74,7 @@ html.is-game-open body {
    the rising sheet, later in the page, slides over it. */
 .game-heading {
   position: fixed;
-  top: 25px;
+  top: calc(25px + var(--safe-top));
   left: 81px;
   right: var(--heading-right, 177px);
   display: flex;
@@ -131,7 +131,7 @@ html.is-game-open body {
 .game-sheet {
   position: relative;
   box-sizing: border-box;
-  min-height: calc(100dvh - 85px);
+  min-height: calc(100dvh - 85px - var(--safe-top));
   margin: 0 25px;
   border-radius: 24px 24px 0 0;
   /* Squared off once it reaches the top of the screen (game-page.js). */
@@ -877,7 +877,7 @@ html.is-game-open body {
   bottom: auto;
   /* The visible sheet (viewport minus the resting top), which is what the
      Figma frame's gradient is sized against. */
-  height: calc(100dvh - 85px);
+  height: calc(100dvh - 85px - var(--safe-top));
   /* Figma: stroke inside, left/top/right 1px, bottom 0. */
   padding: 1px 1px 0;
   /* Figma: radial from the top centre, #F4F4F4 40% to #48484D 0%. */
