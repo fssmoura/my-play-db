@@ -404,7 +404,11 @@ export function openMediaViewer({
     const shield = el("div", "mv-shield");
     frame.replaceChildren(host, poster, shield);
     createYouTubePlayer(host, item.videoId, {
+      onBlocked() {
+        if (current?.root === root) root.classList.add("is-tap-to-play");
+      },
       onState(playing, ended) {
+        if (playing) root.classList.remove("is-tap-to-play");
         controls.setPlaying(playing);
         controls.showVolume();
         root.classList.toggle("is-ended", ended);

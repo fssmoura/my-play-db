@@ -703,6 +703,11 @@
   inset: 0;
 }
 
+/* The browser refused to start the trailer: the next tap goes to YouTube. */
+.media-viewer.is-tap-to-play .mv-shield {
+  pointer-events: none;
+}
+
 .mv-image {
   width: 100%;
   height: 100%;

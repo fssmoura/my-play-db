@@ -336,10 +336,13 @@ What depends on the sheet being taller than the screen:
   trailer's still covers YouTube's suggestions. YouTube's play/pause circle
   still flashes mid-frame as a video starts; the owner prefers that to
   holding the still over the first moment.
-- **Phones only autoplay muted videos**, so on touch screens (no hover) a
-  trailer always starts muted; the volume button turns the sound on. On a
-  computer it starts with sound, and if the browser refuses, it is started
-  muted after 1.5s.
+- **Autoplay isn't guaranteed on phones.** Muting was tried and dropped (the
+  volume button wouldn't unmute it). YouTube's script is fetched as soon as a
+  game with trailers renders, so the player is ready sooner. If the trailer
+  hasn't started 1.2s after the player is ready (or YouTube reports autoplay
+  blocked), the shield stops catching taps until it plays, so the next tap
+  lands on YouTube's own frame: a real tap there is the one thing phones
+  always accept for sound.
 - Card stills come from `i.ytimg.com` (`maxresdefault`, falling back to
   `hqdefault` on a 404 or YouTube's 120px stand-in). It sends CORS headers, so
   the stills are readable by the glass like IGDB's.

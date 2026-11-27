@@ -16,7 +16,11 @@
 
 import { displayImageUrl, loadImageForGlass } from "/js/image-url.js";
 import { createOverlayScroll } from "/js/overlay-scroll.js";
-import { youTubeId, youTubeStills } from "/js/youtube-player.js";
+import {
+  preloadYouTube,
+  youTubeId,
+  youTubeStills,
+} from "/js/youtube-player.js";
 import {
   openMediaViewer,
   closeMediaViewer,
@@ -55,6 +59,8 @@ function sectionsFor(row) {
     .map((v) => ({ title: v?.name || "Trailer", videoId: youTubeId(v?.url) }))
     .filter((v) => v.videoId)
     .reverse();
+  // Fetch YouTube's script early so a tapped trailer is ready sooner.
+  if (trailers.length) preloadYouTube();
   const pictures = (list, title) =>
     (Array.isArray(list) ? list : []).filter(Boolean).map((url) => ({
       title,

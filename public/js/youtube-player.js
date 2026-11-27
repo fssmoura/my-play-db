@@ -2,10 +2,12 @@
 // (media-viewer.js), which draws its own. Wraps the IFrame Player API, loaded
 // once on first use.
 //
-//   createYouTubePlayer(host, videoId, { onState }) -> Promise<player>
+//   createYouTubePlayer(host, videoId, { onState, onBlocked }) -> Promise<player>
+//   preloadYouTube(): fetch YouTube's script ahead, so a player is ready sooner.
 //
 // The player replaces `host` with YouTube's iframe. onState(playing, ended)
-// reports play/pause, and the video reaching its end. The returned object:
+// reports play/pause, and the video reaching its end; onBlocked() that the
+// browser refused to start it by itself. The returned object:
 // play(), pause(), toggle(), seek(seconds), skip(delta), time(), duration(),
 // load(videoId), setVolume(0-100), volume(), mute(), unmute(), isMuted(),
 // isPlaying(), destroy().
@@ -37,6 +39,10 @@ function loadApi() {
   return apiReady;
 }
 
+export function preloadYouTube() {
+  loadApi().catch(() => {});
+}
+
 export const youTubeStills = (id) => [
   `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`,
   `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
@@ -53,21 +59,20 @@ export function youTubeId(url) {
   }
 }
 
-export async function createYouTubePlayer(host, videoId, { onState } = {}) {
+export async function createYouTubePlayer(
+  host,
+  videoId,
+  { onState, onBlocked } = {},
+) {
   const YT = await loadApi();
   let playing = false;
   let ready;
   const whenReady = new Promise((r) => (ready = r));
-  // Phones only start a video by themselves when it is muted; the volume
-  // button turns the sound on.
-  const phone = window.matchMedia("(hover: none)").matches;
-
   const player = new YT.Player(host, {
     host: "https://www.youtube-nocookie.com",
     videoId,
     playerVars: {
       autoplay: 1,
-      mute: phone ? 1 : 0,
       controls: 0,
       disablekb: 1,
       fs: 0,
@@ -79,6 +84,7 @@ export async function createYouTubePlayer(host, videoId, { onState } = {}) {
     },
     events: {
       onReady: () => ready(),
+      onAutoplayBlocked: () => onBlocked?.(),
       onStateChange: (e) => {
         const now = e.data === YT.PlayerState.PLAYING;
         const ended = e.data === YT.PlayerState.ENDED;
@@ -91,24 +97,23 @@ export async function createYouTubePlayer(host, videoId, { onState } = {}) {
   });
   await whenReady;
 
-  // Browsers may refuse to start a video with sound on their own (phones
-  // especially); if it hasn't started shortly, it starts muted instead.
+  // Phones only let a video start with sound during a real tap, and the tap
+  // that opened the viewer has usually expired by now. If it hasn't started
+  // shortly, onBlocked lets the viewer pass the next tap to YouTube itself,
+  // which phones always accept.
   player.playVideo();
   setTimeout(() => {
-    let state = -1;
     try {
-      state = player.getPlayerState();
+      const state = player.getPlayerState();
+      if (
+        state !== YT.PlayerState.PLAYING &&
+        state !== YT.PlayerState.BUFFERING
+      )
+        onBlocked?.();
     } catch {
-      return;
+      /* player already gone */
     }
-    if (
-      state !== YT.PlayerState.PLAYING &&
-      state !== YT.PlayerState.BUFFERING
-    ) {
-      player.mute();
-      player.playVideo();
-    }
-  }, 1500);
+  }, 1200);
 
   const safe = (fn, fallback = 0) => {
     try {
